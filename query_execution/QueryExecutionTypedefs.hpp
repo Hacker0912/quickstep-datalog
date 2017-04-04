@@ -128,6 +128,9 @@ struct WorkOrderTimeEntry {
   std::size_t operator_id;
   std::size_t start_time;  // Epoch time measured in microseconds
   std::size_t end_time;  // Epoch time measured in microseconds
+
+  // Used in the distributed version. Otherwise, 0.
+  std::size_t shiftboss_index;
 };
 // Key = query ID.
 // Value = vector of work order profiling records.

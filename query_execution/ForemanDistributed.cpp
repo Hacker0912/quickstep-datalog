@@ -403,13 +403,13 @@ void ForemanDistributed::printWorkOrderProfilingResults(const std::size_t query_
                                                         std::FILE *out) const {
   const std::vector<WorkOrderTimeEntry> &recorded_times =
       policy_enforcer_->getProfilingResults(query_id);
-  fputs("Query ID,Worker ID,Operator ID,Time (microseconds)\n", out);
+  fputs("Query ID,Shiftboss ID,Worker ID,Operator ID,Time (microseconds)\n", out);
   for (const auto &workorder_entry : recorded_times) {
-    const std::size_t worker_id = workorder_entry.worker_id;
     fprintf(out,
-            "%lu,%lu,%lu,%lu\n",
+            "%lu,%lu,%lu,%lu,%lu\n",
             query_id,
-            worker_id,
+            workorder_entry.shiftboss_index,
+            workorder_entry.worker_id,
             workorder_entry.operator_id,  // Operator ID.
             workorder_entry.end_time - workorder_entry.start_time);  // Time.
   }

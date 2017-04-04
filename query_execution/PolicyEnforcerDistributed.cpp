@@ -19,9 +19,14 @@
 
 #include "query_execution/PolicyEnforcerDistributed.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <limits>
 #include <memory>
 #include <queue>
 #include <sstream>
@@ -60,6 +65,10 @@
 #include "tmb/message_bus.h"
 #include "tmb/tagged_message.h"
 
+using std::endl;
+using std::fclose;
+using std::fopen;
+using std::fprintf;
 using std::free;
 using std::malloc;
 using std::move;
@@ -74,6 +83,7 @@ using tmb::TaggedMessage;
 
 namespace quickstep {
 
+DECLARE_bool(profile_and_report_workorder_perf);
 DECLARE_bool(visualize_execution_dag);
 
 namespace S = serialization;
@@ -250,6 +260,10 @@ void PolicyEnforcerDistributed::onQueryCompletion(QueryManagerBase *query_manage
   const tmb::client_id cli_id = query_handle->getClientId();
   const std::size_t query_id = query_handle->query_id();
 
+  if (FLAGS_profile_and_report_workorder_perf && hasProfilingResults(query_id)) {
+    printWorkOrderProfilingResults(query_id);
+  }
+
   if (FLAGS_visualize_execution_dag && hasProfilingResults(query_id)) {
     ExecutionDAGVisualizer* dag_visualizer = query_manager->dag_visualizer();
     dag_visualizer->bindProfilingStats(getProfilingResults(query_id));
@@ -420,6 +434,55 @@ void PolicyEnforcerDistributed::processAnalyzeQueryResult(const tmb::client_id c
       completed_analyze_relations_.erase(cli_id);
     }
   }
+}
+
+void PolicyEnforcerDistributed::printWorkOrderProfilingResults(const std::size_t query_id) {
+  ostringstream profile_filename;
+  profile_filename << query_id << ".profile";
+
+  // profiling_result[i][j] means WorkOrderTimeEntries from j-th worker in i-th shiftboss_index.
+  vector<vector<vector<std::reference_wrapper<const WorkOrderTimeEntry>>>> profiling_result;
+
+  size_t min_start_time = std::numeric_limits<size_t>::max();
+  for (const WorkOrderTimeEntry &workorder_entry : workorder_time_recorder_[query_id]) {
+    const size_t shiftboss_index = workorder_entry.shiftboss_index;
+    if (profiling_result.size() <= shiftboss_index) {
+      profiling_result.resize(shiftboss_index + 1);
+    }
+
+    const size_t worker_id = workorder_entry.worker_id;
+    if (profiling_result[shiftboss_index].size() <= worker_id) {
+      profiling_result[shiftboss_index].resize(worker_id + 1);
+    }
+
+    profiling_result[shiftboss_index][worker_id].push_back(workorder_entry);
+
+    min_start_time = std::min(min_start_time, workorder_entry.start_time);
+  }
+
+  std::ofstream profile_file(profile_filename.str().c_str());
+  CHECK(profile_file.is_open());
+
+  for (size_t shiftboss_index = 0; shiftboss_index < profiling_result.size(); ++shiftboss_index) {
+    profile_file << "Shiftboss " << shiftboss_index << endl;
+    for (const auto &worker_profiling_result : profiling_result[shiftboss_index]) {
+      size_t prev_end_time = min_start_time;
+      for (const WorkOrderTimeEntry &workorder_entry : worker_profiling_result) {
+        const int num_preceding_whitespaces = (workorder_entry.start_time - min_start_time) / 10000;
+        if (num_preceding_whitespaces) {
+          profile_file << string(num_preceding_whitespaces, ' ');
+        }
+
+        const int num_dashes = (workorder_entry.end_time - workorder_entry.start_time) / 10000;
+        profile_file << std::setw(num_dashes) << std::setfill('.') << std::internal << workorder_entry.operator_id;
+
+        prev_end_time = workorder_entry.end_time;
+      }
+      profile_file << endl;
+    }
+  }
+
+  profile_file.close();
 }
 
 }  // namespace quickstep

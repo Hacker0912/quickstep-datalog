@@ -173,6 +173,8 @@ class PolicyEnforcerDistributed final : public PolicyEnforcerBase {
                                  const CatalogRelation *query_result_relation,
                                  const QueryHandle::AnalyzeQueryInfo *analyze_query_info);
 
+  void printWorkOrderProfilingResults(const std::size_t query_id);
+
   const tmb::client_id foreman_client_id_;
 
   QueryProcessor *query_processor_;

@@ -181,6 +181,12 @@ void PolicyEnforcerBase::recordTimeForWorkOrder(
   entry.operator_id = proto.operator_index(),
   entry.start_time = proto.execution_start_time(),
   entry.end_time = proto.execution_end_time();
+
+  if (proto.has_shiftboss_index()) {
+    entry.shiftboss_index = proto.shiftboss_index();
+  } else {
+    entry.shiftboss_index = 0u;
+  }
 }
 
 }  // namespace quickstep
