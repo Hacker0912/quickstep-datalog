@@ -66,7 +66,7 @@ message AggregationWorkOrder {
     // All required.
     optional uint32 aggr_state_index = 16;
     optional uint64 partition_id = 20;
-    optional fixed64 block_id = 17;
+    repeated fixed64 block_id = 17;
     optional int32 lip_deployment_index = 18;
     repeated uint32 lip_filter_indexes = 19;
   }

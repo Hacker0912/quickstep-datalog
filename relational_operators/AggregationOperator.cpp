@@ -85,9 +85,23 @@ bool AggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contai
     }
 
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::AGGREGATION);
+      proto->set_query_id(query_id_);
+
       for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
-        container->addWorkOrderProto(createWorkOrderProto(input_block_id, part_id), op_index_);
+        proto->AddExtension(serialization::AggregationWorkOrder::block_id, input_block_id);
       }
+
+      proto->SetExtension(serialization::AggregationWorkOrder::aggr_state_index, aggr_state_index_);
+      proto->SetExtension(serialization::AggregationWorkOrder::partition_id, part_id);
+      proto->SetExtension(serialization::AggregationWorkOrder::lip_deployment_index, lip_deployment_index_);
+
+      for (const QueryContext::lip_filter_id lip_filter_index : lip_filter_indexes_) {
+        proto->AddExtension(serialization::AggregationWorkOrder::lip_filter_indexes, lip_filter_index);
+      }
+
+      container->addWorkOrderProto(proto, op_index_);
     }
     started_ = true;
     return true;
@@ -109,7 +123,7 @@ serialization::WorkOrder* AggregationOperator::createWorkOrderProto(const block_
   proto->set_work_order_type(serialization::AGGREGATION);
   proto->set_query_id(query_id_);
 
-  proto->SetExtension(serialization::AggregationWorkOrder::block_id, block);
+  proto->AddExtension(serialization::AggregationWorkOrder::block_id, block);
   proto->SetExtension(serialization::AggregationWorkOrder::aggr_state_index, aggr_state_index_);
   proto->SetExtension(serialization::AggregationWorkOrder::partition_id, part_id);
   proto->SetExtension(serialization::AggregationWorkOrder::lip_deployment_index, lip_deployment_index_);

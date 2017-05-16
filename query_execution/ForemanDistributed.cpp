@@ -253,7 +253,7 @@ bool ForemanDistributed::isAggregationRelatedWorkOrder(const S::WorkOrderMessage
         lip_filter_indexes.push_back(work_order_proto.GetExtension(S::AggregationWorkOrder::lip_filter_indexes, i));
       }
 
-      block = work_order_proto.GetExtension(S::AggregationWorkOrder::block_id);
+      block = work_order_proto.GetExtension(S::AggregationWorkOrder::block_id, 0);
       break;
     case S::BUILD_AGGREGATION_EXISTENCE_MAP:
       aggr_state_index = work_order_proto.GetExtension(S::BuildAggregationExistenceMapWorkOrder::aggr_state_index);
