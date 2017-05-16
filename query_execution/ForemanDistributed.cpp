@@ -248,7 +248,7 @@ bool ForemanDistributed::isAggregationRelatedWorkOrder(const S::WorkOrderMessage
   switch (work_order_proto.work_order_type()) {
     case S::AGGREGATION:
       aggr_state_index = work_order_proto.GetExtension(S::AggregationWorkOrder::aggr_state_index);
-      block = work_order_proto.GetExtension(S::AggregationWorkOrder::block_id);
+      block = work_order_proto.GetExtension(S::AggregationWorkOrder::block_id, 0);
       break;
     case S::FINALIZE_AGGREGATION:
       aggr_state_index = work_order_proto.GetExtension(S::FinalizeAggregationWorkOrder::aggr_state_index);

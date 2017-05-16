@@ -60,8 +60,10 @@
 
 #include "tmb/id_typedefs.h"
 
+using std::make_unique;
 using std::move;
 using std::vector;
+using std::unique_ptr;
 
 namespace quickstep {
 
@@ -70,7 +72,7 @@ class LIPFilterAdaptiveProber;
 class Predicate;
 class Scalar;
 
-WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder &proto,
+vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder &proto,
                                                   const std::size_t shiftboss_index,
                                                   CatalogDatabaseLite *catalog_database,
                                                   QueryContext *query_context,
@@ -83,23 +85,31 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
       << "Attempted to create WorkOrder from an invalid proto description:\n"
       << proto.DebugString();
 
+  vector<unique_ptr<WorkOrder>> work_orders;
+
   switch (proto.work_order_type()) {
     case serialization::AGGREGATION: {
       LOG(INFO) << "Creating AggregationWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new AggregationWorkOrder(
-          proto.query_id(),
-          proto.GetExtension(serialization::AggregationWorkOrder::block_id),
-          query_context->getAggregationState(
-              proto.GetExtension(serialization::AggregationWorkOrder::aggr_state_index)),
-          CreateLIPFilterAdaptiveProberHelper(
-              proto.GetExtension(serialization::AggregationWorkOrder::lip_deployment_index), query_context));
+      AggregationOperationState *aggr_state =
+            query_context->getAggregationState(
+                proto.GetExtension(serialization::AggregationWorkOrder::aggr_state_index));
+      const QueryContext::lip_deployment_id lip_deployment_index =
+          proto.GetExtension(serialization::AggregationWorkOrder::lip_deployment_index);
+      for (int i = 0; i < proto.ExtensionSize(serialization::AggregationWorkOrder::block_id); ++i) {
+        work_orders.push_back(make_unique<AggregationWorkOrder>(
+            proto.query_id(),
+            proto.GetExtension(serialization::AggregationWorkOrder::block_id, i),
+            aggr_state,
+            CreateLIPFilterAdaptiveProberHelper(lip_deployment_index, query_context)));
+      }
+      break;
     }
     case serialization::BUILD_AGGREGATION_EXISTENCE_MAP: {
       LOG(INFO) << "Creating BuildAggregationExistenceMapWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
 
-      return new BuildAggregationExistenceMapWorkOrder(
+      work_orders.push_back(make_unique<BuildAggregationExistenceMapWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::BuildAggregationExistenceMapWorkOrder::relation_id)),
@@ -107,7 +117,8 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           proto.GetExtension(serialization::BuildAggregationExistenceMapWorkOrder::build_attribute),
           query_context->getAggregationState(
               proto.GetExtension(serialization::BuildAggregationExistenceMapWorkOrder::aggr_state_index)),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::BUILD_LIP_FILTER: {
       LOG(INFO) << "Creating BuildLIPFilterWorkOrder for Query " << proto.query_id()
@@ -116,7 +127,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
       const QueryContext::lip_deployment_id lip_deployment_index =
           proto.GetExtension(serialization::BuildLIPFilterWorkOrder::lip_deployment_index);
 
-      return new BuildLIPFilterWorkOrder(
+      work_orders.push_back(make_unique<BuildLIPFilterWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::BuildLIPFilterWorkOrder::relation_id)),
@@ -125,7 +136,8 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
               proto.GetExtension(serialization::BuildLIPFilterWorkOrder::build_side_predicate_index)),
           storage_manager,
           CreateLIPFilterAdaptiveProberHelper(lip_deployment_index, query_context),
-          CreateLIPFilterBuilderHelper(lip_deployment_index, query_context));
+          CreateLIPFilterBuilderHelper(lip_deployment_index, query_context)));
+      break;
     }
     case serialization::BUILD_HASH: {
       const partition_id part_id =
@@ -139,7 +151,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
             proto.GetExtension(serialization::BuildHashWorkOrder::join_key_attributes, i));
       }
 
-      return new BuildHashWorkOrder(
+      work_orders.push_back(make_unique<BuildHashWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::BuildHashWorkOrder::relation_id)),
@@ -151,11 +163,12 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
               proto.GetExtension(serialization::BuildHashWorkOrder::join_hash_table_index), part_id),
           storage_manager,
           CreateLIPFilterBuilderHelper(
-              proto.GetExtension(serialization::BuildHashWorkOrder::lip_deployment_index), query_context));
+              proto.GetExtension(serialization::BuildHashWorkOrder::lip_deployment_index), query_context)));
+      break;
     }
     case serialization::DELETE: {
       LOG(INFO) << "Creating DeleteWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
-      return new DeleteWorkOrder(
+      work_orders.push_back(make_unique<DeleteWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::DeleteWorkOrder::relation_id)),
@@ -165,16 +178,18 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           storage_manager,
           proto.GetExtension(serialization::DeleteWorkOrder::operator_index),
           shiftboss_client_id,
-          bus);
+          bus));
+      break;
     }
     case serialization::DESTROY_AGGREGATION_STATE: {
       LOG(INFO) << "Creating DestroyAggregationStateWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new DestroyAggregationStateWorkOrder(
+      work_orders.push_back(make_unique<DestroyAggregationStateWorkOrder>(
           proto.query_id(),
           proto.GetExtension(
               serialization::DestroyAggregationStateWorkOrder::aggr_state_index),
-          query_context);
+          query_context));
+      break;
     }
     case serialization::DESTROY_HASH: {
       const partition_id part_id =
@@ -182,12 +197,13 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
 
       LOG(INFO) << "Creating DestroyHashWorkOrder (Partition " << part_id << ") for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new DestroyHashWorkOrder(
+      work_orders.push_back(make_unique<DestroyHashWorkOrder>(
           proto.query_id(),
           proto.GetExtension(
               serialization::DestroyHashWorkOrder::join_hash_table_index),
           part_id,
-          query_context);
+          query_context));
+      break;
     }
     case serialization::DROP_TABLE: {
       LOG(INFO) << "Creating DropTableWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
@@ -197,28 +213,30 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
             proto.GetExtension(serialization::DropTableWorkOrder::block_ids, i));
       }
 
-      return new DropTableWorkOrder(
+      work_orders.push_back(make_unique<DropTableWorkOrder>(
           proto.query_id(),
           move(blocks),
           storage_manager,
           proto.HasExtension(serialization::DropTableWorkOrder::relation_id)
               ? proto.GetExtension(serialization::DropTableWorkOrder::relation_id)
               : kInvalidCatalogId,
-          catalog_database);
+          catalog_database));
+      break;
     }
     case serialization::FINALIZE_AGGREGATION: {
       LOG(INFO) << "Creating FinalizeAggregationWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
       // TODO(quickstep-team): Handle inner-table partitioning in the distributed
       // setting.
-      return new FinalizeAggregationWorkOrder(
+      work_orders.push_back(make_unique<FinalizeAggregationWorkOrder>(
           proto.query_id(),
           0uL /* partition_id */,
           query_context->getAggregationState(proto.GetExtension(
               serialization::FinalizeAggregationWorkOrder::aggr_state_index)),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::FinalizeAggregationWorkOrder::
-                                     insert_destination_index)));
+                                     insert_destination_index))));
+      break;
     }
     case serialization::HASH_JOIN: {
       const auto hash_join_work_order_type =
@@ -270,38 +288,20 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
         case serialization::HashJoinWorkOrder::HASH_ANTI_JOIN: {
           LOG(INFO) << "Creating HashAntiJoinWorkOrder (Partition " << part_id << ") for Query " << proto.query_id()
                     << " in Shiftboss " << shiftboss_index;
-          return new HashAntiJoinWorkOrder(
-              proto.query_id(),
-              build_relation,
-              probe_relation,
-              move(join_key_attributes),
-              any_join_key_attributes_nullable,
-              part_id,
-              lookup_block_id,
-              residual_predicate,
-              selection,
-              hash_table,
-              output_destination,
-              storage_manager,
-              lip_filter_adaptive_prober);
+          work_orders.push_back(make_unique<HashAntiJoinWorkOrder>(
+              proto.query_id(), build_relation, probe_relation, move(join_key_attributes),
+              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
+              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          break;
         }
         case serialization::HashJoinWorkOrder::HASH_INNER_JOIN: {
           LOG(INFO) << "Creating HashInnerJoinWorkOrder (Partition " << part_id << ") for Query " << proto.query_id()
                     << " in Shiftboss " << shiftboss_index;
-          return new HashInnerJoinWorkOrder(
-              proto.query_id(),
-              build_relation,
-              probe_relation,
-              move(join_key_attributes),
-              any_join_key_attributes_nullable,
-              part_id,
-              lookup_block_id,
-              residual_predicate,
-              selection,
-              hash_table,
-              output_destination,
-              storage_manager,
-              lip_filter_adaptive_prober);
+          work_orders.push_back(make_unique<HashInnerJoinWorkOrder>(
+              proto.query_id(), build_relation, probe_relation, move(join_key_attributes),
+              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
+              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          break;
         }
         case serialization::HashJoinWorkOrder::HASH_OUTER_JOIN: {
           vector<bool> is_selection_on_build;
@@ -314,56 +314,41 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
 
           LOG(INFO) << "Creating HashOuterJoinWorkOrder (Partition " << part_id << ") for Query " << proto.query_id()
                     << " in Shiftboss " << shiftboss_index;
-          return new HashOuterJoinWorkOrder(
-              proto.query_id(),
-              build_relation,
-              probe_relation,
-              move(join_key_attributes),
-              any_join_key_attributes_nullable,
-              part_id,
-              lookup_block_id,
-              selection,
-              move(is_selection_on_build),
-              hash_table,
-              output_destination,
-              storage_manager,
-              lip_filter_adaptive_prober);
+          work_orders.push_back(make_unique<HashOuterJoinWorkOrder>(
+              proto.query_id(), build_relation, probe_relation, move(join_key_attributes),
+              any_join_key_attributes_nullable, part_id, lookup_block_id, selection,
+              move(is_selection_on_build), hash_table, output_destination, storage_manager,
+              lip_filter_adaptive_prober));
+          break;
         }
         case serialization::HashJoinWorkOrder::HASH_SEMI_JOIN: {
           LOG(INFO) << "Creating HashSemiJoinWorkOrder (Partition " << part_id << ") for Query " << proto.query_id()
                     << " in Shiftboss " << shiftboss_index;
-          return new HashSemiJoinWorkOrder(
-              proto.query_id(),
-              build_relation,
-              probe_relation,
-              move(join_key_attributes),
-              any_join_key_attributes_nullable,
-              part_id,
-              lookup_block_id,
-              residual_predicate,
-              selection,
-              hash_table,
-              output_destination,
-              storage_manager,
-              lip_filter_adaptive_prober);
+          work_orders.push_back(make_unique<HashSemiJoinWorkOrder>(
+              proto.query_id(), build_relation, probe_relation, move(join_key_attributes),
+              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
+              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          break;
         }
         default:
           LOG(FATAL) << "Unknown HashJoinWorkOrder Type in WorkOrderFactory::ReconstructFromProto";
       }
+      break;
     }
     case serialization::INSERT: {
       LOG(INFO) << "Creating InsertWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
-      return new InsertWorkOrder(
+      work_orders.push_back(make_unique<InsertWorkOrder>(
           proto.query_id(),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::InsertWorkOrder::insert_destination_index)),
           query_context->releaseTuple(
-              proto.GetExtension(serialization::InsertWorkOrder::tuple_index)));
+              proto.GetExtension(serialization::InsertWorkOrder::tuple_index))));
+      break;
     }
     case serialization::NESTED_LOOP_JOIN: {
       LOG(INFO) << "Creating NestedLoopsJoinWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new NestedLoopsJoinWorkOrder(
+      work_orders.push_back(make_unique<NestedLoopsJoinWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::NestedLoopsJoinWorkOrder::left_relation_id)),
@@ -377,11 +362,12 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
               proto.GetExtension(serialization::NestedLoopsJoinWorkOrder::selection_index)),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::NestedLoopsJoinWorkOrder::insert_destination_index)),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::SAMPLE: {
       LOG(INFO) << "Creating SampleWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
-      return new SampleWorkOrder(
+      work_orders.push_back(make_unique<SampleWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::SampleWorkOrder::relation_id)),
@@ -390,16 +376,18 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           proto.GetExtension(serialization::SampleWorkOrder::percentage),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::SampleWorkOrder::insert_destination_index)),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::SAVE_BLOCKS: {
       LOG(INFO) << "Creating SaveBlocksWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new SaveBlocksWorkOrder(
+      work_orders.push_back(make_unique<SaveBlocksWorkOrder>(
           proto.query_id(),
           proto.GetExtension(serialization::SaveBlocksWorkOrder::block_id),
           proto.GetExtension(serialization::SaveBlocksWorkOrder::force),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::SELECT: {
       LOG(INFO) << "Creating SelectWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
@@ -411,7 +399,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
             proto.GetExtension(serialization::SelectWorkOrder::simple_selection, i));
       }
 
-      return new SelectWorkOrder(
+      work_orders.push_back(make_unique<SelectWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::SelectWorkOrder::relation_id)),
@@ -427,7 +415,8 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
               proto.GetExtension(serialization::SelectWorkOrder::insert_destination_index)),
           storage_manager,
           CreateLIPFilterAdaptiveProberHelper(
-              proto.GetExtension(serialization::SelectWorkOrder::lip_deployment_index), query_context));
+              proto.GetExtension(serialization::SelectWorkOrder::lip_deployment_index), query_context)));
+      break;
     }
     case serialization::SORT_MERGE_RUN: {
       LOG(INFO) << "Creating SortMergeRunWorkOrder for Query " << proto.query_id()
@@ -443,7 +432,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
         runs.push_back(move(run));
       }
 
-      return new SortMergeRunWorkOrder(
+      work_orders.push_back(make_unique<SortMergeRunWorkOrder>(
           proto.query_id(),
           query_context->getSortConfig(
               proto.GetExtension(serialization::SortMergeRunWorkOrder::sort_config_index)),
@@ -457,12 +446,13 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           storage_manager,
           proto.GetExtension(serialization::SortMergeRunWorkOrder::operator_index),
           shiftboss_client_id,
-          bus);
+          bus));
+      break;
     }
     case serialization::SORT_RUN_GENERATION: {
       LOG(INFO) << "Creating SortRunGenerationWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new SortRunGenerationWorkOrder(
+      work_orders.push_back(make_unique<SortRunGenerationWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::SortRunGenerationWorkOrder::relation_id)),
@@ -471,21 +461,23 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
               proto.GetExtension(serialization::SortRunGenerationWorkOrder::sort_config_index)),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::SortRunGenerationWorkOrder::insert_destination_index)),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::TABLE_GENERATOR: {
       LOG(INFO) << "Creating SortRunGenerationWorkOrder for Query " << proto.query_id()
                 << " in Shiftboss " << shiftboss_index;
-      return new TableGeneratorWorkOrder(
+      work_orders.push_back(make_unique<TableGeneratorWorkOrder>(
           proto.query_id(),
           query_context->getGeneratorFunctionHandle(
               proto.GetExtension(serialization::TableGeneratorWorkOrder::generator_function_index)),
           query_context->getInsertDestination(
-              proto.GetExtension(serialization::TableGeneratorWorkOrder::insert_destination_index)));
+              proto.GetExtension(serialization::TableGeneratorWorkOrder::insert_destination_index))));
+      break;
     }
     case serialization::TEXT_SCAN: {
       LOG(INFO) << "Creating TextScanWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
-      return new TextScanWorkOrder(
+      work_orders.push_back(make_unique<TextScanWorkOrder>(
           proto.query_id(),
           proto.GetExtension(serialization::TextScanWorkOrder::filename),
           proto.GetExtension(serialization::TextScanWorkOrder::text_offset),
@@ -494,7 +486,8 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           proto.GetExtension(serialization::TextScanWorkOrder::process_escape_sequences),
           query_context->getInsertDestination(
               proto.GetExtension(serialization::TextScanWorkOrder::insert_destination_index)),
-          hdfs);
+          hdfs));
+      break;
     }
     case serialization::UNION_ALL: {
       LOG(INFO) << "Creating UnionAllWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
@@ -503,7 +496,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
         select_attribute_id.push_back(
             proto.GetExtension(serialization::UnionAllWorkOrder::select_attribute_id, i));
       }
-      return new UnionAllWorkOrder(
+      work_orders.push_back(make_unique<UnionAllWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::UnionAllWorkOrder::relation_id)),
@@ -511,11 +504,12 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           select_attribute_id,
           query_context->getInsertDestination(
               proto.GetExtension(serialization::UnionAllWorkOrder::insert_destination_index)),
-          storage_manager);
+          storage_manager));
+      break;
     }
     case serialization::UPDATE: {
       LOG(INFO) << "Creating UpdateWorkOrder for Query " << proto.query_id() << " in Shiftboss " << shiftboss_index;
-      return new UpdateWorkOrder(
+      work_orders.push_back(make_unique<UpdateWorkOrder>(
           proto.query_id(),
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::UpdateWorkOrder::relation_id)),
@@ -529,7 +523,8 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           storage_manager,
           proto.GetExtension(serialization::UpdateWorkOrder::operator_index),
           shiftboss_client_id,
-          bus);
+          bus));
+      break;
     }
     case serialization::WINDOW_AGGREGATION: {
       LOG(INFO) << "Creating WindowAggregationWorkOrder for Query " << proto.query_id()
@@ -540,17 +535,20 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
             proto.GetExtension(serialization::WindowAggregationWorkOrder::block_ids, i));
       }
 
-      return new WindowAggregationWorkOrder(
+      work_orders.push_back(make_unique<WindowAggregationWorkOrder>(
           proto.query_id(),
           query_context->getWindowAggregationState(
               proto.GetExtension(serialization::WindowAggregationWorkOrder::window_aggr_state_index)),
           move(blocks),
           query_context->getInsertDestination(
-              proto.GetExtension(serialization::WindowAggregationWorkOrder::insert_destination_index)));
+              proto.GetExtension(serialization::WindowAggregationWorkOrder::insert_destination_index))));
+      break;
     }
     default:
       LOG(FATAL) << "Unknown WorkOrder Type in WorkOrderFactory::ReconstructFromProto in Shiftboss" << shiftboss_index;
   }
+
+  return work_orders;
 }
 
 bool WorkOrderFactory::ProtoIsValid(const serialization::WorkOrder &proto,

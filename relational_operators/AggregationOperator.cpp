@@ -72,9 +72,18 @@ bool AggregationOperator::getAllWorkOrders(
 bool AggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (input_relation_is_stored_) {
     if (!started_) {
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::AGGREGATION);
+      proto->set_query_id(query_id_);
+
       for (const block_id input_block_id : input_relation_block_ids_) {
-        container->addWorkOrderProto(createWorkOrderProto(input_block_id), op_index_);
+        proto->AddExtension(serialization::AggregationWorkOrder::block_id, input_block_id);
       }
+
+      proto->SetExtension(serialization::AggregationWorkOrder::aggr_state_index, aggr_state_index_);
+      proto->SetExtension(serialization::AggregationWorkOrder::lip_deployment_index, lip_deployment_index_);
+
+      container->addWorkOrderProto(proto, op_index_);
       started_ = true;
     }
     return true;
@@ -94,7 +103,7 @@ serialization::WorkOrder* AggregationOperator::createWorkOrderProto(const block_
   proto->set_work_order_type(serialization::AGGREGATION);
   proto->set_query_id(query_id_);
 
-  proto->SetExtension(serialization::AggregationWorkOrder::block_id, block);
+  proto->AddExtension(serialization::AggregationWorkOrder::block_id, block);
   proto->SetExtension(serialization::AggregationWorkOrder::aggr_state_index, aggr_state_index_);
   proto->SetExtension(serialization::AggregationWorkOrder::lip_deployment_index, lip_deployment_index_);
 
