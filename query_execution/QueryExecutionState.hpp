@@ -229,9 +229,10 @@ class QueryExecutionState {
    *
    * @param operator_index The index of the given operator.
    **/
-  inline void incrementNumQueuedWorkOrders(const std::size_t operator_index) {
+  inline void incrementNumQueuedWorkOrders(const std::size_t operator_index,
+                                           const std::size_t num_work_orders = 1) {
     DCHECK(operator_index < num_operators_);
-    ++queued_workorders_per_op_[operator_index];
+    queued_workorders_per_op_[operator_index] += num_work_orders;
   }
 
   /**
