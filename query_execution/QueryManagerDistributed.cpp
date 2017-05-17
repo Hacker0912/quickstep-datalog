@@ -166,7 +166,12 @@ serialization::WorkOrderMessage* QueryManagerDistributed::getNextWorkOrderMessag
     unique_ptr<serialization::WorkOrder> work_order_proto(
         normal_workorder_protos_container_->getWorkOrderProto(index));
     if (work_order_proto) {
-      query_exec_state_->incrementNumQueuedWorkOrders(index);
+      std::size_t num_work_orders = 1u;
+      if (work_order_proto->work_order_type() == serialization::AGGREGATION) {
+        num_work_orders = work_order_proto->ExtensionSize(serialization::AggregationWorkOrder::block_id);
+      }
+
+      query_exec_state_->incrementNumQueuedWorkOrders(index, num_work_orders);
 
       unique_ptr<serialization::WorkOrderMessage> message_proto(new serialization::WorkOrderMessage);
       message_proto->set_query_id(query_id_);
