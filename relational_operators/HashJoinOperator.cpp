@@ -330,11 +330,35 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrderProtos(
     }
 
     for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id probe_block_id : probe_relation_block_ids_[part_id]) {
-        container->addWorkOrderProto(
-            createNonOuterJoinWorkOrderProto(hash_join_type, probe_block_id, part_id),
-            op_index_);
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::HASH_JOIN);
+      proto->set_query_id(query_id_);
+
+      proto->SetExtension(serialization::HashJoinWorkOrder::hash_join_work_order_type, hash_join_type);
+      proto->SetExtension(serialization::HashJoinWorkOrder::build_relation_id, build_relation_.getID());
+      proto->SetExtension(serialization::HashJoinWorkOrder::probe_relation_id, probe_relation_.getID());
+      for (const attribute_id attr_id : join_key_attributes_) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::join_key_attributes, attr_id);
       }
+      proto->SetExtension(serialization::HashJoinWorkOrder::any_join_key_attributes_nullable,
+                          any_join_key_attributes_nullable_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::insert_destination_index, output_destination_index_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::join_hash_table_index, hash_table_index_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::partition_id, part_id);
+      proto->SetExtension(serialization::HashJoinWorkOrder::selection_index, selection_index_);
+
+      for (const block_id probe_block_id : probe_relation_block_ids_[part_id]) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::block_id, probe_block_id);
+      }
+
+      proto->SetExtension(serialization::HashJoinWorkOrder::residual_predicate_index, residual_predicate_index_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::lip_deployment_index, lip_deployment_index_);
+
+      for (const QueryContext::lip_filter_id lip_filter_index : lip_filter_indexes_) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::lip_filter_indexes, lip_filter_index);
+      }
+
+      container->addWorkOrderProto(proto, op_index_);
     }
     started_ = true;
     return true;
@@ -373,7 +397,7 @@ serialization::WorkOrder* HashJoinOperator::createNonOuterJoinWorkOrderProto(
   proto->SetExtension(serialization::HashJoinWorkOrder::join_hash_table_index, hash_table_index_);
   proto->SetExtension(serialization::HashJoinWorkOrder::partition_id, part_id);
   proto->SetExtension(serialization::HashJoinWorkOrder::selection_index, selection_index_);
-  proto->SetExtension(serialization::HashJoinWorkOrder::block_id, block);
+  proto->AddExtension(serialization::HashJoinWorkOrder::block_id, block);
   proto->SetExtension(serialization::HashJoinWorkOrder::residual_predicate_index, residual_predicate_index_);
   proto->SetExtension(serialization::HashJoinWorkOrder::lip_deployment_index, lip_deployment_index_);
 
@@ -391,9 +415,38 @@ bool HashJoinOperator::getAllOuterJoinWorkOrderProtos(WorkOrderProtosContainer *
     }
 
     for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id probe_block_id : probe_relation_block_ids_[part_id]) {
-        container->addWorkOrderProto(createOuterJoinWorkOrderProto(probe_block_id, part_id), op_index_);
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::HASH_JOIN);
+      proto->set_query_id(query_id_);
+
+      proto->SetExtension(serialization::HashJoinWorkOrder::hash_join_work_order_type,
+                          serialization::HashJoinWorkOrder::HASH_OUTER_JOIN);
+      proto->SetExtension(serialization::HashJoinWorkOrder::build_relation_id, build_relation_.getID());
+      proto->SetExtension(serialization::HashJoinWorkOrder::probe_relation_id, probe_relation_.getID());
+      for (const attribute_id attr_id : join_key_attributes_) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::join_key_attributes, attr_id);
       }
+      proto->SetExtension(serialization::HashJoinWorkOrder::any_join_key_attributes_nullable,
+                          any_join_key_attributes_nullable_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::insert_destination_index, output_destination_index_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::join_hash_table_index, hash_table_index_);
+      proto->SetExtension(serialization::HashJoinWorkOrder::selection_index, selection_index_);
+
+      for (const block_id probe_block_id : probe_relation_block_ids_[part_id]) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::block_id, probe_block_id);
+      }
+      proto->SetExtension(serialization::HashJoinWorkOrder::partition_id, part_id);
+      proto->SetExtension(serialization::HashJoinWorkOrder::lip_deployment_index, lip_deployment_index_);
+
+      for (const QueryContext::lip_filter_id lip_filter_index : lip_filter_indexes_) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::lip_filter_indexes, lip_filter_index);
+      }
+
+      for (const bool is_attribute_on_build : is_selection_on_build_) {
+        proto->AddExtension(serialization::HashJoinWorkOrder::is_selection_on_build, is_attribute_on_build);
+      }
+
+      container->addWorkOrderProto(proto, op_index_);
     }
     started_ = true;
     return true;
@@ -430,7 +483,7 @@ serialization::WorkOrder* HashJoinOperator::createOuterJoinWorkOrderProto(const 
   proto->SetExtension(serialization::HashJoinWorkOrder::insert_destination_index, output_destination_index_);
   proto->SetExtension(serialization::HashJoinWorkOrder::join_hash_table_index, hash_table_index_);
   proto->SetExtension(serialization::HashJoinWorkOrder::selection_index, selection_index_);
-  proto->SetExtension(serialization::HashJoinWorkOrder::block_id, block);
+  proto->AddExtension(serialization::HashJoinWorkOrder::block_id, block);
   proto->SetExtension(serialization::HashJoinWorkOrder::partition_id, part_id);
   proto->SetExtension(serialization::HashJoinWorkOrder::lip_deployment_index, lip_deployment_index_);
 

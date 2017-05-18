@@ -167,8 +167,21 @@ serialization::WorkOrderMessage* QueryManagerDistributed::getNextWorkOrderMessag
         normal_workorder_protos_container_->getWorkOrderProto(index));
     if (work_order_proto) {
       std::size_t num_work_orders = 1u;
-      if (work_order_proto->work_order_type() == serialization::AGGREGATION) {
-        num_work_orders = work_order_proto->ExtensionSize(serialization::AggregationWorkOrder::block_id);
+      switch (work_order_proto->work_order_type()) {
+        case serialization::AGGREGATION:
+          num_work_orders = work_order_proto->ExtensionSize(serialization::AggregationWorkOrder::block_id);
+          break;
+        case serialization::BUILD_HASH:
+          num_work_orders = work_order_proto->ExtensionSize(serialization::BuildHashWorkOrder::block_id);
+          break;
+        case serialization::BUILD_LIP_FILTER:
+          num_work_orders = work_order_proto->ExtensionSize(serialization::BuildLIPFilterWorkOrder::build_block_id);
+          break;
+        case serialization::HASH_JOIN:
+          num_work_orders = work_order_proto->ExtensionSize(serialization::HashJoinWorkOrder::block_id);
+          break;
+        default:
+          break;
       }
 
       query_exec_state_->incrementNumQueuedWorkOrders(index, num_work_orders);

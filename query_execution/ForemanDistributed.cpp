@@ -300,7 +300,7 @@ bool ForemanDistributed::isHashJoinRelatedWorkOrder(const S::WorkOrderMessage &p
         lip_filter_indexes.push_back(work_order_proto.GetExtension(S::BuildHashWorkOrder::lip_filter_indexes, i));
       }
 
-      block = work_order_proto.GetExtension(S::BuildHashWorkOrder::block_id);
+      block = work_order_proto.GetExtension(S::BuildHashWorkOrder::block_id, 0);
       break;
     case S::HASH_JOIN:
       join_hash_table_index = work_order_proto.GetExtension(S::HashJoinWorkOrder::join_hash_table_index);
@@ -335,7 +335,7 @@ bool ForemanDistributed::isLipRelatedWorkOrder(const S::WorkOrderMessage &proto,
         lip_filter_indexes.push_back(work_order_proto.GetExtension(S::BuildLIPFilterWorkOrder::lip_filter_indexes, i));
       }
       part_id = work_order_proto.GetExtension(S::BuildLIPFilterWorkOrder::partition_id);
-      block = work_order_proto.GetExtension(S::BuildLIPFilterWorkOrder::build_block_id);
+      block = work_order_proto.GetExtension(S::BuildLIPFilterWorkOrder::build_block_id, 0);
       break;
     case S::SELECT:
       for (int i = 0; i < work_order_proto.ExtensionSize(S::SelectWorkOrder::lip_filter_indexes); ++i) {

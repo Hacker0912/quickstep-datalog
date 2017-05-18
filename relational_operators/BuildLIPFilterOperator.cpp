@@ -104,9 +104,24 @@ bool BuildLIPFilterOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *con
     }
 
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::BUILD_LIP_FILTER);
+      proto->set_query_id(query_id_);
+
+      proto->SetExtension(serialization::BuildLIPFilterWorkOrder::relation_id, input_relation_.getID());
+      proto->SetExtension(serialization::BuildLIPFilterWorkOrder::partition_id, part_id);
       for (const block_id block : input_relation_block_ids_[part_id]) {
-        container->addWorkOrderProto(createWorkOrderProto(part_id, block), op_index_);
+        proto->AddExtension(serialization::BuildLIPFilterWorkOrder::build_block_id, block);
       }
+      proto->SetExtension(serialization::BuildLIPFilterWorkOrder::build_side_predicate_index,
+                          build_side_predicate_index_);
+      proto->SetExtension(serialization::BuildLIPFilterWorkOrder::lip_deployment_index, lip_deployment_index_);
+
+      for (const QueryContext::lip_filter_id lip_filter_index : lip_filter_indexes_) {
+        proto->AddExtension(serialization::BuildLIPFilterWorkOrder::lip_filter_indexes, lip_filter_index);
+      }
+
+      container->addWorkOrderProto(proto, op_index_);
     }
     started_ = true;
     return true;
@@ -131,7 +146,7 @@ serialization::WorkOrder* BuildLIPFilterOperator::createWorkOrderProto(const par
 
   proto->SetExtension(serialization::BuildLIPFilterWorkOrder::relation_id, input_relation_.getID());
   proto->SetExtension(serialization::BuildLIPFilterWorkOrder::partition_id, part_id);
-  proto->SetExtension(serialization::BuildLIPFilterWorkOrder::build_block_id, block);
+  proto->AddExtension(serialization::BuildLIPFilterWorkOrder::build_block_id, block);
   proto->SetExtension(serialization::BuildLIPFilterWorkOrder::build_side_predicate_index,
                       build_side_predicate_index_);
   proto->SetExtension(serialization::BuildLIPFilterWorkOrder::lip_deployment_index, lip_deployment_index_);

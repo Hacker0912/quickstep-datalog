@@ -75,21 +75,21 @@ class Predicate;
 class Scalar;
 
 vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder &proto,
-                                                  const std::size_t shiftboss_index,
-                                                  CatalogDatabaseLite *catalog_database,
-                                                  QueryContext *query_context,
-                                                  StorageManager *storage_manager,
-                                                  const tmb::client_id shiftboss_client_id,
-                                                  tmb::MessageBus *bus,
-                                                  void *hdfs) {
+                                                                     const std::size_t shiftboss_index,
+                                                                     CatalogDatabaseLite *catalog_database,
+                                                                     QueryContext *query_context,
+                                                                     StorageManager *storage_manager,
+                                                                     const tmb::client_id shiftboss_client_id,
+                                                                     tmb::MessageBus *bus,
+                                                                     void *hdfs) {
   DCHECK(query_context != nullptr);
   DCHECK(ProtoIsValid(proto, *catalog_database, *query_context))
       << "Attempted to create WorkOrder from an invalid proto description:\n"
       << proto.DebugString();
 
   const size_t query_id = proto.query_id();
-  vector<unique_ptr<WorkOrder>> work_orders;
 
+  vector<unique_ptr<WorkOrder>> work_orders;
   switch (proto.work_order_type()) {
     case serialization::AGGREGATION: {
       const partition_id part_id =
@@ -130,6 +130,43 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
           storage_manager));
       break;
     }
+    case serialization::BUILD_HASH: {
+      const partition_id part_id =
+          proto.GetExtension(serialization::BuildHashWorkOrder::partition_id);
+
+      LOG(INFO) << "Creating BuildHashWorkOrder (Partition " << part_id << ") for Query " << query_id
+                << " in Shiftboss " << shiftboss_index;
+
+      const CatalogRelationSchema &input_relation =
+          catalog_database->getRelationSchemaById(
+              proto.GetExtension(serialization::BuildHashWorkOrder::relation_id));
+
+      vector<attribute_id> join_key_attributes;
+      for (int i = 0; i < proto.ExtensionSize(serialization::BuildHashWorkOrder::join_key_attributes); ++i) {
+        join_key_attributes.push_back(
+            proto.GetExtension(serialization::BuildHashWorkOrder::join_key_attributes, i));
+      }
+
+      const bool any_join_key_attributes_nullable =
+          proto.GetExtension(serialization::BuildHashWorkOrder::any_join_key_attributes_nullable);
+      const Predicate *predicate =
+          query_context->getPredicate(
+              proto.GetExtension(serialization::BuildHashWorkOrder::build_predicate_index));
+      JoinHashTable *hash_table =
+          query_context->getJoinHashTable(
+              proto.GetExtension(serialization::BuildHashWorkOrder::join_hash_table_index), part_id);
+      const QueryContext::lip_deployment_id lip_deployment_index =
+          proto.GetExtension(serialization::BuildHashWorkOrder::lip_deployment_index);
+
+      for (int i = 0; i < proto.ExtensionSize(serialization::BuildHashWorkOrder::block_id); ++i) {
+        work_orders.push_back(make_unique<BuildHashWorkOrder>(
+            query_id, input_relation, join_key_attributes, any_join_key_attributes_nullable, part_id,
+            proto.GetExtension(serialization::BuildHashWorkOrder::block_id, i),
+            predicate, hash_table, storage_manager,
+            CreateLIPFilterBuilderHelper(lip_deployment_index, query_context)));
+      }
+      break;
+    }
     case serialization::BUILD_LIP_FILTER: {
       const partition_id part_id =
           proto.GetExtension(serialization::BuildLIPFilterWorkOrder::partition_id);
@@ -140,46 +177,21 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
       const QueryContext::lip_deployment_id lip_deployment_index =
           proto.GetExtension(serialization::BuildLIPFilterWorkOrder::lip_deployment_index);
 
-      work_orders.push_back(make_unique<BuildLIPFilterWorkOrder>(
-          query_id,
+      const CatalogRelationSchema &input_relation =
           catalog_database->getRelationSchemaById(
-              proto.GetExtension(serialization::BuildLIPFilterWorkOrder::relation_id)),
-          part_id,
-          proto.GetExtension(serialization::BuildLIPFilterWorkOrder::build_block_id),
+              proto.GetExtension(serialization::BuildLIPFilterWorkOrder::relation_id));
+      const Predicate *build_side_predicate =
           query_context->getPredicate(
-              proto.GetExtension(serialization::BuildLIPFilterWorkOrder::build_side_predicate_index)),
-          storage_manager,
-          CreateLIPFilterAdaptiveProberHelper(lip_deployment_index, query_context),
-          CreateLIPFilterBuilderHelper(lip_deployment_index, query_context)));
-      break;
-    }
-    case serialization::BUILD_HASH: {
-      const partition_id part_id =
-          proto.GetExtension(serialization::BuildHashWorkOrder::partition_id);
+              proto.GetExtension(serialization::BuildLIPFilterWorkOrder::build_side_predicate_index));
 
-      LOG(INFO) << "Creating BuildHashWorkOrder (Partition " << part_id << ") for Query " << query_id
-                << " in Shiftboss " << shiftboss_index;
-      vector<attribute_id> join_key_attributes;
-      for (int i = 0; i < proto.ExtensionSize(serialization::BuildHashWorkOrder::join_key_attributes); ++i) {
-        join_key_attributes.push_back(
-            proto.GetExtension(serialization::BuildHashWorkOrder::join_key_attributes, i));
+      for (int i = 0; i < proto.ExtensionSize(serialization::BuildLIPFilterWorkOrder::build_block_id); ++i) {
+        work_orders.push_back(make_unique<BuildLIPFilterWorkOrder>(
+            query_id, input_relation, part_id,
+            proto.GetExtension(serialization::BuildLIPFilterWorkOrder::build_block_id, i),
+            build_side_predicate, storage_manager,
+            CreateLIPFilterAdaptiveProberHelper(lip_deployment_index, query_context),
+            CreateLIPFilterBuilderHelper(lip_deployment_index, query_context)));
       }
-
-      work_orders.push_back(make_unique<BuildHashWorkOrder>(
-          query_id,
-          catalog_database->getRelationSchemaById(
-              proto.GetExtension(serialization::BuildHashWorkOrder::relation_id)),
-          move(join_key_attributes),
-          proto.GetExtension(serialization::BuildHashWorkOrder::any_join_key_attributes_nullable),
-          part_id,
-          proto.GetExtension(serialization::BuildHashWorkOrder::block_id),
-          query_context->getPredicate(
-              proto.GetExtension(serialization::BuildHashWorkOrder::build_predicate_index)),
-          query_context->getJoinHashTable(
-              proto.GetExtension(serialization::BuildHashWorkOrder::join_hash_table_index), part_id),
-          storage_manager,
-          CreateLIPFilterBuilderHelper(
-              proto.GetExtension(serialization::BuildHashWorkOrder::lip_deployment_index), query_context)));
       break;
     }
     case serialization::DELETE: {
@@ -286,8 +298,6 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
 
       const bool any_join_key_attributes_nullable =
           proto.GetExtension(serialization::HashJoinWorkOrder::any_join_key_attributes_nullable);
-      const block_id lookup_block_id =
-          proto.GetExtension(serialization::HashJoinWorkOrder::block_id);
 
       const Predicate *residual_predicate = nullptr;
       if (hash_join_work_order_type != serialization::HashJoinWorkOrder::HASH_OUTER_JOIN) {
@@ -315,19 +325,27 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
         case serialization::HashJoinWorkOrder::HASH_ANTI_JOIN: {
           LOG(INFO) << "Creating HashAntiJoinWorkOrder (Partition " << part_id << ") for Query " << query_id
                     << " in Shiftboss " << shiftboss_index;
-          work_orders.push_back(make_unique<HashAntiJoinWorkOrder>(
-              query_id, build_relation, probe_relation, move(join_key_attributes),
-              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
-              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          for (int i = 0; i < proto.ExtensionSize(serialization::HashJoinWorkOrder::block_id); ++i) {
+            work_orders.push_back(make_unique<HashAntiJoinWorkOrder>(
+                query_id, build_relation, probe_relation, join_key_attributes,
+                any_join_key_attributes_nullable, part_id,
+                proto.GetExtension(serialization::HashJoinWorkOrder::block_id, i),
+                residual_predicate, selection, hash_table, output_destination, storage_manager,
+                lip_filter_adaptive_prober));
+          }
           break;
         }
         case serialization::HashJoinWorkOrder::HASH_INNER_JOIN: {
           LOG(INFO) << "Creating HashInnerJoinWorkOrder (Partition " << part_id << ") for Query " << query_id
                     << " in Shiftboss " << shiftboss_index;
-          work_orders.push_back(make_unique<HashInnerJoinWorkOrder>(
-              query_id, build_relation, probe_relation, move(join_key_attributes),
-              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
-              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          for (int i = 0; i < proto.ExtensionSize(serialization::HashJoinWorkOrder::block_id); ++i) {
+            work_orders.push_back(make_unique<HashInnerJoinWorkOrder>(
+                query_id, build_relation, probe_relation, join_key_attributes,
+                any_join_key_attributes_nullable, part_id,
+                proto.GetExtension(serialization::HashJoinWorkOrder::block_id, i),
+                residual_predicate, selection, hash_table, output_destination, storage_manager,
+                lip_filter_adaptive_prober));
+          }
           break;
         }
         case serialization::HashJoinWorkOrder::HASH_OUTER_JOIN: {
@@ -341,20 +359,27 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
 
           LOG(INFO) << "Creating HashOuterJoinWorkOrder (Partition " << part_id << ") for Query " << query_id
                     << " in Shiftboss " << shiftboss_index;
-          work_orders.push_back(make_unique<HashOuterJoinWorkOrder>(
-              query_id, build_relation, probe_relation, move(join_key_attributes),
-              any_join_key_attributes_nullable, part_id, lookup_block_id, selection,
-              move(is_selection_on_build), hash_table, output_destination, storage_manager,
-              lip_filter_adaptive_prober));
+          for (int i = 0; i < proto.ExtensionSize(serialization::HashJoinWorkOrder::block_id); ++i) {
+            work_orders.push_back(make_unique<HashOuterJoinWorkOrder>(
+                query_id, build_relation, probe_relation, join_key_attributes,
+                any_join_key_attributes_nullable, part_id,
+                proto.GetExtension(serialization::HashJoinWorkOrder::block_id, i),
+                selection, is_selection_on_build, hash_table, output_destination, storage_manager,
+                lip_filter_adaptive_prober));
+          }
           break;
         }
         case serialization::HashJoinWorkOrder::HASH_SEMI_JOIN: {
           LOG(INFO) << "Creating HashSemiJoinWorkOrder (Partition " << part_id << ") for Query " << query_id
                     << " in Shiftboss " << shiftboss_index;
-          work_orders.push_back(make_unique<HashSemiJoinWorkOrder>(
-              query_id, build_relation, probe_relation, move(join_key_attributes),
-              any_join_key_attributes_nullable, part_id, lookup_block_id, residual_predicate,
-              selection, hash_table, output_destination, storage_manager, lip_filter_adaptive_prober));
+          for (int i = 0; i < proto.ExtensionSize(serialization::HashJoinWorkOrder::block_id); ++i) {
+            work_orders.push_back(make_unique<HashSemiJoinWorkOrder>(
+                query_id, build_relation, probe_relation, join_key_attributes,
+                any_join_key_attributes_nullable, part_id,
+                proto.GetExtension(serialization::HashJoinWorkOrder::block_id, i),
+                residual_predicate, selection, hash_table, output_destination, storage_manager,
+                lip_filter_adaptive_prober));
+          }
           break;
         }
         default:
@@ -383,6 +408,7 @@ vector<unique_ptr<WorkOrder>> WorkOrderFactory::ReconstructFromProto(const seria
 
       const int tuple_count = proto.ExtensionSize(serialization::InsertWorkOrder::tuple_indexes);
       std::vector<std::unique_ptr<Tuple>> tuple_indexes;
+      tuple_indexes.reserve(tuple_count);
 
       for (int specific_tuple_index = 0; specific_tuple_index < tuple_count; specific_tuple_index++) {
         const int tuple_index =
@@ -643,7 +669,7 @@ bool WorkOrderFactory::ProtoIsValid(const serialization::WorkOrder &proto,
         }
       }
 
-      return proto.HasExtension(serialization::AggregationWorkOrder::block_id) &&
+      return proto.ExtensionSize(serialization::AggregationWorkOrder::block_id) > 0 &&
              proto.HasExtension(serialization::AggregationWorkOrder::aggr_state_index) &&
              proto.HasExtension(serialization::AggregationWorkOrder::partition_id) &&
              query_context.isValidAggregationStateId(
@@ -705,7 +731,7 @@ bool WorkOrderFactory::ProtoIsValid(const serialization::WorkOrder &proto,
       }
 
       return proto.HasExtension(serialization::BuildHashWorkOrder::any_join_key_attributes_nullable) &&
-             proto.HasExtension(serialization::BuildHashWorkOrder::block_id) &&
+             proto.ExtensionSize(serialization::BuildHashWorkOrder::block_id) > 0 &&
              proto.HasExtension(serialization::BuildHashWorkOrder::join_hash_table_index) &&
              proto.HasExtension(serialization::BuildHashWorkOrder::partition_id) &&
              query_context.isValidJoinHashTableId(

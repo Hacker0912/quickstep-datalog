@@ -218,41 +218,6 @@ class BuildHashWorkOrder : public WorkOrder {
         storage_manager_(DCHECK_NOTNULL(storage_manager)),
         lip_filter_builder_(lip_filter_builder) {}
 
-  /**
-   * @brief Constructor for the distributed version.
-   *
-   * @param query_id The ID of the query.
-   * @param input_relation The relation to build hash table on.
-   * @param join_key_attributes The IDs of equijoin attributes in
-   *        input_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
-   * @param part_id The partition id of 'input_relation'.
-   * @param build_block_id The block id.
-   * @param predicate The Predicate to use.
-   * @param hash_table The JoinHashTable to use.
-   * @param storage_manager The StorageManager to use.
-   * @param lip_filter_builder The attached LIP filter builer.
-   **/
-  BuildHashWorkOrder(const std::size_t query_id,
-                     const CatalogRelationSchema &input_relation,
-                     std::vector<attribute_id> &&join_key_attributes,
-                     const bool any_join_key_attributes_nullable,
-                     const partition_id part_id,
-                     const block_id build_block_id,
-                     const Predicate *predicate,
-                     JoinHashTable *hash_table,
-                     StorageManager *storage_manager,
-                     LIPFilterBuilder *lip_filter_builder)
-      : WorkOrder(query_id, part_id),
-        input_relation_(input_relation),
-        join_key_attributes_(std::move(join_key_attributes)),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        build_block_id_(build_block_id),
-        predicate_(predicate),
-        hash_table_(DCHECK_NOTNULL(hash_table)),
-        storage_manager_(DCHECK_NOTNULL(storage_manager)),
-        lip_filter_builder_(lip_filter_builder) {}
-
   ~BuildHashWorkOrder() override {}
 
   const CatalogRelationSchema& input_relation() const {
