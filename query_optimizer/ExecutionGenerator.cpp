@@ -25,15 +25,11 @@
 #include <string>
 #include <type_traits>
 #include <unordered_map>
-
-#include "query_optimizer/QueryOptimizerConfig.h"  // For QUICKSTEP_DISTRIBUTED.
-
-#ifdef QUICKSTEP_DISTRIBUTED
 #include <unordered_set>
-#endif
-
 #include <utility>
 #include <vector>
+
+#include "query_optimizer/QueryOptimizerConfig.h"  // For QUICKSTEP_DISTRIBUTED.
 
 #ifdef QUICKSTEP_DISTRIBUTED
 #include "catalog/Catalog.pb.h"
@@ -147,6 +143,7 @@ using std::size_t;
 using std::static_pointer_cast;
 using std::unique_ptr;
 using std::unordered_map;
+using std::unordered_set;
 using std::vector;
 
 namespace quickstep {
@@ -1043,6 +1040,38 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
   createTemporaryCatalogRelation(physical_plan,
                                  &output_relation,
                                  insert_destination_proto);
+
+  if (num_partitions > 1u) {
+    unordered_set<E::ExprId> output_relation_attributes;
+    for (const E::NamedExpressionPtr &output_attribute :
+         physical_plan->getOutputAttributes()) {
+      output_relation_attributes.insert(output_attribute->id());
+    }
+
+    vector<unordered_set<E::ExprId>> partition_attributes_candidates;
+    for (int i = 0; i < left_join_attributes.size(); ++i) {
+      unordered_set<E::ExprId> partition_attribute_candidates;
+
+      const E::ExprId left_join_attribute_expr_id = left_join_attributes[i]->id();
+      if (output_relation_attributes.count(left_join_attribute_expr_id)) {
+        partition_attribute_candidates.insert(left_join_attribute_expr_id);
+      }
+
+      const E::ExprId right_join_attribute_expr_id = right_join_attributes[i]->id();
+      if (output_relation_attributes.count(right_join_attribute_expr_id)) {
+        partition_attribute_candidates.insert(right_join_attribute_expr_id);
+      }
+
+      if (!partition_attribute_candidates.empty()) {
+        partition_attributes_candidates.push_back(move(partition_attribute_candidates));
+      }
+    }
+
+    output_relation_partition_info_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(output_relation->getID()),
+        std::forward_as_tuple(num_partitions, move(partition_attributes_candidates)));
+  }
 
   // Get JoinType
   HashJoinOperator::JoinType join_type;

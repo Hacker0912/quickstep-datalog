@@ -24,11 +24,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-
-#ifdef QUICKSTEP_DISTRIBUTED
 #include <unordered_set>
-#endif
-
+#include <utility>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
@@ -440,6 +437,19 @@ class ExecutionGenerator {
    * @brief All temporary relations created during query processing.
    */
   std::vector<CatalogRelationInfo> temporary_relation_info_vec_;
+
+  struct PartitionInfo {
+    PartitionInfo(const std::size_t num_partitions_in,
+                  std::vector<std::unordered_set<expressions::ExprId>> &&partition_attribute_candidates_in)
+        : num_partitions(num_partitions_in),
+          partition_attribute_candidates(std::move(partition_attribute_candidates_in)) {}
+
+    const std::size_t num_partitions;
+    const std::vector<std::unordered_set<expressions::ExprId>> partition_attribute_candidates;
+  };
+
+  // Store the PartitionInfo to convert the consumer operator to be partition-aware.
+  std::unordered_map<relation_id, PartitionInfo> output_relation_partition_info_;
 
   /**
    * @brief The cost model to use for estimating aggregation hash table size.
