@@ -96,7 +96,7 @@ bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
                 input_relation_,
                 input_block_id,
                 build_attribute_,
-                query_context->getAggregationState(aggr_state_index_),
+                query_context->getAggregationState(aggr_state_index_, 0),
                 storage_manager),
             op_index_);
       }
@@ -111,7 +111,7 @@ bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
                 input_relation_,
                 input_relation_block_ids_[num_workorders_generated_],
                 build_attribute_,
-                query_context->getAggregationState(aggr_state_index_),
+                query_context->getAggregationState(aggr_state_index_, 0),
                 storage_manager),
           op_index_);
       ++num_workorders_generated_;

@@ -41,19 +41,21 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
 
   if (blocking_dependencies_met_ && !started_) {
     started_ = true;
-    AggregationOperationState *agg_state =
-        query_context->getAggregationState(aggr_state_index_);
-    DCHECK(agg_state != nullptr);
-    for (std::size_t part_id = 0;
-         part_id < agg_state->getNumFinalizationPartitions();
-         ++part_id) {
-      container->addNormalWorkOrder(
-          new FinalizeAggregationWorkOrder(
-              query_id_,
-              part_id,
-              agg_state,
-              query_context->getInsertDestination(output_destination_index_)),
-          op_index_);
+    for (partition_id input_part_id = 0; input_part_id < num_partitions_; ++input_part_id) {
+      AggregationOperationState *agg_state =
+          query_context->getAggregationState(aggr_state_index_, input_part_id);
+      DCHECK(agg_state != nullptr);
+      for (std::size_t part_id = 0;
+           part_id < agg_state->getNumFinalizationPartitions();
+           ++part_id) {
+        container->addNormalWorkOrder(
+            new FinalizeAggregationWorkOrder(
+                query_id_,
+                part_id,
+                agg_state,
+                query_context->getInsertDestination(output_destination_index_)),
+            op_index_);
+      }
     }
   }
   return started_;
@@ -66,15 +68,22 @@ bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer
   if (blocking_dependencies_met_ && !started_) {
     started_ = true;
 
-    serialization::WorkOrder *proto = new serialization::WorkOrder;
-    proto->set_work_order_type(serialization::FINALIZE_AGGREGATION);
-    proto->set_query_id(query_id_);
-    proto->SetExtension(serialization::FinalizeAggregationWorkOrder::aggr_state_index,
-                        aggr_state_index_);
-    proto->SetExtension(serialization::FinalizeAggregationWorkOrder::insert_destination_index,
-                        output_destination_index_);
+    for (partition_id input_part_id = 0; input_part_id < num_partitions_; ++input_part_id) {
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::FINALIZE_AGGREGATION);
+      proto->set_query_id(query_id_);
+      proto->SetExtension(serialization::FinalizeAggregationWorkOrder::aggr_state_index,
+                          aggr_state_index_);
+      // NOTE(zuyu): 'input_part_id' comes from the partitioned input relation,
+      // while 'partition_id' in above TODO comes from an internally partitioned
+      // aggregation implementation (CollisionFreeVectorTable).
+      proto->SetExtension(serialization::FinalizeAggregationWorkOrder::partition_id,
+                          input_part_id);
+      proto->SetExtension(serialization::FinalizeAggregationWorkOrder::insert_destination_index,
+                          output_destination_index_);
 
-    container->addWorkOrderProto(proto, op_index_);
+      container->addWorkOrderProto(proto, op_index_);
+    }
   }
   return started_;
 }

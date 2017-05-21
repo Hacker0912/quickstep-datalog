@@ -1784,19 +1784,246 @@ void ExecutionGenerator::convertUpdateTable(
 
 void ExecutionGenerator::convertAggregate(
     const P::AggregatePtr &physical_plan) {
+  const CatalogRelationInfo *input_relation_info =
+      findRelationInfoOutputByPhysical(physical_plan->input());
+  const CatalogRelation *input_relation = input_relation_info->relation;
+
+  const PartitionScheme *input_partition_scheme = input_relation->getPartitionScheme();
+  if (input_partition_scheme) {
+    P::PhysicalPtr input_physical = physical_plan->input();
+    DCHECK(input_physical->getPhysicalType() == P::PhysicalType::kTableReference);
+    const PartitionSchemeHeader &partition_scheme_header = input_partition_scheme->getPartitionSchemeHeader();
+
+    const vector<E::AttributeReferencePtr> &attribute_references =
+        std::static_pointer_cast<const P::TableReference>(input_physical)->attribute_list();
+    vector<unordered_set<E::ExprId>> partition_attributes_candidates;
+    for (const attribute_id partition_attr : partition_scheme_header.getPartitionAttributeIds()) {
+      unordered_set<E::ExprId> partition_attribute_candidates;
+      partition_attribute_candidates.insert(attribute_references[partition_attr]->id());
+
+      partition_attributes_candidates.push_back(move(partition_attribute_candidates));
+    }
+
+    output_relation_partition_info_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(input_relation->getID()),
+        std::forward_as_tuple(partition_scheme_header.getNumPartitions(), move(partition_attributes_candidates)));
+  }
+
+  const vector<E::NamedExpressionPtr> &grouping_expressions = physical_plan->grouping_expressions();
+  const bool has_group_by = !grouping_expressions.empty();
+
+  // Check partitioned aggregate.
+  bool need_partial_aggr = false;
+  QueryPlan::DAGNodeIndex finalize_partial_aggregation_operator_index;
+  const auto &output_relation_partition_info_cit = output_relation_partition_info_.find(input_relation->getID());
+  if (has_group_by && output_relation_partition_info_cit != output_relation_partition_info_.end()) {
+    unordered_map<E::ExprId, size_t> grouping_expression_ids;
+    for (int i = 0; i < grouping_expressions.size(); ++i) {
+      grouping_expression_ids.emplace(grouping_expressions[i]->id(), i);
+    }
+
+    unordered_set<size_t> grouping_expression_indexes;
+    PartitionSchemeHeader::PartitionAttributeIds partition_attribute_ids;
+    for (const unordered_set<E::ExprId> &partition_attr_candidates :
+         output_relation_partition_info_cit->second.partition_attribute_candidates) {
+      bool found_partition_attribute = false;
+      for (const E::ExprId partition_attr_candidate : partition_attr_candidates) {
+        const auto &grouping_expression_id_cit = grouping_expression_ids.find(partition_attr_candidate);
+        if (grouping_expression_id_cit != grouping_expression_ids.end()) {
+          if (!found_partition_attribute) {
+            grouping_expression_indexes.insert(grouping_expression_id_cit->second);
+            partition_attribute_ids.push_back(attribute_substitution_map_[partition_attr_candidate]->getID());
+            found_partition_attribute = true;
+          }
+
+          grouping_expression_ids.erase(partition_attr_candidate);
+        }
+      }
+    }
+
+    if (!input_relation_info->isStoredRelation()) {
+      auto partition_scheme_header =
+          make_unique<HashPartitionSchemeHeader>(output_relation_partition_info_cit->second.num_partitions,
+                                                 move(partition_attribute_ids));
+      auto partition_scheme = make_unique<PartitionScheme>(partition_scheme_header.release());
+
+      S::InsertDestination *insert_destination_proto =
+          query_context_proto_->mutable_insert_destinations(input_relation_info->output_destination_index);
+
+      insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
+      insert_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
+          ->MergeFrom(partition_scheme->getProto());
+
+      CatalogRelation *mutable_input_relation =
+          catalog_database_->getRelationByIdMutable(input_relation->getID());
+      mutable_input_relation->setPartitionScheme(partition_scheme.release());
+    }
+
+    need_partial_aggr = !grouping_expression_ids.empty();
+    if (need_partial_aggr) {
+      const size_t num_partitions = output_relation_partition_info_cit->second.num_partitions;
+
+      // Create aggr state proto.
+      const QueryContext::aggregation_state_id partial_aggr_state_index =
+          query_context_proto_->aggregation_states_size();
+      S::QueryContext::AggregationOperationStateContext *partial_aggr_state_context_proto =
+          query_context_proto_->add_aggregation_states();
+      partial_aggr_state_context_proto->set_num_partitions(num_partitions);
+
+      S::AggregationOperationState *partial_aggr_state_proto =
+          partial_aggr_state_context_proto->mutable_aggregation_state();
+
+      partial_aggr_state_proto->set_relation_id(input_relation->getID());
+
+      for (const std::size_t index : grouping_expression_indexes) {
+        const E::NamedExpressionPtr &grouping_expression = grouping_expressions[index];
+
+        unique_ptr<const Scalar> execution_group_by_expression;
+        E::AliasPtr alias;
+        if (E::SomeAlias::MatchesWithConditionalCast(grouping_expression, &alias)) {
+          E::ScalarPtr scalar;
+          // NOTE(zuyu): For aggregate expressions, all child expressions of an
+          // Alias should be a Scalar.
+          CHECK(E::SomeScalar::MatchesWithConditionalCast(alias->expression(), &scalar))
+              << alias->toString();
+          execution_group_by_expression.reset(scalar->concretize(attribute_substitution_map_));
+        } else {
+          execution_group_by_expression.reset(
+              grouping_expression->concretize(attribute_substitution_map_));
+        }
+        partial_aggr_state_proto->add_group_by_expressions()->MergeFrom(execution_group_by_expression->getProto());
+      }
+
+      const std::size_t estimated_num_groups =
+          cost_model_for_aggregation_->estimateNumGroupsForAggregate(physical_plan);
+
+      // TODO(quickstep-team): use array-based aggregation if applicable.
+      if (cost_model_for_aggregation_->canUseTwoPhaseCompactKeyAggregation(
+              physical_plan, estimated_num_groups)) {
+        // Second option: use thread-private compact-key aggregation if applicable.
+        partial_aggr_state_proto->set_hash_table_impl_type(
+            serialization::HashTableImplType::THREAD_PRIVATE_COMPACT_KEY);
+      } else {
+        // Otherwise, use SeparateChaining.
+        partial_aggr_state_proto->set_hash_table_impl_type(
+            serialization::HashTableImplType::SEPARATE_CHAINING);
+      }
+      partial_aggr_state_proto->set_estimated_num_entries(std::max(16uL, estimated_num_groups));
+
+      for (const E::AliasPtr &named_aggregate_expression : physical_plan->aggregate_expressions()) {
+        const E::AggregateFunctionPtr unnamed_aggregate_expression =
+            std::static_pointer_cast<const E::AggregateFunction>(named_aggregate_expression->expression());
+
+        // Add a new entry in 'aggregates'.
+        S::Aggregate *aggr_proto = partial_aggr_state_proto->add_aggregates();
+
+        // Set the AggregateFunction.
+        aggr_proto->mutable_function()->MergeFrom(
+            unnamed_aggregate_expression->getAggregate().getProto());
+
+        // Add each of the aggregate's arguments.
+        for (const E::ScalarPtr &argument : unnamed_aggregate_expression->getArguments()) {
+          unique_ptr<const Scalar> concretized_argument(argument->concretize(attribute_substitution_map_));
+          aggr_proto->add_argument()->MergeFrom(concretized_argument->getProto());
+        }
+
+        // Set whether it is a DISTINCT aggregation.
+        aggr_proto->set_is_distinct(unnamed_aggregate_expression->is_distinct());
+
+        // Add distinctify hash table impl type if it is a DISTINCT aggregation.
+        if (unnamed_aggregate_expression->is_distinct()) {
+          const vector<E::ScalarPtr> &arguments = unnamed_aggregate_expression->getArguments();
+          DCHECK_GE(arguments.size(), 1u);
+          // Right now only SeparateChaining implementation is supported.
+          partial_aggr_state_proto->add_distinctify_hash_table_impl_types(
+              serialization::HashTableImplType::SEPARATE_CHAINING);
+        }
+      }
+
+      if (physical_plan->filter_predicate() != nullptr) {
+        unique_ptr<const Predicate> predicate(convertPredicate(physical_plan->filter_predicate()));
+        partial_aggr_state_proto->mutable_predicate()->MergeFrom(predicate->getProto());
+      }
+
+      const QueryPlan::DAGNodeIndex partial_aggregation_operator_index =
+          execution_plan_->addRelationalOperator(
+              new AggregationOperator(
+                  query_handle_->query_id(),
+                  *input_relation,
+                  input_relation_info->isStoredRelation(),
+                  partial_aggr_state_index,
+                  num_partitions));
+
+      if (!input_relation_info->isStoredRelation()) {
+        execution_plan_->addDirectDependency(partial_aggregation_operator_index,
+                                             input_relation_info->producer_operator_index,
+                                             false /* is_pipeline_breaker */);
+      }
+
+      // Create InsertDestination proto.
+      const CatalogRelation *partial_aggr_output_relation = nullptr;
+      const QueryContext::insert_destination_id partial_aggr_insert_destination_index =
+          query_context_proto_->insert_destinations_size();
+      S::InsertDestination *partial_aggr_insert_destination_proto = query_context_proto_->add_insert_destinations();
+      createTemporaryCatalogRelation(physical_plan,
+                                     &partial_aggr_output_relation,
+                                     partial_aggr_insert_destination_proto);
+
+      finalize_partial_aggregation_operator_index =
+          execution_plan_->addRelationalOperator(
+              new FinalizeAggregationOperator(query_handle_->query_id(),
+                                              num_partitions,
+                                              partial_aggr_state_index,
+                                              *partial_aggr_output_relation,
+                                              partial_aggr_insert_destination_index));
+
+      partial_aggr_insert_destination_proto->set_relational_op_index(finalize_partial_aggregation_operator_index);
+
+      execution_plan_->addDirectDependency(finalize_partial_aggregation_operator_index,
+                                           partial_aggregation_operator_index,
+                                           true /* is_pipeline_breaker */);
+
+      temporary_relation_info_vec_.emplace_back(finalize_partial_aggregation_operator_index,
+                                                partial_aggr_output_relation,
+                                                partial_aggr_insert_destination_index);
+
+      const QueryPlan::DAGNodeIndex destroy_partial_aggregation_state_operator_index =
+          execution_plan_->addRelationalOperator(
+              new DestroyAggregationStateOperator(query_handle_->query_id(),
+                                                  num_partitions,
+                                                  partial_aggr_state_index));
+
+      execution_plan_->addDirectDependency(destroy_partial_aggregation_state_operator_index,
+                                           finalize_partial_aggregation_operator_index,
+                                           true);
+
+      if (lip_filter_generator_ != nullptr && !need_partial_aggr) {
+        lip_filter_generator_->addAggregateInfo(physical_plan,
+                                                partial_aggregation_operator_index);
+      }
+    }
+  }
+
+  input_partition_scheme = input_relation->getPartitionScheme();
+  const size_t num_partitions =
+      input_partition_scheme
+          ? input_partition_scheme->getPartitionSchemeHeader().getNumPartitions()
+          : 1u;
+
   // Create aggr state proto.
   const QueryContext::aggregation_state_id aggr_state_index =
       query_context_proto_->aggregation_states_size();
-  S::AggregationOperationState *aggr_state_proto = query_context_proto_->add_aggregation_states();
+  S::QueryContext::AggregationOperationStateContext *aggr_state_context_proto =
+      query_context_proto_->add_aggregation_states();
+  aggr_state_context_proto->set_num_partitions(num_partitions);
 
-  const CatalogRelationInfo *input_relation_info =
-      findRelationInfoOutputByPhysical(physical_plan->input());
-  aggr_state_proto->set_relation_id(input_relation_info->relation->getID());
+  S::AggregationOperationState *aggr_state_proto =
+      aggr_state_context_proto->mutable_aggregation_state();
 
-  bool use_parallel_initialization = false;
+  aggr_state_proto->set_relation_id(input_relation->getID());
 
-  std::vector<const Type*> group_by_types;
-  for (const E::NamedExpressionPtr &grouping_expression : physical_plan->grouping_expressions()) {
+  for (const E::NamedExpressionPtr &grouping_expression : grouping_expressions) {
     unique_ptr<const Scalar> execution_group_by_expression;
     E::AliasPtr alias;
     if (E::SomeAlias::MatchesWithConditionalCast(grouping_expression, &alias)) {
@@ -1810,15 +2037,17 @@ void ExecutionGenerator::convertAggregate(
       execution_group_by_expression.reset(
           grouping_expression->concretize(attribute_substitution_map_));
     }
-    aggr_state_proto->add_group_by_expressions()->CopyFrom(execution_group_by_expression->getProto());
-    group_by_types.push_back(&execution_group_by_expression->getType());
+    aggr_state_proto->add_group_by_expressions()->MergeFrom(execution_group_by_expression->getProto());
   }
 
-  if (!group_by_types.empty()) {
+  bool use_parallel_initialization = false;
+
+  if (has_group_by) {
     const std::size_t estimated_num_groups =
         cost_model_for_aggregation_->estimateNumGroupsForAggregate(physical_plan);
 
     std::size_t max_num_groups;
+
     if (cost_model_for_aggregation_
             ->canUseCollisionFreeAggregation(physical_plan,
                                              estimated_num_groups,
@@ -1875,18 +2104,19 @@ void ExecutionGenerator::convertAggregate(
     }
   }
 
-  if (physical_plan->filter_predicate() != nullptr) {
+  if (physical_plan->filter_predicate() != nullptr && !need_partial_aggr) {
     unique_ptr<const Predicate> predicate(convertPredicate(physical_plan->filter_predicate()));
-    aggr_state_proto->mutable_predicate()->CopyFrom(predicate->getProto());
+    aggr_state_proto->mutable_predicate()->MergeFrom(predicate->getProto());
   }
 
   const QueryPlan::DAGNodeIndex aggregation_operator_index =
       execution_plan_->addRelationalOperator(
           new AggregationOperator(
               query_handle_->query_id(),
-              *input_relation_info->relation,
+              *input_relation,
               input_relation_info->isStoredRelation(),
-              aggr_state_index));
+              aggr_state_index,
+              num_partitions));
 
   if (!input_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(aggregation_operator_index,
@@ -1906,6 +2136,12 @@ void ExecutionGenerator::convertAggregate(
                                          true /* is_pipeline_breaker */);
   }
 
+  if (need_partial_aggr) {
+      execution_plan_->addDirectDependency(aggregation_operator_index,
+                                           finalize_partial_aggregation_operator_index,
+                                           true /* is_pipeline_breaker */);
+  }
+
   // Create InsertDestination proto.
   const CatalogRelation *output_relation = nullptr;
   const QueryContext::insert_destination_id insert_destination_index =
@@ -1918,6 +2154,7 @@ void ExecutionGenerator::convertAggregate(
   const QueryPlan::DAGNodeIndex finalize_aggregation_operator_index =
       execution_plan_->addRelationalOperator(
           new FinalizeAggregationOperator(query_handle_->query_id(),
+                                          num_partitions,
                                           aggr_state_index,
                                           *output_relation,
                                           insert_destination_index));
@@ -1941,13 +2178,14 @@ void ExecutionGenerator::convertAggregate(
   const QueryPlan::DAGNodeIndex destroy_aggregation_state_operator_index =
       execution_plan_->addRelationalOperator(
           new DestroyAggregationStateOperator(query_handle_->query_id(),
+                                              num_partitions,
                                               aggr_state_index));
 
   execution_plan_->addDirectDependency(destroy_aggregation_state_operator_index,
                                        finalize_aggregation_operator_index,
                                        true);
 
-  if (lip_filter_generator_ != nullptr) {
+  if (lip_filter_generator_ != nullptr && !need_partial_aggr) {
     lip_filter_generator_->addAggregateInfo(physical_plan,
                                             aggregation_operator_index);
   }
@@ -1962,13 +2200,15 @@ void ExecutionGenerator::convertCrossReferenceCoalesceAggregate(
       findRelationInfoOutputByPhysical(physical_plan->left_child());
   const CatalogRelationInfo *right_relation_info =
       findRelationInfoOutputByPhysical(physical_plan->right_child());
+  const CatalogRelation &right_relation = *right_relation_info->relation;
 
   // Create aggr state proto.
   const QueryContext::aggregation_state_id aggr_state_index =
       query_context_proto_->aggregation_states_size();
-  S::AggregationOperationState *aggr_state_proto = query_context_proto_->add_aggregation_states();
+  S::AggregationOperationState *aggr_state_proto =
+      query_context_proto_->add_aggregation_states()->mutable_aggregation_state();
 
-  aggr_state_proto->set_relation_id(right_relation_info->relation->getID());
+  aggr_state_proto->set_relation_id(right_relation.getID());
 
   // Group by the right join attribute.
   std::unique_ptr<const Scalar> execution_group_by_expression(
@@ -2031,13 +2271,17 @@ void ExecutionGenerator::convertCrossReferenceCoalesceAggregate(
                                          false /* is_pipeline_breaker */);
   }
 
+  // TODO(quickstep-team): Support partitioned aggregation.
+  CHECK(!right_relation.hasPartitionScheme());
+  const std::size_t num_partitions = 1u;
   const QueryPlan::DAGNodeIndex aggregation_operator_index =
       execution_plan_->addRelationalOperator(
           new AggregationOperator(
               query_handle_->query_id(),
-              *right_relation_info->relation,
+              right_relation,
               right_relation_info->isStoredRelation(),
-              aggr_state_index));
+              aggr_state_index,
+              num_partitions));
 
   if (!right_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(aggregation_operator_index,
@@ -2068,6 +2312,7 @@ void ExecutionGenerator::convertCrossReferenceCoalesceAggregate(
   const QueryPlan::DAGNodeIndex finalize_aggregation_operator_index =
       execution_plan_->addRelationalOperator(
           new FinalizeAggregationOperator(query_handle_->query_id(),
+                                          num_partitions,
                                           aggr_state_index,
                                           *output_relation,
                                           insert_destination_index));
@@ -2091,6 +2336,7 @@ void ExecutionGenerator::convertCrossReferenceCoalesceAggregate(
   const QueryPlan::DAGNodeIndex destroy_aggregation_state_operator_index =
       execution_plan_->addRelationalOperator(
           new DestroyAggregationStateOperator(query_handle_->query_id(),
+                                              num_partitions,
                                               aggr_state_index));
 
   execution_plan_->addDirectDependency(destroy_aggregation_state_operator_index,

@@ -133,6 +133,7 @@ class PolicyEnforcerDistributed final : public PolicyEnforcerBase {
    *
    * @param query_id The query id.
    * @param aggr_state_index The Hash Table for the Aggregation.
+   * @param part_id The partition ID.
    * @param block_locator The BlockLocator to use.
    * @param block The block id to feed BlockLocator for the locality info.
    * @param next_shiftboss_index The index of Shiftboss to schedule a next WorkOrder.
@@ -141,6 +142,7 @@ class PolicyEnforcerDistributed final : public PolicyEnforcerBase {
   void getShiftbossIndexForAggregation(
       const std::size_t query_id,
       const QueryContext::aggregation_state_id aggr_state_index,
+      const partition_id part_id,
       const BlockLocator &block_locator,
       const block_id block,
       const std::size_t next_shiftboss_index_to_schedule,

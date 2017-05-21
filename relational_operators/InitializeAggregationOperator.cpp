@@ -41,7 +41,7 @@ bool InitializeAggregationOperator::getAllWorkOrders(
     tmb::MessageBus *bus) {
   if (!started_) {
     AggregationOperationState *agg_state =
-        query_context->getAggregationState(aggr_state_index_);
+        query_context->getAggregationState(aggr_state_index_, 0);
     DCHECK(agg_state != nullptr);
 
     for (std::size_t part_id = 0;

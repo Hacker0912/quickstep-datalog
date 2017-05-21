@@ -58,10 +58,12 @@ message WorkOrder {
   extensions 16 to max;
 }
 
+// Next tag: 20.
 message AggregationWorkOrder {
   extend WorkOrder {
     // All required.
     optional uint32 aggr_state_index = 16;
+    optional uint64 partition_id = 19;
     optional fixed64 block_id = 17;
     optional int32 lip_deployment_index = 18;
   }
@@ -113,6 +115,7 @@ message DeleteWorkOrder {
 message DestroyAggregationStateWorkOrder {
   extend WorkOrder {
     optional uint32 aggr_state_index = 352;
+    optional uint64 partition_id = 353;
   }
 }
 
@@ -138,6 +141,7 @@ message FinalizeAggregationWorkOrder {
     // All required.
     optional uint32 aggr_state_index = 144;
     optional int32 insert_destination_index = 145;
+    optional uint64 partition_id = 146;
   }
 }
 

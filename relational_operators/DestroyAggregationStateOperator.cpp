@@ -36,9 +36,11 @@ bool DestroyAggregationStateOperator::getAllWorkOrders(
     tmb::MessageBus *bus) {
   if (blocking_dependencies_met_ && !work_generated_) {
     work_generated_ = true;
-    container->addNormalWorkOrder(
-        new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, query_context),
-        op_index_);
+    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
+      container->addNormalWorkOrder(
+          new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
+          op_index_);
+    }
   }
   return work_generated_;
 }
@@ -47,18 +49,21 @@ bool DestroyAggregationStateOperator::getAllWorkOrderProtos(WorkOrderProtosConta
   if (blocking_dependencies_met_ && !work_generated_) {
     work_generated_ = true;
 
-    serialization::WorkOrder *proto = new serialization::WorkOrder;
-    proto->set_work_order_type(serialization::DESTROY_AGGREGATION_STATE);
-    proto->set_query_id(query_id_);
-    proto->SetExtension(serialization::DestroyAggregationStateWorkOrder::aggr_state_index, aggr_state_index_);
+    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
+      serialization::WorkOrder *proto = new serialization::WorkOrder;
+      proto->set_work_order_type(serialization::DESTROY_AGGREGATION_STATE);
+      proto->set_query_id(query_id_);
+      proto->SetExtension(serialization::DestroyAggregationStateWorkOrder::partition_id, part_id);
+      proto->SetExtension(serialization::DestroyAggregationStateWorkOrder::aggr_state_index, aggr_state_index_);
 
-    container->addWorkOrderProto(proto, op_index_);
+      container->addWorkOrderProto(proto, op_index_);
+    }
   }
   return work_generated_;
 }
 
 void DestroyAggregationStateWorkOrder::execute() {
-  query_context_->destroyAggregationState(aggr_state_index_);
+  query_context_->destroyAggregationState(aggr_state_index_, part_id_);
 }
 
 }  // namespace quickstep

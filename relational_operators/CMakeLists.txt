@@ -203,6 +203,7 @@ target_link_libraries(quickstep_relationaloperators_DeleteOperator
                       tmb)
 target_link_libraries(quickstep_relationaloperators_DestroyAggregationStateOperator
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_QueryContext
                       quickstep_queryexecution_WorkOrderProtosContainer
                       quickstep_queryexecution_WorkOrdersContainer
