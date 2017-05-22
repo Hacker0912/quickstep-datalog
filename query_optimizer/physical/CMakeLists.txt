@@ -33,6 +33,7 @@ add_library(quickstep_queryoptimizer_physical_InsertTuple InsertTuple.cpp Insert
 add_library(quickstep_queryoptimizer_physical_Join ../../empty_src.cpp Join.hpp)
 add_library(quickstep_queryoptimizer_physical_LIPFilterConfiguration ../../empty_src.cpp LIPFilterConfiguration.hpp)
 add_library(quickstep_queryoptimizer_physical_NestedLoopsJoin NestedLoopsJoin.cpp NestedLoopsJoin.hpp)
+add_library(quickstep_queryoptimizer_physical_PartitionSchemeHeader ../../empty_src.cpp PartitionSchemeHeader.hpp)
 add_library(quickstep_queryoptimizer_physical_PatternMatcher ../../empty_src.cpp PatternMatcher.hpp)
 add_library(quickstep_queryoptimizer_physical_Physical ../../empty_src.cpp Physical.hpp)
 add_library(quickstep_queryoptimizer_physical_PhysicalType ../../empty_src.cpp PhysicalType.hpp)
@@ -57,6 +58,7 @@ target_link_libraries(quickstep_queryoptimizer_physical_Aggregate
                       quickstep_queryoptimizer_expressions_ExpressionUtil
                       quickstep_queryoptimizer_expressions_NamedExpression
                       quickstep_queryoptimizer_expressions_Predicate
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Cast
@@ -66,6 +68,7 @@ target_link_libraries(quickstep_queryoptimizer_physical_BinaryJoin
                       quickstep_queryoptimizer_OptimizerTree
                       quickstep_queryoptimizer_expressions_NamedExpression
                       quickstep_queryoptimizer_physical_Join
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_utility_Cast
                       quickstep_utility_Macros)
@@ -150,6 +153,7 @@ target_link_libraries(quickstep_queryoptimizer_physical_HashJoin
                       quickstep_queryoptimizer_expressions_NamedExpression
                       quickstep_queryoptimizer_expressions_Predicate
                       quickstep_queryoptimizer_physical_BinaryJoin
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Cast
@@ -194,12 +198,16 @@ target_link_libraries(quickstep_queryoptimizer_physical_NestedLoopsJoin
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_queryoptimizer_physical_PartitionSchemeHeader
+                      quickstep_queryoptimizer_expressions_ExprId
+                      quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_PhysicalType)
 target_link_libraries(quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_OptimizerTree
                       quickstep_queryoptimizer_expressions_AttributeReference
                       quickstep_queryoptimizer_expressions_ExpressionUtil
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_physical_Sample
@@ -220,6 +228,7 @@ target_link_libraries(quickstep_queryoptimizer_physical_Selection
                       quickstep_queryoptimizer_expressions_LogicalAnd
                       quickstep_queryoptimizer_expressions_NamedExpression
                       quickstep_queryoptimizer_expressions_Predicate
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Cast
@@ -256,10 +265,13 @@ target_link_libraries(quickstep_queryoptimizer_physical_TableGenerator
 target_link_libraries(quickstep_queryoptimizer_physical_TableReference
                       glog
                       quickstep_catalog_CatalogRelation
+                      quickstep_catalog_PartitionScheme
+                      quickstep_catalog_PartitionSchemeHeader
                       quickstep_queryoptimizer_OptimizerTree
                       quickstep_queryoptimizer_expressions_AttributeReference
                       quickstep_queryoptimizer_expressions_ExpressionUtil
                       quickstep_queryoptimizer_expressions_NamedExpression
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Cast
@@ -325,6 +337,7 @@ target_link_libraries(quickstep_queryoptimizer_physical
                       quickstep_queryoptimizer_physical_Join
                       quickstep_queryoptimizer_physical_LIPFilterConfiguration
                       quickstep_queryoptimizer_physical_NestedLoopsJoin
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType

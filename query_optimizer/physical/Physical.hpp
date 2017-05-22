@@ -26,6 +26,7 @@
 #include "query_optimizer/OptimizerTree.hpp"
 #include "query_optimizer/expressions/AttributeReference.hpp"
 #include "query_optimizer/expressions/ExpressionUtil.hpp"
+#include "query_optimizer/physical/PartitionSchemeHeader.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
 
 #include "utility/Macros.hpp"
@@ -86,11 +87,26 @@ class Physical : public OptimizerTree<Physical> {
       const expressions::UnorderedNamedExpressionSet &referenced_expressions,
       PhysicalPtr *output) const = 0;
 
+  /**
+   * @brief Get the partition scheme of the physical plan node.
+   *
+   * @return A const pointer to the partition scheme of the node.
+   **/
+  const PartitionSchemeHeader* getOutputPartitionSchemeHeader() const {
+    return partition_scheme_header_.get();
+  }
+
  protected:
   /**
    * @brief Constructor.
+   *
+   * @param partition_scheme_header The partition scheme header of the relation.
+   *        Take ownership of the object.
    */
-  Physical() {}
+  explicit Physical(PartitionSchemeHeader *partition_scheme_header = nullptr)
+      : partition_scheme_header_(partition_scheme_header) {}
+
+  std::unique_ptr<PartitionSchemeHeader> partition_scheme_header_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Physical);

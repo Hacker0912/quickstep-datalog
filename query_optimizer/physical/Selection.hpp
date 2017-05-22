@@ -42,6 +42,7 @@ namespace physical {
  *  @{
  */
 
+struct PartitionSchemeHeader;
 class Selection;
 typedef std::shared_ptr<const Selection> SelectionPtr;
 
@@ -97,10 +98,7 @@ class Selection : public Physical {
   static SelectionPtr Create(
       const PhysicalPtr &input,
       const std::vector<expressions::NamedExpressionPtr> &project_expressions,
-      const expressions::PredicatePtr &filter_predicate) {
-    return SelectionPtr(
-        new Selection(input, project_expressions, filter_predicate));
-  }
+      const expressions::PredicatePtr &filter_predicate);
 
   /**
    * @brief Creates a conjunctive predicate with \p filter_predicates
@@ -140,15 +138,17 @@ class Selection : public Physical {
   Selection(
       const PhysicalPtr &input,
       const std::vector<expressions::NamedExpressionPtr> &project_expressions,
-      const expressions::PredicatePtr &filter_predicate)
-      : project_expressions_(project_expressions),
+      const expressions::PredicatePtr &filter_predicate,
+      PartitionSchemeHeader *partition_scheme_header)
+      : Physical(partition_scheme_header),
+        project_expressions_(project_expressions),
         filter_predicate_(filter_predicate) {
     addChild(input);
   }
 
-  std::vector<expressions::NamedExpressionPtr> project_expressions_;
+  const std::vector<expressions::NamedExpressionPtr> project_expressions_;
   // Can be NULL. If NULL, the filter predicate is treated as the literal true.
-  expressions::PredicatePtr filter_predicate_;
+  const expressions::PredicatePtr filter_predicate_;
 
   DISALLOW_COPY_AND_ASSIGN(Selection);
 };

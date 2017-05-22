@@ -19,22 +19,57 @@
 
 #include "query_optimizer/physical/Selection.hpp"
 
+#include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "query_optimizer/OptimizerTree.hpp"
 #include "query_optimizer/expressions/AttributeReference.hpp"
 #include "query_optimizer/expressions/ExpressionUtil.hpp"
 #include "query_optimizer/expressions/NamedExpression.hpp"
+#include "query_optimizer/physical/PartitionSchemeHeader.hpp"
+#include "query_optimizer/physical/Physical.hpp"
 #include "utility/Cast.hpp"
 
 #include "glog/logging.h"
+
+using std::unordered_set;
 
 namespace quickstep {
 namespace optimizer {
 namespace physical {
 
 namespace E = ::quickstep::optimizer::expressions;
+
+SelectionPtr Selection::Create(
+      const PhysicalPtr &input,
+      const std::vector<E::NamedExpressionPtr> &project_expressions,
+      const E::PredicatePtr &filter_predicate) {
+  std::unique_ptr<PartitionSchemeHeader> output_partition_scheme_header;
+  const PartitionSchemeHeader *partition_scheme_header = input->getOutputPartitionSchemeHeader();
+  if (partition_scheme_header) {
+    unordered_set<E::ExprId> project_expr_ids;
+    for (const E::NamedExpressionPtr &project_expression : project_expressions) {
+      project_expr_ids.insert(project_expression->id());
+    }
+
+    bool projected_partition_attr = false;
+    for (const E::ExprId expr_id : partition_scheme_header->partition_expr_ids_) {
+      if (project_expr_ids.find(expr_id) == project_expr_ids.end()) {
+        projected_partition_attr = true;
+        break;
+      }
+    }
+
+    if (!projected_partition_attr) {
+      output_partition_scheme_header = std::make_unique<PartitionSchemeHeader>(*partition_scheme_header);
+    }
+  }
+
+  return SelectionPtr(
+      new Selection(input, project_expressions, filter_predicate, output_partition_scheme_header.release()));
+}
 
 PhysicalPtr Selection::copyWithNewChildren(
     const std::vector<PhysicalPtr> &new_children) const {
@@ -89,6 +124,11 @@ void Selection::getFieldStringItems(
     std::vector<OptimizerTreeBaseNodePtr> *non_container_child_fields,
     std::vector<std::string> *container_child_field_names,
     std::vector<std::vector<OptimizerTreeBaseNodePtr>> *container_child_fields) const {
+  if (partition_scheme_header_) {
+    inline_field_names->push_back("output_partition_scheme_header");
+    inline_field_values->push_back(partition_scheme_header_->toString());
+  }
+
   non_container_child_field_names->emplace_back("input");
   non_container_child_fields->emplace_back(input());
 
