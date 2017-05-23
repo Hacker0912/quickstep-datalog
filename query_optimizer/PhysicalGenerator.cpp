@@ -31,6 +31,7 @@
 #include "query_optimizer/rules/ExtractCommonSubexpression.hpp"
 #include "query_optimizer/rules/FuseAggregateJoin.hpp"
 #include "query_optimizer/rules/InjectJoinFilters.hpp"
+#include "query_optimizer/rules/Partition.hpp"
 #include "query_optimizer/rules/PruneColumns.hpp"
 #include "query_optimizer/rules/PushDownLowCostDisjunctivePredicate.hpp"
 #include "query_optimizer/rules/ReduceGroupByAttributes.hpp"
@@ -175,6 +176,8 @@ P::PhysicalPtr PhysicalGenerator::optimizePlan() {
   if (FLAGS_use_lip_filters) {
     rules.emplace_back(new AttachLIPFilters());
   }
+
+  rules.push_back(std::make_unique<Partition>());
 
   for (std::unique_ptr<Rule<P::Physical>> &rule : rules) {
     physical_plan_ = rule->apply(physical_plan_);

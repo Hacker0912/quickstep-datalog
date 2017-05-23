@@ -52,7 +52,7 @@ typedef std::shared_ptr<const TableReference> TableReferencePtr;
 /**
  * @brief Leaf physical node that represents a reference to a catalog relation.
  */
-class TableReference : public Physical {
+class TableReference : public Physical, public std::enable_shared_from_this<TableReference> {
  public:
   PhysicalType getPhysicalType() const override { return PhysicalType::kTableReference; }
 
@@ -79,6 +79,12 @@ class TableReference : public Physical {
 
   std::vector<expressions::AttributeReferencePtr> getReferencedAttributes() const override {
     return {};
+  }
+
+  PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
+      PartitionSchemeHeader *partition_scheme_header) const override {
+    std::unique_ptr<PartitionSchemeHeader> new_partition_scheme_header(partition_scheme_header);
+    return shared_from_this();
   }
 
   bool maybeCopyWithPrunedExpressions(

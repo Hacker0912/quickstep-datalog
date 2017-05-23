@@ -103,6 +103,7 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_queryoptimizer_physical_InsertTuple
                       quickstep_queryoptimizer_physical_LIPFilterConfiguration
                       quickstep_queryoptimizer_physical_NestedLoopsJoin
+                      quickstep_queryoptimizer_physical_PartitionSchemeHeader
                       quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
@@ -211,6 +212,7 @@ target_link_libraries(quickstep_queryoptimizer_OptimizerTree
 target_link_libraries(quickstep_queryoptimizer_PhysicalGenerator
                       ${GFLAGS_LIB_NAME}
                       quickstep_queryoptimizer_LogicalToPhysicalMapper
+                      quickstep_queryoptimizer_Validator
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_rules_AttachLIPFilters
@@ -218,6 +220,7 @@ target_link_libraries(quickstep_queryoptimizer_PhysicalGenerator
                       quickstep_queryoptimizer_rules_ExtractCommonSubexpression
                       quickstep_queryoptimizer_rules_FuseAggregateJoin
                       quickstep_queryoptimizer_rules_InjectJoinFilters
+                      quickstep_queryoptimizer_rules_Partition
                       quickstep_queryoptimizer_rules_PruneColumns
                       quickstep_queryoptimizer_rules_PushDownLowCostDisjunctivePredicate
                       quickstep_queryoptimizer_rules_ReduceGroupByAttributes
@@ -230,7 +233,6 @@ target_link_libraries(quickstep_queryoptimizer_PhysicalGenerator
                       quickstep_queryoptimizer_strategy_OneToOne
                       quickstep_queryoptimizer_strategy_Selection
                       quickstep_queryoptimizer_strategy_Strategy
-                      quickstep_queryoptimizer_Validator
                       quickstep_utility_Macros
                       quickstep_utility_PlanVisualizer)
 target_link_libraries(quickstep_queryoptimizer_QueryHandle

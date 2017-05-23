@@ -61,7 +61,7 @@ TableReferencePtr TableReference::Create(
 
     PartitionSchemeHeader::PartitionExprIds partition_expr_ids;
     for (const attribute_id part_attr : partition_scheme_header.getPartitionAttributeIds()) {
-      partition_expr_ids.push_back(attribute_list[part_attr]->id());
+      partition_expr_ids.push_back({ attribute_list[part_attr]->id() });
     }
 
     output_partition_scheme_header =
@@ -70,18 +70,16 @@ TableReferencePtr TableReference::Create(
                                                 std::move(partition_expr_ids));
   }
 
-  return TableReferencePtr(new TableReference(relation, alias, attribute_list, output_partition_scheme_header.release()));
+  return TableReferencePtr(new TableReference(relation, alias, attribute_list,
+                                              output_partition_scheme_header.release()));
 }
 
 PhysicalPtr TableReference::copyWithNewChildren(
     const std::vector<PhysicalPtr> &new_children) const {
   DCHECK_EQ(new_children.size(), children().size());
   std::unique_ptr<PartitionSchemeHeader> output_partition_scheme_header;
-  if (partition_scheme_header_) {
-    output_partition_scheme_header = std::make_unique<PartitionSchemeHeader>(*partition_scheme_header_);
-  }
   return TableReferencePtr(new TableReference(relation_, alias_, attribute_list_,
-                                              output_partition_scheme_header.release()));
+                                              cloneOutputPartitionSchemeHeader()));
 }
 
 void TableReference::getFieldStringItems(

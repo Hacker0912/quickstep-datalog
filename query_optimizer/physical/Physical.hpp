@@ -28,8 +28,9 @@
 #include "query_optimizer/expressions/ExpressionUtil.hpp"
 #include "query_optimizer/physical/PartitionSchemeHeader.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
-
 #include "utility/Macros.hpp"
+
+#include "glog/logging.h"
 
 namespace quickstep {
 namespace optimizer {
@@ -88,6 +89,22 @@ class Physical : public OptimizerTree<Physical> {
       PhysicalPtr *output) const = 0;
 
   /**
+   * @brief Creates a copy with the partition scheme header replaced by \p
+   *        partition_scheme_header.
+   *
+   * @param partition_scheme_header The partition scheme header to be
+   *        substituted for the existing one, if any. It takes ownership of
+   *        'partition_scheme_header'.
+   *
+   * @return A copy with \p partition_scheme_header as the partition scheme
+   *         header.
+   */
+  virtual PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
+      PartitionSchemeHeader *partition_scheme_header) const {
+    LOG(FATAL) << "copyWithNewOutputPartitionSchemeHeader is not implemented for " << getName();
+  }
+
+  /**
    * @brief Get the partition scheme of the physical plan node.
    *
    * @return A const pointer to the partition scheme of the node.
@@ -101,10 +118,24 @@ class Physical : public OptimizerTree<Physical> {
    * @brief Constructor.
    *
    * @param partition_scheme_header The partition scheme header of the relation.
-   *        Take ownership of the object.
+   *        The constructor takes ownership of 'partition_scheme_header'.
    */
   explicit Physical(PartitionSchemeHeader *partition_scheme_header = nullptr)
       : partition_scheme_header_(partition_scheme_header) {}
+
+  /**
+   * @brief Clone a copy of the partition scheme header.
+   *
+   * @return A copy of the partition scheme header. Caller should take ownership
+   *         of the returned object.
+   **/
+  PartitionSchemeHeader* cloneOutputPartitionSchemeHeader() const {
+    if (partition_scheme_header_) {
+      return new PartitionSchemeHeader(*partition_scheme_header_);
+    }
+
+    return nullptr;
+  }
 
   std::unique_ptr<PartitionSchemeHeader> partition_scheme_header_;
 

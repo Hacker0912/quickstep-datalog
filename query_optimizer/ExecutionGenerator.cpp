@@ -84,6 +84,7 @@
 #include "query_optimizer/physical/InsertTuple.hpp"
 #include "query_optimizer/physical/LIPFilterConfiguration.hpp"
 #include "query_optimizer/physical/NestedLoopsJoin.hpp"
+#include "query_optimizer/physical/PartitionSchemeHeader.hpp"
 #include "query_optimizer/physical/PatternMatcher.hpp"
 #include "query_optimizer/physical/Physical.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
@@ -140,6 +141,7 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+using std::make_unique;
 using std::move;
 using std::static_pointer_cast;
 using std::unique_ptr;
@@ -363,16 +365,35 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
     ++aid;
   }
 
+  const P::PartitionSchemeHeader *partition_scheme_header = physical->getOutputPartitionSchemeHeader();
+  if (partition_scheme_header) {
+    PartitionSchemeHeader::PartitionAttributeIds output_partition_attr_ids;
+    for (const auto &partition_expr_ids : partition_scheme_header->partition_expr_ids) {
+      output_partition_attr_ids.push_back(attribute_substitution_map_[*partition_expr_ids.begin()]->getID());
+    }
+    auto output_partition_scheme_header =
+        make_unique<HashPartitionSchemeHeader>(partition_scheme_header->num_partitions,
+                                               move(output_partition_attr_ids));
+    auto output_partition_scheme = make_unique<PartitionScheme>(output_partition_scheme_header.release());
+
+    insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
+    insert_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
+        ->MergeFrom(output_partition_scheme->getProto());
+
+    catalog_relation->setPartitionScheme(output_partition_scheme.release());
+  } else {
+    insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
+  }
+
   *catalog_relation_output = catalog_relation.get();
   const relation_id output_rel_id = catalog_database_->addRelation(
       catalog_relation.release());
 
+  insert_destination_proto->set_relation_id(output_rel_id);
+
 #ifdef QUICKSTEP_DISTRIBUTED
   referenced_relation_ids_.insert(output_rel_id);
 #endif
-
-  insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
-  insert_destination_proto->set_relation_id(output_rel_id);
 }
 
 void ExecutionGenerator::dropAllTemporaryRelations() {
@@ -790,17 +811,10 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
   S::QueryContext::HashTableContext *hash_table_context_proto =
       query_context_proto_->add_join_hash_tables();
 
-  // No partition.
-  std::size_t num_partitions = 1;
-  if (build_relation->hasPartitionScheme() &&
-      build_attribute_ids.size() == 1) {
-    const PartitionSchemeHeader &partition_scheme_header =
-        build_relation->getPartitionScheme()->getPartitionSchemeHeader();
-    if (build_attribute_ids[0] == partition_scheme_header.getPartitionAttributeIds().front()) {
-      // TODO(zuyu): add optimizer support for partitioned hash joins.
-      hash_table_context_proto->set_num_partitions(num_partitions);
-    }
-  }
+  const P::PartitionSchemeHeader *probe_partition_scheme_header = probe_physical->getOutputPartitionSchemeHeader();
+  const std::size_t num_partitions =
+      probe_partition_scheme_header ? probe_partition_scheme_header->num_partitions : 1u;
+  hash_table_context_proto->set_num_partitions(num_partitions);
 
   S::HashTable *hash_table_proto = hash_table_context_proto->mutable_join_hash_table();
 

@@ -83,6 +83,11 @@ class Selection : public Physical {
 
   std::vector<expressions::AttributeReferencePtr> getReferencedAttributes() const override;
 
+  PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
+      PartitionSchemeHeader *partition_scheme_header) const override {
+    return Create(input(), project_expressions_, filter_predicate_, partition_scheme_header);
+  }
+
   bool maybeCopyWithPrunedExpressions(
       const expressions::UnorderedNamedExpressionSet &referenced_attributes,
       PhysicalPtr *output) const override;
@@ -93,12 +98,17 @@ class Selection : public Physical {
    * @param input The input node.
    * @param project_expressions The project expressions.
    * @param filter_predicate The filter predicate. Can be NULL.
+   * @param output_partition_scheme_header The partition scheme header that
+   *        overwrites that from input, if not NULL. It takes ownership of
+   *        'output_partition_scheme_header'.
+   *
    * @return An immutable Selection.
    */
   static SelectionPtr Create(
       const PhysicalPtr &input,
       const std::vector<expressions::NamedExpressionPtr> &project_expressions,
-      const expressions::PredicatePtr &filter_predicate);
+      const expressions::PredicatePtr &filter_predicate,
+      PartitionSchemeHeader *output_partition_scheme_header = nullptr);
 
   /**
    * @brief Creates a conjunctive predicate with \p filter_predicates

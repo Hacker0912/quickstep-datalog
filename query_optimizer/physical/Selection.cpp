@@ -45,36 +45,32 @@ namespace E = ::quickstep::optimizer::expressions;
 SelectionPtr Selection::Create(
       const PhysicalPtr &input,
       const std::vector<E::NamedExpressionPtr> &project_expressions,
-      const E::PredicatePtr &filter_predicate) {
-  std::unique_ptr<PartitionSchemeHeader> output_partition_scheme_header;
-  const PartitionSchemeHeader *partition_scheme_header = input->getOutputPartitionSchemeHeader();
-  if (partition_scheme_header) {
-    unordered_set<E::ExprId> project_expr_ids;
-    for (const E::NamedExpressionPtr &project_expression : project_expressions) {
-      project_expr_ids.insert(project_expression->id());
-    }
+      const E::PredicatePtr &filter_predicate,
+      PartitionSchemeHeader *output_partition_scheme_header) {
+  std::unique_ptr<PartitionSchemeHeader> partition_scheme_header(output_partition_scheme_header);
 
-    bool projected_partition_attr = false;
-    for (const E::ExprId expr_id : partition_scheme_header->partition_expr_ids_) {
-      if (project_expr_ids.find(expr_id) == project_expr_ids.end()) {
-        projected_partition_attr = true;
-        break;
+  if (!partition_scheme_header) {
+    const PartitionSchemeHeader *input_partition_scheme_header = input->getOutputPartitionSchemeHeader();
+    if (input_partition_scheme_header) {
+      unordered_set<E::ExprId> project_expr_ids;
+      for (const E::NamedExpressionPtr &project_expression : project_expressions) {
+        project_expr_ids.insert(project_expression->id());
       }
-    }
 
-    if (!projected_partition_attr) {
-      output_partition_scheme_header = std::make_unique<PartitionSchemeHeader>(*partition_scheme_header);
+      if (input_partition_scheme_header->reusablePartitionScheme(project_expr_ids)) {
+        partition_scheme_header = std::make_unique<PartitionSchemeHeader>(*input_partition_scheme_header);
+      }
     }
   }
 
   return SelectionPtr(
-      new Selection(input, project_expressions, filter_predicate, output_partition_scheme_header.release()));
+      new Selection(input, project_expressions, filter_predicate, partition_scheme_header.release()));
 }
 
 PhysicalPtr Selection::copyWithNewChildren(
     const std::vector<PhysicalPtr> &new_children) const {
   DCHECK_EQ(children().size(), new_children.size());
-  return Create(new_children[0], project_expressions_, filter_predicate_);
+  return Create(new_children[0], project_expressions_, filter_predicate_, cloneOutputPartitionSchemeHeader());
 }
 
 std::vector<E::AttributeReferencePtr> Selection::getOutputAttributes() const {
@@ -111,7 +107,7 @@ bool Selection::maybeCopyWithPrunedExpressions(
     }
   }
   if (new_project_expressions.size() != project_expressions_.size()) {
-    *output = Create(input(), new_project_expressions, filter_predicate_);
+    *output = Create(input(), new_project_expressions, filter_predicate_, cloneOutputPartitionSchemeHeader());
     return true;
   }
   return false;
