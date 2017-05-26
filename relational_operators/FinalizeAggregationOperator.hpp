@@ -59,6 +59,8 @@ class FinalizeAggregationOperator : public RelationalOperator {
    *
    * @param query_id The ID of the query to which this operator belongs.
    * @param aggr_state_index The index of the AggregationState in QueryContext.
+   * @param num_partitions The number of partitions of 'input_relation' in a
+   *        partitioned aggregation. If no partitions, it is one.
    * @param output_relation The output relation.
    * @param output_destination_index The index of the InsertDestination in the
    *        QueryContext to insert aggregation results.
@@ -66,10 +68,12 @@ class FinalizeAggregationOperator : public RelationalOperator {
   FinalizeAggregationOperator(
       const std::size_t query_id,
       const QueryContext::aggregation_state_id aggr_state_index,
+      const std::size_t num_partitions,
       const CatalogRelation &output_relation,
       const QueryContext::insert_destination_id output_destination_index)
       : RelationalOperator(query_id),
         aggr_state_index_(aggr_state_index),
+        num_partitions_(num_partitions),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
         started_(false) {}
@@ -102,6 +106,7 @@ class FinalizeAggregationOperator : public RelationalOperator {
 
  private:
   const QueryContext::aggregation_state_id aggr_state_index_;
+  const std::size_t num_partitions_;
   const CatalogRelation &output_relation_;
   const QueryContext::insert_destination_id output_destination_index_;
   bool started_;
