@@ -21,6 +21,8 @@
 #define QUICKSTEP_RELATIONAL_OPERATORS_WORK_ORDER_FACTORY_HPP_
 
 #include <cstddef>
+#include <memory>
+#include <vector>
 
 #include "utility/Macros.hpp"
 
@@ -63,14 +65,15 @@ class WorkOrderFactory {
    *
    * @return A new WorkOrder reconstructed from the supplied Protocol Buffer.
    **/
-  static WorkOrder* ReconstructFromProto(const serialization::WorkOrder &proto,
-                                         const std::size_t shiftboss_index,
-                                         CatalogDatabaseLite *catalog_database,
-                                         QueryContext *query_context,
-                                         StorageManager *storage_manager,
-                                         const tmb::client_id shiftboss_client_id,
-                                         tmb::MessageBus *bus,
-                                         void *hdfs);
+  static std::vector<std::unique_ptr<WorkOrder>> ReconstructFromProto(
+      const serialization::WorkOrder &proto,
+      const std::size_t shiftboss_index,
+      CatalogDatabaseLite *catalog_database,
+      QueryContext *query_context,
+      StorageManager *storage_manager,
+      const tmb::client_id shiftboss_client_id,
+      tmb::MessageBus *bus,
+      void *hdfs);
 
   /**
    * @brief Check whether a serialization::WorkOrder is fully-formed and

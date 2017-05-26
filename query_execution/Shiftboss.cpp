@@ -185,28 +185,30 @@ void Shiftboss::run() {
           const std::size_t query_id = proto.query_id();
           DCHECK_EQ(1u, query_contexts_.count(query_id));
 
-          unique_ptr<WorkOrder> work_order(
+          vector<unique_ptr<WorkOrder>> work_orders(
               WorkOrderFactory::ReconstructFromProto(proto.work_order(), shiftboss_index_, &database_cache_,
                                                      query_contexts_[query_id].get(), storage_manager_,
                                                      shiftboss_client_id_local_, bus_local_, hdfs_));
 
-          unique_ptr<WorkerMessage> worker_message(
-              WorkerMessage::WorkOrderMessage(work_order.release(), proto.operator_index()));
+          for (int i = 0; i < work_orders.size(); ++i) {
+            unique_ptr<WorkerMessage> worker_message(
+                WorkerMessage::WorkOrderMessage(work_orders[i].release(), proto.operator_index()));
 
-          TaggedMessage worker_tagged_message(worker_message.get(),
-                                              sizeof(*worker_message),
-                                              kWorkOrderMessage);
+            TaggedMessage worker_tagged_message(worker_message.get(),
+                                                sizeof(*worker_message),
+                                                kWorkOrderMessage);
 
-          const size_t worker_index = getSchedulableWorker();
-          DLOG(INFO) << "Shiftboss " << shiftboss_index_ << " with Client " << shiftboss_client_id_local_
-                     << " forwarded WorkOrderMessage from Foreman to Worker " << worker_index;
+            const size_t worker_index = getSchedulableWorker();
+            DLOG(INFO) << "Shiftboss " << shiftboss_index_ << " with Client " << shiftboss_client_id_local_
+                       << " forwarded WorkOrderMessage from Foreman to Worker " << worker_index;
 
-          const MessageBus::SendStatus send_status =
-              QueryExecutionUtil::SendTMBMessage(bus_local_,
-                                                 shiftboss_client_id_local_,
-                                                 workers_->getClientID(worker_index),
-                                                 move(worker_tagged_message));
-          CHECK(send_status == MessageBus::SendStatus::kOK);
+            const MessageBus::SendStatus send_status =
+                QueryExecutionUtil::SendTMBMessage(bus_local_,
+                                                   shiftboss_client_id_local_,
+                                                   workers_->getClientID(worker_index),
+                                                   move(worker_tagged_message));
+            CHECK(send_status == MessageBus::SendStatus::kOK);
+          }
           break;
         }
         case kInitiateRebuildMessage: {

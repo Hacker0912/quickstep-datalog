@@ -65,24 +65,18 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
   return started_;
 }
 
-// TODO(quickstep-team) : Think about how the number of partitions could be
-// accessed in this function. Until then, we can't use partitioned aggregation
-// finalization with the distributed version.
 bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (blocking_dependencies_met_ && !started_) {
     started_ = true;
 
-    for (partition_id input_part_id = 0; input_part_id < num_partitions_; ++input_part_id) {
+    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       serialization::WorkOrder *proto = new serialization::WorkOrder;
       proto->set_work_order_type(serialization::FINALIZE_AGGREGATION);
       proto->set_query_id(query_id_);
       proto->SetExtension(serialization::FinalizeAggregationWorkOrder::aggr_state_index,
                           aggr_state_index_);
-      // NOTE(zuyu): 'input_part_id' comes from the partitioned input relation,
-      // which is different from 'partition_id' in above TODO taht comes from an
-      // internally partitioned aggregation implementation (CollisionFreeVectorTable).
       proto->SetExtension(serialization::FinalizeAggregationWorkOrder::partition_id,
-                          input_part_id);
+                          part_id);
       proto->SetExtension(serialization::FinalizeAggregationWorkOrder::insert_destination_index,
                           output_destination_index_);
 
