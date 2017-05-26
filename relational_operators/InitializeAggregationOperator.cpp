@@ -40,29 +40,43 @@ bool InitializeAggregationOperator::getAllWorkOrders(
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
   if (!started_) {
-    AggregationOperationState *agg_state =
-        query_context->getAggregationState(aggr_state_index_);
-    DCHECK(agg_state != nullptr);
+    for (partition_id input_part_id = 0; input_part_id < num_partitions_; ++input_part_id) {
+      AggregationOperationState *agg_state =
+          query_context->getAggregationState(aggr_state_index_, input_part_id);
+      DCHECK(agg_state != nullptr);
 
-    for (std::size_t part_id = 0;
-         part_id < agg_state->getNumInitializationPartitions();
-         ++part_id) {
-      container->addNormalWorkOrder(
-          new InitializeAggregationWorkOrder(query_id_,
-                                             part_id,
-                                             agg_state),
-          op_index_);
+      for (std::size_t part_id = 0;
+           part_id < agg_state->getNumInitializationPartitions();
+           ++part_id) {
+        container->addNormalWorkOrder(
+            new InitializeAggregationWorkOrder(query_id_,
+                                               part_id,
+                                               agg_state),
+            op_index_);
+      }
     }
     started_ = true;
   }
   return true;
 }
 
-// TODO(quickstep-team) : Think about how the number of partitions could be
-// accessed in this function. Until then, we can't use partitioned aggregation
-// initialization with the distributed version.
 bool InitializeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  LOG(FATAL) << "Not supported";
+  if (started_) {
+    return true;
+  }
+
+  for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
+    serialization::WorkOrder *proto = new serialization::WorkOrder;
+    proto->set_work_order_type(serialization::INITIALIZE_AGGREGATION);
+    proto->set_query_id(query_id_);
+
+    proto->SetExtension(serialization::InitializeAggregationWorkOrder::aggr_state_index, aggr_state_index_);
+    proto->SetExtension(serialization::InitializeAggregationWorkOrder::partition_id, part_id);
+
+    container->addWorkOrderProto(proto, op_index_);
+  }
+  started_ = true;
+  return true;
 }
 
 void InitializeAggregationWorkOrder::execute() {

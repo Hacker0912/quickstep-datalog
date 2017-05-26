@@ -56,11 +56,15 @@ class InitializeAggregationOperator : public RelationalOperator {
    *
    * @param query_id The ID of this query.
    * @param aggr_state_index The index of the AggregationOperationState in QueryContext.
+   * @param num_partitions The number of partitions in 'input_relation'. If no
+   *        partitions, it is one.
    **/
   InitializeAggregationOperator(const std::size_t query_id,
-                                const QueryContext::aggregation_state_id aggr_state_index)
+                                const QueryContext::aggregation_state_id aggr_state_index,
+                                const std::size_t num_partitions)
       : RelationalOperator(query_id),
         aggr_state_index_(aggr_state_index),
+        num_partitions_(num_partitions),
         started_(false) {}
 
   ~InitializeAggregationOperator() override {}
@@ -83,6 +87,7 @@ class InitializeAggregationOperator : public RelationalOperator {
 
  private:
   const QueryContext::aggregation_state_id aggr_state_index_;
+  const std::size_t num_partitions_;
   bool started_;
 
   DISALLOW_COPY_AND_ASSIGN(InitializeAggregationOperator);
