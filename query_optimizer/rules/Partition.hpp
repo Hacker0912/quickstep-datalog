@@ -29,6 +29,8 @@
 namespace quickstep {
 namespace optimizer {
 
+class OptimizerContext;
+
 /** \addtogroup OptimizerRules
  *  @{
  */
@@ -36,12 +38,16 @@ namespace optimizer {
 /**
  * @brief Added partition support.
  */
-class Partition : public BottomUpRule<physical::Physical> {
+class Partition final : public BottomUpRule<physical::Physical> {
  public:
   /**
    * @brief Constructor.
+   *
+   * @param optimizer_context The optimizer context.
    */
-  Partition() {}
+  explicit Partition(OptimizerContext *optimizer_context)
+      : optimizer_context_(optimizer_context) {
+  }
 
   ~Partition() override {}
 
@@ -51,6 +57,8 @@ class Partition : public BottomUpRule<physical::Physical> {
   physical::PhysicalPtr applyToNode(const physical::PhysicalPtr &input) override;
 
  private:
+  OptimizerContext *optimizer_context_;
+
   DISALLOW_COPY_AND_ASSIGN(Partition);
 };
 

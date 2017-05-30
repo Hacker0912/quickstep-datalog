@@ -177,7 +177,7 @@ P::PhysicalPtr PhysicalGenerator::optimizePlan() {
     rules.emplace_back(new AttachLIPFilters());
   }
 
-  rules.push_back(std::make_unique<Partition>());
+  rules.push_back(std::make_unique<Partition>(optimizer_context_));
 
   for (std::unique_ptr<Rule<P::Physical>> &rule : rules) {
     physical_plan_ = rule->apply(physical_plan_);

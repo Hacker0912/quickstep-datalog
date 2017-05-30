@@ -368,8 +368,11 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
   const P::PartitionSchemeHeader *partition_scheme_header = physical->getOutputPartitionSchemeHeader();
   if (partition_scheme_header) {
     PartitionSchemeHeader::PartitionAttributeIds output_partition_attr_ids;
-    for (const auto &partition_expr_ids : partition_scheme_header->partition_expr_ids) {
-      output_partition_attr_ids.push_back(attribute_substitution_map_[*partition_expr_ids.begin()]->getID());
+    for (const auto &partition_equivalent_expr_ids : partition_scheme_header->partition_expr_ids) {
+      DCHECK(!partition_equivalent_expr_ids.empty());
+      const E::ExprId partition_expr_id = *partition_equivalent_expr_ids.begin();
+      DCHECK(attribute_substitution_map_.find(partition_expr_id) != attribute_substitution_map_.end());
+      output_partition_attr_ids.push_back(attribute_substitution_map_[partition_expr_id]->getID());
     }
     auto output_partition_scheme_header =
         make_unique<HashPartitionSchemeHeader>(partition_scheme_header->num_partitions,
