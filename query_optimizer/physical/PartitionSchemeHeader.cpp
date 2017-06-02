@@ -25,6 +25,8 @@
 
 #include "query_optimizer/expressions/ExprId.hpp"
 
+#include "glog/logging.h"
+
 using std::string;
 
 namespace quickstep {
@@ -34,6 +36,12 @@ namespace physical {
 namespace E = expressions;
 
 bool PartitionSchemeHeader::reusablePartitionScheme(const std::unordered_set<E::ExprId> &output_expr_ids) const {
+  DCHECK(!output_expr_ids.empty());
+
+  if (partition_expr_ids.empty()) {
+    return false;
+  }
+
   for (const EquivalentPartitionExprIds &expr_ids : partition_expr_ids) {
     bool has_matched_expr = false;
     for (const E::ExprId expr_id : expr_ids) {
@@ -83,10 +91,12 @@ string PartitionSchemeHeader::toString() const {
   }
 
   serialized_header += "( ";
-  PrintEquivalentPartitionExprIds(partition_expr_ids[0], &serialized_header);
-  for (int i = 1; i < partition_expr_ids.size(); ++i) {
-    serialized_header += ", ";
-    PrintEquivalentPartitionExprIds(partition_expr_ids[i], &serialized_header);
+  if (!partition_expr_ids.empty()) {
+    PrintEquivalentPartitionExprIds(partition_expr_ids[0], &serialized_header);
+    for (int i = 1; i < partition_expr_ids.size(); ++i) {
+      serialized_header += ", ";
+      PrintEquivalentPartitionExprIds(partition_expr_ids[i], &serialized_header);
+    }
   }
   serialized_header += " )";
 

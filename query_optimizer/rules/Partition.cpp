@@ -208,7 +208,7 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
           avg_recompute_expressions.empty()
               ? aggregate->copyWithNewOutputPartitionSchemeHeader(output_partition_scheme_header.release())
               : P::Aggregate::Create(input, grouping_expressions, partial_aggregate_expressions,
-                                 nullptr /* filter_predicate */, output_partition_scheme_header.release());
+                                     nullptr /* filter_predicate */, output_partition_scheme_header.release());
 
       vector<E::AliasPtr> reaggregate_expressions;
       for (const auto &aggregate_expr : partial_aggregate_expressions) {
@@ -443,9 +443,9 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
           project_expr_ids.insert(project_expression->id());
         }
 
+        const auto &input_partition_expr_ids = input_partition_scheme_header->partition_expr_ids;
         P::PartitionSchemeHeader::PartitionExprIds output_partition_expr_ids;
-        for (const P::PartitionSchemeHeader::EquivalentPartitionExprIds &equivalent_expr_ids :
-             input_partition_scheme_header->partition_expr_ids) {
+        for (const auto &equivalent_expr_ids : input_partition_expr_ids) {
           P::PartitionSchemeHeader::EquivalentPartitionExprIds output_equivalent_partition_expr_ids;
           for (const E::ExprId expr_id : equivalent_expr_ids) {
             if (project_expr_ids.find(expr_id) != project_expr_ids.end()) {
@@ -458,11 +458,13 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
           }
         }
 
-        auto output_partition_scheme_header = make_unique<P::PartitionSchemeHeader>(
-            P::PartitionSchemeHeader::PartitionType::kHash,
-            input_partition_scheme_header->num_partitions,
-            move(output_partition_expr_ids));
-        return selection->copyWithNewOutputPartitionSchemeHeader(output_partition_scheme_header.release());
+        if (input_partition_expr_ids != output_partition_expr_ids) {
+          auto output_partition_scheme_header = make_unique<P::PartitionSchemeHeader>(
+              P::PartitionSchemeHeader::PartitionType::kHash,
+              input_partition_scheme_header->num_partitions,
+              move(output_partition_expr_ids));
+          return selection->copyWithNewOutputPartitionSchemeHeader(output_partition_scheme_header.release());
+        }
       }
       break;
     }

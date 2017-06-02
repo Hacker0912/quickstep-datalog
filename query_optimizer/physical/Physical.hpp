@@ -101,6 +101,7 @@ class Physical : public OptimizerTree<Physical> {
    */
   virtual PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
       PartitionSchemeHeader *partition_scheme_header) const {
+    std::unique_ptr<PartitionSchemeHeader> new_partition_scheme_header(partition_scheme_header);
     LOG(FATAL) << "copyWithNewOutputPartitionSchemeHeader is not implemented for " << getName();
   }
 

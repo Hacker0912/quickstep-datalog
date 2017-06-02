@@ -125,6 +125,7 @@ class FinalizeAggregationWorkOrder : public WorkOrder {
    * @note InsertWorkOrder takes ownership of \c state.
    *
    * @param query_id The ID of the query to which this operator belongs.
+   * @param input_partition_id The input partition ID of 'output_destination'.
    * @param partition_id The partition ID for which the Finalize aggregation
    *        work order is issued.
    * @param state The AggregationState to use.
@@ -132,10 +133,12 @@ class FinalizeAggregationWorkOrder : public WorkOrder {
    *        results.
    */
   FinalizeAggregationWorkOrder(const std::size_t query_id,
+                               const std::size_t input_partition_id,
                                const std::size_t partition_id,
                                AggregationOperationState *state,
                                InsertDestination *output_destination)
       : WorkOrder(query_id),
+        input_partition_id_(input_partition_id),
         partition_id_(partition_id),
         state_(DCHECK_NOTNULL(state)),
         output_destination_(DCHECK_NOTNULL(output_destination)) {}
@@ -145,7 +148,7 @@ class FinalizeAggregationWorkOrder : public WorkOrder {
   void execute() override;
 
  private:
-  const std::size_t partition_id_;
+  const std::size_t input_partition_id_, partition_id_;
   AggregationOperationState *state_;
   InsertDestination *output_destination_;
 

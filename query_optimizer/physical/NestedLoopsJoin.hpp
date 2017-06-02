@@ -80,14 +80,14 @@ class NestedLoopsJoin : public BinaryJoin {
 
   std::vector<expressions::AttributeReferencePtr> getReferencedAttributes() const override;
 
+  bool maybeCopyWithPrunedExpressions(
+      const expressions::UnorderedNamedExpressionSet &referenced_expressions,
+      PhysicalPtr *output) const override;
+
   PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
       PartitionSchemeHeader *partition_scheme_header) const override {
     return Create(left(), right(), join_predicate_, project_expressions(), partition_scheme_header);
   }
-
-  bool maybeCopyWithPrunedExpressions(
-      const expressions::UnorderedNamedExpressionSet &referenced_expressions,
-      PhysicalPtr *output) const override;
 
   /**
    * @brief Creates a NestedLoopsJoin.

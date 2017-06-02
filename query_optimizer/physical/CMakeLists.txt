@@ -198,6 +198,7 @@ target_link_libraries(quickstep_queryoptimizer_physical_NestedLoopsJoin
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_physical_PartitionSchemeHeader
+                      glog
                       quickstep_queryoptimizer_expressions_ExprId
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_physical_PatternMatcher

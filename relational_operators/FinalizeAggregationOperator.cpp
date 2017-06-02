@@ -55,6 +55,7 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
         container->addNormalWorkOrder(
             new FinalizeAggregationWorkOrder(
                 query_id_,
+                input_part_id,
                 part_id,
                 agg_state,
                 query_context->getInsertDestination(output_destination_index_)),
@@ -79,9 +80,9 @@ bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer
       proto->SetExtension(serialization::FinalizeAggregationWorkOrder::aggr_state_index,
                           aggr_state_index_);
       // NOTE(zuyu): 'input_part_id' comes from the partitioned input relation,
-      // which is different from 'partition_id' in above TODO taht comes from an
+      // which is different from 'partition_id' in above TODO that comes from an
       // internally partitioned aggregation implementation (CollisionFreeVectorTable).
-      proto->SetExtension(serialization::FinalizeAggregationWorkOrder::partition_id,
+      proto->SetExtension(serialization::FinalizeAggregationWorkOrder::input_partition_id,
                           input_part_id);
       proto->SetExtension(serialization::FinalizeAggregationWorkOrder::insert_destination_index,
                           output_destination_index_);
@@ -93,6 +94,7 @@ bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer
 }
 
 void FinalizeAggregationWorkOrder::execute() {
+  output_destination_->setInputPartitionId(input_partition_id_);
   state_->finalizeAggregate(partition_id_, output_destination_);
 }
 
