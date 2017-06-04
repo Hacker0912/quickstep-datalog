@@ -80,8 +80,14 @@ void PrintEquivalentPartitionExprIds(const PartitionSchemeHeader::EquivalentPart
 string PartitionSchemeHeader::toString() const {
   string serialized_header("PARTITION BY ");
   switch (partition_type) {
+    case PartitionType::kBroadcast:
+      serialized_header += "BROADCAST";
+      break;
     case PartitionType::kHash:
       serialized_header += "HASH";
+      break;
+    case PartitionType::kRandom:
+      serialized_header += "RANDOM";
       break;
     case PartitionType::kRange:
       serialized_header += "RANGE";
@@ -90,7 +96,7 @@ string PartitionSchemeHeader::toString() const {
       break;
   }
 
-  serialized_header += "( ";
+  serialized_header += " ( ";
   if (!partition_expr_ids.empty()) {
     PrintEquivalentPartitionExprIds(partition_expr_ids[0], &serialized_header);
     for (int i = 1; i < partition_expr_ids.size(); ++i) {
@@ -98,9 +104,7 @@ string PartitionSchemeHeader::toString() const {
       PrintEquivalentPartitionExprIds(partition_expr_ids[i], &serialized_header);
     }
   }
-  serialized_header += " )";
-
-  serialized_header += " PARTITIONS ";
+  serialized_header += " ) PARTITIONS ";
   serialized_header += std::to_string(num_partitions);
 
   return serialized_header;

@@ -48,6 +48,8 @@ struct PartitionSchemeHeader {
 
   enum class PartitionType {
     kHash = 0,
+    kBroadcast,
+    kRandom,
     kRange
   };
 
@@ -84,6 +86,19 @@ struct PartitionSchemeHeader {
    **/
   bool isHashPartition() const {
     return partition_type == PartitionType::kHash;
+  }
+
+  /**
+   * @brief Check whether the partition scheme header is euqal.
+   *
+   * @param other The instance to compare.
+   *
+   * @return True if both are the same partition scheme header. Otherwise, false.
+   **/
+  bool equal(const PartitionSchemeHeader &other) const {
+    return partition_type == other.partition_type &&
+           num_partitions == other.num_partitions &&
+           partition_expr_ids == other.partition_expr_ids;
   }
 
   /**

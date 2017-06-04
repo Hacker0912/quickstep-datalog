@@ -20,7 +20,6 @@
 #ifndef QUICKSTEP_QUERY_OPTIMIZER_PHYSICAL_TABLE_REFERENCE_HPP_
 #define QUICKSTEP_QUERY_OPTIMIZER_PHYSICAL_TABLE_REFERENCE_HPP_
 
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -52,7 +51,7 @@ typedef std::shared_ptr<const TableReference> TableReferencePtr;
 /**
  * @brief Leaf physical node that represents a reference to a catalog relation.
  */
-class TableReference : public Physical, public std::enable_shared_from_this<TableReference> {
+class TableReference : public Physical {
  public:
   PhysicalType getPhysicalType() const override { return PhysicalType::kTableReference; }
 
@@ -79,12 +78,6 @@ class TableReference : public Physical, public std::enable_shared_from_this<Tabl
 
   std::vector<expressions::AttributeReferencePtr> getReferencedAttributes() const override {
     return {};
-  }
-
-  PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
-      PartitionSchemeHeader *partition_scheme_header) const override {
-    std::unique_ptr<PartitionSchemeHeader> new_partition_scheme_header(partition_scheme_header);
-    return shared_from_this();
   }
 
   bool maybeCopyWithPrunedExpressions(

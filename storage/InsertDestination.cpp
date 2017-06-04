@@ -574,8 +574,27 @@ PartitionSchemeHeader::PartitionAttributeIds PartitionAwareInsertDestination::ge
 }
 
 void PartitionAwareInsertDestination::insertTuple(const Tuple &tuple) {
-  const partition_id part_id = getPartitionId(tuple);
+  if (partition_scheme_header_->getPartitionType() == PartitionSchemeHeader::PartitionType::kBroadcast) {
+    for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
+      insertTupleHelper(tuple, part_id);
+    }
+  } else {
+    insertTupleHelper(tuple, getPartitionId(tuple));
+  }
+}
 
+void PartitionAwareInsertDestination::insertTupleInBatch(const Tuple &tuple) {
+  if (partition_scheme_header_->getPartitionType() == PartitionSchemeHeader::PartitionType::kBroadcast) {
+    for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
+      insertTupleInBatchHelper(tuple, part_id);
+    }
+  } else {
+    insertTupleInBatchHelper(tuple, getPartitionId(tuple));
+  }
+}
+
+
+void PartitionAwareInsertDestination::insertTupleHelper(const Tuple &tuple, const partition_id part_id) {
   MutableBlockReference output_block = getBlockForInsertionInPartition(part_id);
 
   try {
@@ -592,9 +611,7 @@ void PartitionAwareInsertDestination::insertTuple(const Tuple &tuple) {
   returnBlockInPartition(std::move(output_block), false, part_id);
 }
 
-void PartitionAwareInsertDestination::insertTupleInBatch(const Tuple &tuple) {
-  const partition_id part_id = getPartitionId(tuple);
-
+void PartitionAwareInsertDestination::insertTupleInBatchHelper(const Tuple &tuple, const partition_id part_id) {
   MutableBlockReference output_block = getBlockForInsertionInPartition(part_id);
 
   try {
@@ -630,7 +647,14 @@ void PartitionAwareInsertDestination::bulkInsertTuples(ValueAccessor *accessor, 
     // set a bit in the appropriate TupleIdSequence.
     accessor->beginIteration();
     while (accessor->next()) {
-      partition_membership[getPartitionId(accessor)]->set(accessor->getCurrentPosition(), true);
+      const tuple_id tuple = accessor->getCurrentPosition();
+      if (partition_scheme_header_->getPartitionType() == PartitionSchemeHeader::PartitionType::kBroadcast) {
+        for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
+          partition_membership[part_id]->set(tuple, true);
+        }
+      } else {
+        partition_membership[getPartitionId(accessor)]->set(tuple, true);
+      }
     }
 
     // For each partition, create an adapter around Value Accessor and
@@ -681,7 +705,14 @@ void PartitionAwareInsertDestination::bulkInsertTuplesWithRemappedAttributes(
     // set a bit in the appropriate TupleIdSequence.
     accessor->beginIteration();
     while (accessor->next()) {
-      partition_membership[getPartitionId(accessor)]->set(accessor->getCurrentPosition(), true);
+      const tuple_id tuple = accessor->getCurrentPosition();
+      if (partition_scheme_header_->getPartitionType() == PartitionSchemeHeader::PartitionType::kBroadcast) {
+        for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
+          partition_membership[part_id]->set(tuple, true);
+        }
+      } else {
+        partition_membership[getPartitionId(accessor)]->set(tuple, true);
+      }
     }
 
     // For each partition, create an adapter around Value Accessor and
@@ -718,15 +749,14 @@ void PartitionAwareInsertDestination::insertTuplesFromVector(std::vector<Tuple>:
   }
 
   for (; begin != end; ++begin) {
-    const partition_id part_id = getPartitionId(*begin);
-
-    MutableBlockReference dest_block = getBlockForInsertionInPartition(part_id);
-    // FIXME(chasseur): Deal with TupleTooLargeForBlock exception.
-    while (!dest_block->insertTupleInBatch(*begin)) {
-      returnBlockInPartition(std::move(dest_block), true, part_id);
-      dest_block = getBlockForInsertionInPartition(part_id);
+    const Tuple &tuple = *begin;
+    if (partition_scheme_header_->getPartitionType() == PartitionSchemeHeader::PartitionType::kBroadcast) {
+      for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
+        insertTupleInBatchHelper(tuple, part_id);
+      }
+    } else {
+      insertTupleInBatchHelper(tuple, getPartitionId(tuple));
     }
-    returnBlockInPartition(std::move(dest_block), false, part_id);
   }
 }
 

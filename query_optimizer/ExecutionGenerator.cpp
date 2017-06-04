@@ -374,9 +374,25 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
       DCHECK(attribute_substitution_map_.find(partition_expr_id) != attribute_substitution_map_.end());
       output_partition_attr_ids.push_back(attribute_substitution_map_[partition_expr_id]->getID());
     }
-    auto output_partition_scheme_header =
-        make_unique<HashPartitionSchemeHeader>(partition_scheme_header->num_partitions,
-                                               move(output_partition_attr_ids));
+
+    const size_t num_partition = partition_scheme_header->num_partitions;
+    unique_ptr<PartitionSchemeHeader> output_partition_scheme_header;
+    switch (partition_scheme_header->partition_type) {
+      case P::PartitionSchemeHeader::PartitionType::kBroadcast:
+        output_partition_scheme_header = make_unique<BroadcastPartitionSchemeHeader>(num_partition);
+        break;
+      case P::PartitionSchemeHeader::PartitionType::kHash:
+        output_partition_scheme_header =
+            make_unique<HashPartitionSchemeHeader>(num_partition, move(output_partition_attr_ids));
+        break;
+      case P::PartitionSchemeHeader::PartitionType::kRandom:
+        output_partition_scheme_header = make_unique<RandomPartitionSchemeHeader>(num_partition);
+        break;
+      case P::PartitionSchemeHeader::PartitionType::kRange:
+        LOG(FATAL) << "Unimplemented";
+      default:
+        LOG(FATAL) << "Unknown partition type";
+    }
     auto output_partition_scheme = make_unique<PartitionScheme>(output_partition_scheme_header.release());
 
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
@@ -523,13 +539,27 @@ bool ExecutionGenerator::convertSimpleProjection(
 
 void ExecutionGenerator::convertSelection(
     const P::SelectionPtr &physical_selection) {
+  const P::PhysicalPtr input = physical_selection->input();
+  const CatalogRelationInfo *input_relation_info =
+      findRelationInfoOutputByPhysical(input);
+  DCHECK(input_relation_info != nullptr);
+  const CatalogRelation &input_relation = *input_relation_info->relation;
+
   // Check if the Selection is only for renaming columns.
   if (physical_selection->filter_predicate() == nullptr) {
-    const std::vector<E::AttributeReferencePtr> input_attributes =
-        physical_selection->input()->getOutputAttributes();
+    const P::PartitionSchemeHeader *physical_select_partition_scheme_header =
+        physical_selection->getOutputPartitionSchemeHeader();
+    const P::PartitionSchemeHeader *physical_input_partition_scheme_header = input->getOutputPartitionSchemeHeader();
+
+    const bool are_same_physical_partition_scheme_headers =
+        (!physical_select_partition_scheme_header && !physical_input_partition_scheme_header) ||
+        (physical_select_partition_scheme_header && physical_input_partition_scheme_header &&
+         physical_select_partition_scheme_header->equal(*physical_input_partition_scheme_header));
+
+    const std::vector<E::AttributeReferencePtr> input_attributes = input->getOutputAttributes();
     const std::vector<E::NamedExpressionPtr> &project_expressions =
         physical_selection->project_expressions();
-    if (project_expressions.size() == input_attributes.size()) {
+    if (project_expressions.size() == input_attributes.size() && are_same_physical_partition_scheme_headers) {
       bool has_different_attrs = false;
       for (std::size_t attr_idx = 0; attr_idx < input_attributes.size(); ++attr_idx) {
         if (project_expressions[attr_idx]->id() != input_attributes[attr_idx]->id()) {
@@ -538,21 +568,16 @@ void ExecutionGenerator::convertSelection(
         }
       }
       if (!has_different_attrs) {
-        const std::unordered_map<P::PhysicalPtr, CatalogRelationInfo>::const_iterator input_catalog_rel_it =
-            physical_to_output_relation_map_.find(physical_selection->input());
-        DCHECK(input_catalog_rel_it != physical_to_output_relation_map_.end());
-        if (!input_catalog_rel_it->second.isStoredRelation()) {
+        if (!input_relation_info->isStoredRelation()) {
           CatalogRelation *catalog_relation =
-              const_cast<CatalogRelation*>(input_catalog_rel_it->second.relation);
+              const_cast<CatalogRelation*>(input_relation_info->relation);
           for (std::size_t attr_idx = 0; attr_idx < project_expressions.size(); ++attr_idx) {
-            CatalogAttribute *catalog_attribute =
-                catalog_relation->getAttributeByIdMutable(attr_idx);
+            CatalogAttribute *catalog_attribute = catalog_relation->getAttributeByIdMutable(attr_idx);
             DCHECK(catalog_attribute != nullptr);
             catalog_attribute->setDisplayName(
                 project_expressions[attr_idx]->attribute_alias());
           }
-          physical_to_output_relation_map_.emplace(physical_selection,
-                                                   input_catalog_rel_it->second);
+          physical_to_output_relation_map_.emplace(physical_selection, *input_relation_info);
           return;
         }
       }
@@ -584,10 +609,6 @@ void ExecutionGenerator::convertSelection(
                                  insert_destination_proto);
 
   // Create and add a Select operator.
-  const CatalogRelationInfo *input_relation_info =
-      findRelationInfoOutputByPhysical(physical_selection->input());
-  DCHECK(input_relation_info != nullptr);
-  const CatalogRelation &input_relation = *input_relation_info->relation;
   const PartitionScheme *input_partition_scheme = input_relation.getPartitionScheme();
 
   const std::size_t num_partitions =

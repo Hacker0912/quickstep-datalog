@@ -73,6 +73,7 @@ bool PartitionSchemeHeader::ProtoIsValid(
 
   // Check that the proto has a valid partition type.
   switch (proto.partition_type()) {
+    case serialization::PartitionSchemeHeader::BROADCAST:
     case serialization::PartitionSchemeHeader::HASH:
     case serialization::PartitionSchemeHeader::RANDOM:
       return true;
@@ -102,6 +103,9 @@ PartitionSchemeHeader* PartitionSchemeHeader::ReconstructFromProto(
   }
 
   switch (proto.partition_type()) {
+    case serialization::PartitionSchemeHeader::BROADCAST: {
+      return new BroadcastPartitionSchemeHeader(proto.num_partitions());
+    }
     case serialization::PartitionSchemeHeader::HASH: {
       return new HashPartitionSchemeHeader(proto.num_partitions(), move(partition_attribute_ids));
     }
@@ -143,6 +147,9 @@ serialization::PartitionSchemeHeader PartitionSchemeHeader::getProto() const {
   serialization::PartitionSchemeHeader proto;
 
   switch (partition_type_) {
+    case PartitionType::kBroadcast:
+      proto.set_partition_type(serialization::PartitionSchemeHeader::BROADCAST);
+      break;
     case PartitionType::kHash:
       proto.set_partition_type(serialization::PartitionSchemeHeader::HASH);
       break;

@@ -43,7 +43,6 @@
 #include "utility/Macros.hpp"
 
 #include "glog/logging.h"
-
 #include "gtest/gtest_prod.h"
 
 #include "tmb/id_typedefs.h"
@@ -618,7 +617,18 @@ class PartitionAwareInsertDestination : public InsertDestination {
       values.push_back(tuple.getAttributeValue(attr_id));
     }
 
-    return values.empty() ? input_partition_id_ : partition_scheme_header_->getPartitionId(values);
+    switch (partition_scheme_header_->getPartitionType()) {
+      case PartitionSchemeHeader::PartitionType::kBroadcast:
+        LOG(FATAL) << "Unreachable";
+      case PartitionSchemeHeader::PartitionType::kHash:
+        return values.empty() ? input_partition_id_ : partition_scheme_header_->getPartitionId(values);
+      case PartitionSchemeHeader::PartitionType::kRandom:
+        return partition_scheme_header_->getPartitionId(values);
+      case PartitionSchemeHeader::PartitionType::kRange:
+        LOG(FATAL) << "Unimplemented for range partition";
+      default:
+        LOG(FATAL) << "Unrecognized PartitionType";
+    }
   }
 
   partition_id getPartitionId(ValueAccessor *accessor) const {
@@ -627,8 +637,22 @@ class PartitionAwareInsertDestination : public InsertDestination {
       values.push_back(accessor->getTypedValueVirtual(attr_id));
     }
 
-    return values.empty() ? input_partition_id_ : partition_scheme_header_->getPartitionId(values);
+    switch (partition_scheme_header_->getPartitionType()) {
+      case PartitionSchemeHeader::PartitionType::kBroadcast:
+        LOG(FATAL) << "Unreachable";
+      case PartitionSchemeHeader::PartitionType::kHash:
+        return values.empty() ? input_partition_id_ : partition_scheme_header_->getPartitionId(values);
+      case PartitionSchemeHeader::PartitionType::kRandom:
+        return partition_scheme_header_->getPartitionId(values);
+      case PartitionSchemeHeader::PartitionType::kRange:
+        LOG(FATAL) << "Unimplemented for range partition";
+      default:
+        LOG(FATAL) << "Unrecognized PartitionType";
+    }
   }
+
+  void insertTupleHelper(const Tuple &tuple, const partition_id part_id);
+  void insertTupleInBatchHelper(const Tuple &tuple, const partition_id part_id);
 
   std::unique_ptr<const PartitionSchemeHeader> partition_scheme_header_;
 
@@ -647,6 +671,7 @@ class PartitionAwareInsertDestination : public InsertDestination {
 
   DISALLOW_COPY_AND_ASSIGN(PartitionAwareInsertDestination);
 };
+
 /** @} */
 
 }  // namespace quickstep

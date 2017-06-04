@@ -162,6 +162,7 @@ target_link_libraries(quickstep_queryoptimizer_rules_Partition
                       quickstep_expressions_aggregation_AggregateFunctionFactory
                       quickstep_expressions_aggregation_AggregationID
                       quickstep_queryoptimizer_OptimizerContext
+                      quickstep_queryoptimizer_costmodel_StarSchemaSimpleCostModel
                       quickstep_queryoptimizer_expressions_AggregateFunction
                       quickstep_queryoptimizer_expressions_BinaryExpression
                       quickstep_queryoptimizer_expressions_ExprId
@@ -170,11 +171,14 @@ target_link_libraries(quickstep_queryoptimizer_rules_Partition
                       quickstep_queryoptimizer_expressions_PatternMatcher
                       quickstep_queryoptimizer_physical_Aggregate
                       quickstep_queryoptimizer_physical_HashJoin
+                      quickstep_queryoptimizer_physical_NestedLoopsJoin
                       quickstep_queryoptimizer_physical_PartitionSchemeHeader
+                      quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
                       quickstep_queryoptimizer_physical_Selection
                       quickstep_queryoptimizer_physical_TableReference
+                      quickstep_queryoptimizer_physical_TopLevelPlan
                       quickstep_queryoptimizer_rules_BottomUpRule
                       quickstep_types_operations_binaryoperations_BinaryOperation
                       quickstep_types_operations_binaryoperations_BinaryOperationFactory

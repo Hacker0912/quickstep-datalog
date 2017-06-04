@@ -44,6 +44,8 @@ namespace E = ::quickstep::optimizer::expressions;
  *  @{
  */
 
+struct PartitionSchemeHeader;
+
 class TableGenerator;
 typedef std::shared_ptr<const TableGenerator> TableGeneratorPtr;
 
@@ -100,6 +102,12 @@ class TableGenerator : public Physical {
     return {};
   }
 
+  PhysicalPtr copyWithNewOutputPartitionSchemeHeader(
+      PartitionSchemeHeader *partition_scheme_header) const override {
+    return TableGeneratorPtr(
+        new TableGenerator(generator_function_handle_, table_alias_, attribute_list_, partition_scheme_header));
+  }
+
   void getFieldStringItems(
       std::vector<std::string> *inline_field_names,
       std::vector<std::string> *inline_field_values,
@@ -116,6 +124,10 @@ class TableGenerator : public Physical {
       inline_field_values->push_back(table_alias_);
     }
 
+    if (partition_scheme_header_) {
+      inline_field_names->push_back("output_partition_scheme_header");
+      inline_field_values->push_back(partition_scheme_header_->toString());
+    }
     container_child_field_names->push_back("");
     container_child_fields->push_back(CastSharedPtrVector<OptimizerTreeBase>(attribute_list_));
   }
@@ -139,8 +151,10 @@ class TableGenerator : public Physical {
  private:
   TableGenerator(const GeneratorFunctionHandlePtr &generator_function_handle,
                  const std::string &table_alias,
-                 const std::vector<E::AttributeReferencePtr> &attribute_list)
-      : generator_function_handle_(generator_function_handle),
+                 const std::vector<E::AttributeReferencePtr> &attribute_list,
+                 PartitionSchemeHeader *partition_scheme_header = nullptr)
+      : Physical(partition_scheme_header),
+        generator_function_handle_(generator_function_handle),
         table_alias_(table_alias),
         attribute_list_(attribute_list) {
   }

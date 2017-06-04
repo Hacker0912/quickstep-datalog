@@ -257,5 +257,3 @@ SELECT * FROM generate_series(1, 5, -1);
 ERROR: Invalid step width (1 : 15)
 SELECT * FROM generate_series(1, 5, -1);
               ^
-==
-

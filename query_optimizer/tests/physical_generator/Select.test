@@ -3445,4 +3445,3 @@ TopLevelPlan
 |   +-[]
 +-output_attributes=
   +-AttributeReference[id=0,name=int_col,relation=test,type=Int NULL]
-==

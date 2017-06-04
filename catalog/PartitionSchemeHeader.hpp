@@ -62,6 +62,7 @@ class PartitionSchemeHeader {
 
   enum class PartitionType {
     kHash = 0,
+    kBroadcast,
     kRandom,
     kRange
   };
@@ -165,6 +166,36 @@ class PartitionSchemeHeader {
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PartitionSchemeHeader);
+};
+
+/**
+ * @brief Implementation of PartitionSchemeHeader that broadcast the tuples in
+ *        a relation to each and every partition.
+**/
+class BroadcastPartitionSchemeHeader final : public PartitionSchemeHeader {
+ public:
+  /**
+   * @brief Constructor.
+   *
+   * @param num_partitions The number of partitions to be created.
+   **/
+  explicit BroadcastPartitionSchemeHeader(const std::size_t num_partitions)
+      : PartitionSchemeHeader(PartitionType::kBroadcast, num_partitions, {}) {
+  }
+
+  /**
+   * @brief Destructor.
+   **/
+  ~BroadcastPartitionSchemeHeader() override {
+  }
+
+  partition_id getPartitionId(
+      const PartitionValues &value_of_attributes) const override {
+    LOG(FATAL) << "Not reachable";
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(BroadcastPartitionSchemeHeader);
 };
 
 /**

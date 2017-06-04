@@ -769,4 +769,3 @@ TopLevelPlan
   | type=Long NULL]
   +-AttributeReference[id=9,name=,alias=((SUM((long_col+1))+2)*3),relation=,
     type=Long NULL]
-==

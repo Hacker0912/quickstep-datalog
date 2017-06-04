@@ -20,8 +20,10 @@
 #ifndef QUICKSTEP_QUERY_OPTIMIZER_RULES_PARTITION_HPP_
 #define QUICKSTEP_QUERY_OPTIMIZER_RULES_PARTITION_HPP_
 
+#include <memory>
 #include <string>
 
+#include "query_optimizer/cost_model/StarSchemaSimpleCostModel.hpp"
 #include "query_optimizer/physical/Physical.hpp"
 #include "query_optimizer/rules/BottomUpRule.hpp"
 #include "utility/Macros.hpp"
@@ -54,10 +56,14 @@ class Partition final : public BottomUpRule<physical::Physical> {
   std::string getName() const override { return "Partition"; }
 
  protected:
+  void init(const physical::PhysicalPtr &input) override;
+
   physical::PhysicalPtr applyToNode(const physical::PhysicalPtr &input) override;
 
  private:
   OptimizerContext *optimizer_context_;
+
+  std::unique_ptr<cost::StarSchemaSimpleCostModel> cost_model_;
 
   DISALLOW_COPY_AND_ASSIGN(Partition);
 };

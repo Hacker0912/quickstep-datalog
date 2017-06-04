@@ -29,6 +29,7 @@
 #include "expressions/aggregation/AggregateFunctionFactory.hpp"
 #include "expressions/aggregation/AggregationID.hpp"
 #include "query_optimizer/OptimizerContext.hpp"
+#include "query_optimizer/cost_model/StarSchemaSimpleCostModel.hpp"
 #include "query_optimizer/expressions/AggregateFunction.hpp"
 #include "query_optimizer/expressions/BinaryExpression.hpp"
 #include "query_optimizer/expressions/ExprId.hpp"
@@ -37,11 +38,14 @@
 #include "query_optimizer/expressions/PatternMatcher.hpp"
 #include "query_optimizer/physical/Aggregate.hpp"
 #include "query_optimizer/physical/HashJoin.hpp"
+#include "query_optimizer/physical/NestedLoopsJoin.hpp"
 #include "query_optimizer/physical/PartitionSchemeHeader.hpp"
+#include "query_optimizer/physical/PatternMatcher.hpp"
 #include "query_optimizer/physical/Physical.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
 #include "query_optimizer/physical/Selection.hpp"
 #include "query_optimizer/physical/TableReference.hpp"
+#include "query_optimizer/physical/TopLevelPlan.hpp"
 #include "types/operations/binary_operations/BinaryOperation.hpp"
 #include "types/operations/binary_operations/BinaryOperationFactory.hpp"
 #include "types/operations/binary_operations/BinaryOperationID.hpp"
@@ -63,7 +67,7 @@ namespace optimizer {
 namespace E = expressions;
 namespace P = physical;
 
-DEFINE_uint64(num_repartitions, 4, "Number of repartitions for a hash join.");
+DEFINE_uint64(num_repartitions, 4, "Number of repartitions for a join.");
 
 namespace {
 
@@ -106,7 +110,67 @@ E::AliasPtr GetReaggregateExpression(const E::AliasPtr &agg_alias) {
                           agg_alias->relation_name());
 }
 
+P::PhysicalPtr applyToNestedLoopsJoin(const P::NestedLoopsJoinPtr &nested_loops_join,
+                                      P::PhysicalPtr left, P::PhysicalPtr right) {
+  const std::size_t num_partitions = FLAGS_num_repartitions;
+  const bool left_has_reusable_partition =
+      DCHECK_NOTNULL(left->getOutputPartitionSchemeHeader())->num_partitions == num_partitions;
+  auto left_repartition_scheme_header = make_unique<P::PartitionSchemeHeader>(
+      P::PartitionSchemeHeader::PartitionType::kRandom, num_partitions, P::PartitionSchemeHeader::PartitionExprIds());
+  switch (left->getPhysicalType()) {
+    case P::PhysicalType::kTableReference:
+      if (left_has_reusable_partition) {
+        break;
+      }
+      // Fall through.
+    case P::PhysicalType::kSharedSubplanReference:
+    case P::PhysicalType::kSort:
+    case P::PhysicalType::kUnionAll:
+      // Add a Selection node.
+      left = P::Selection::Create(left,
+                                  CastSharedPtrVector<E::NamedExpression>(left->getOutputAttributes()),
+                                  nullptr /* filter_predicate */, left_repartition_scheme_header.release());
+      break;
+    default: {
+      if (!left_has_reusable_partition) {
+        left = left->copyWithNewOutputPartitionSchemeHeader(left_repartition_scheme_header.release());
+      }
+    }
+  }
+
+  auto right_repartition_scheme_header = make_unique<P::PartitionSchemeHeader>(
+      P::PartitionSchemeHeader::PartitionType::kBroadcast, num_partitions,
+      P::PartitionSchemeHeader::PartitionExprIds());
+  switch (right->getPhysicalType()) {
+    case P::PhysicalType::kSharedSubplanReference:
+    case P::PhysicalType::kSort:
+    case P::PhysicalType::kTableReference:
+    case P::PhysicalType::kUnionAll:
+      // Add a Selection node.
+      right = P::Selection::Create(right,
+                                   CastSharedPtrVector<E::NamedExpression>(right->getOutputAttributes()),
+                                   nullptr /* filter_predicate */, right_repartition_scheme_header.release());
+      break;
+    default:
+      right = right->copyWithNewOutputPartitionSchemeHeader(right_repartition_scheme_header.release());
+  }
+
+  auto output_partition_scheme_header = make_unique<P::PartitionSchemeHeader>(
+      *left->getOutputPartitionSchemeHeader());
+  return P::NestedLoopsJoin::Create(left, right,
+                                    nested_loops_join->join_predicate(),
+                                    nested_loops_join->project_expressions(),
+                                    output_partition_scheme_header.release());
+}
+
 }  // namespace
+
+void Partition::init(const P::PhysicalPtr &input) {
+  P::TopLevelPlanPtr top_level_plan;
+  CHECK(P::SomeTopLevelPlan::MatchesWithConditionalCast(input, &top_level_plan));
+
+  cost_model_ = make_unique<cost::StarSchemaSimpleCostModel>(top_level_plan->shared_subplans());
+}
 
 P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
   switch (node->getPhysicalType()) {
@@ -431,6 +495,22 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
         return hash_join->copyWithNewOutputPartitionSchemeHeader(output_partition_scheme_header.release());
       }
       break;
+    }
+    case P::PhysicalType::kNestedLoopsJoin: {
+      const P::NestedLoopsJoinPtr nested_loops_join = static_pointer_cast<const P::NestedLoopsJoin>(node);
+
+      P::PhysicalPtr left = nested_loops_join->left();
+      P::PhysicalPtr right = nested_loops_join->right();
+      if (!left->getOutputPartitionSchemeHeader() && !right->getOutputPartitionSchemeHeader()) {
+        break;
+      }
+
+      // Left (larger) side becames RandomPartition, and the right (smaller) side for broadcast join.
+      if (cost_model_->estimateCardinality(right) < cost_model_->estimateCardinality(left)) {
+        return applyToNestedLoopsJoin(nested_loops_join, left, right);
+      } else {
+        return applyToNestedLoopsJoin(nested_loops_join, right, left);
+      }
     }
     case P::PhysicalType::kSelection: {
       const P::SelectionPtr selection = static_pointer_cast<const P::Selection>(node);
