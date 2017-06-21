@@ -72,6 +72,8 @@ namespace optimizer {
 namespace E = expressions;
 namespace P = physical;
 
+DEFINE_bool(forced_partitioned_hash_join, false, "Force to execute a hash join with partitions.");
+
 static bool ValidateNumRepartitions(const char *flagname, std::uint64_t value) {
   return value > 1u;
 }
@@ -442,7 +444,8 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
       const P::PartitionSchemeHeader *right_partition_scheme_header =
           right->getOutputPartitionSchemeHeader();
 
-      if (!left_partition_scheme_header && !right_partition_scheme_header) {
+      if (!left_partition_scheme_header && !right_partition_scheme_header &&
+          !FLAGS_forced_partitioned_hash_join) {
         break;
       }
 
@@ -453,9 +456,16 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
       bool right_needs_repartition = false;
       size_t num_partitions = 1u;
 
-      needsRepartitionForHashJoin(left_partition_scheme_header, left_join_attributes,
-                                  right_partition_scheme_header, right_join_attributes,
-                                  &left_needs_repartition, &right_needs_repartition, &num_partitions);
+      if (FLAGS_forced_partitioned_hash_join) {
+        left_needs_repartition = true;
+        right_needs_repartition = true;
+        num_partitions = FLAGS_num_repartitions;
+      } else {
+        needsRepartitionForHashJoin(left_partition_scheme_header, left_join_attributes,
+                                    right_partition_scheme_header, right_join_attributes,
+                                    &left_needs_repartition, &right_needs_repartition, &num_partitions);
+      }
+
       // Hash repartition.
       if (left_needs_repartition) {
         left = HashRepartition(left, left_join_attributes, num_partitions);
