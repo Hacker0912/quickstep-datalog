@@ -85,9 +85,8 @@ class BuildLIPFilterOperator : public RelationalOperator {
                          const std::size_t num_partitions,
                          const QueryContext::predicate_id build_side_predicate_index,
                          const bool input_relation_is_stored)
-    : RelationalOperator(query_id),
+    : RelationalOperator(query_id, num_partitions),
       input_relation_(input_relation),
-      num_partitions_(num_partitions),
       build_side_predicate_index_(build_side_predicate_index),
       input_relation_is_stored_(input_relation_is_stored),
       input_relation_block_ids_(num_partitions),
@@ -148,7 +147,6 @@ class BuildLIPFilterOperator : public RelationalOperator {
   serialization::WorkOrder* createWorkOrderProto(const partition_id part_id, const block_id block);
 
   const CatalogRelation &input_relation_;
-  const std::size_t num_partitions_;
   const QueryContext::predicate_id build_side_predicate_index_;
   const bool input_relation_is_stored_;
 

@@ -89,12 +89,11 @@ class BuildHashOperator : public RelationalOperator {
                     const bool any_join_key_attributes_nullable,
                     const std::size_t num_partitions,
                     const QueryContext::join_hash_table_id hash_table_index)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, num_partitions),
         input_relation_(input_relation),
         input_relation_is_stored_(input_relation_is_stored),
         join_key_attributes_(join_key_attributes),
         any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        num_partitions_(num_partitions),
         is_broadcast_join_(num_partitions > 1u && !input_relation.hasPartitionScheme()),
         hash_table_index_(hash_table_index),
         input_relation_block_ids_(num_partitions),
@@ -162,7 +161,6 @@ class BuildHashOperator : public RelationalOperator {
   const bool input_relation_is_stored_;
   const std::vector<attribute_id> join_key_attributes_;
   const bool any_join_key_attributes_nullable_;
-  const std::size_t num_partitions_;
   const bool is_broadcast_join_;
   const QueryContext::join_hash_table_id hash_table_index_;
 

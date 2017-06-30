@@ -97,13 +97,12 @@ class SelectOperator : public RelationalOperator {
       const QueryContext::scalar_group_id selection_index,
       const bool input_relation_is_stored,
       const std::size_t num_partitions)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, num_partitions),
         input_relation_(input_relation),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
         predicate_index_(predicate_index),
         selection_index_(selection_index),
-        num_partitions_(num_partitions),
         input_relation_block_ids_(num_partitions),
         num_workorders_generated_(num_partitions),
         simple_projection_(false),
@@ -155,14 +154,13 @@ class SelectOperator : public RelationalOperator {
       std::vector<attribute_id> &&selection,
       const bool input_relation_is_stored,
       const std::size_t num_partitions)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, num_partitions),
         input_relation_(input_relation),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
         predicate_index_(predicate_index),
         selection_index_(QueryContext::kInvalidScalarGroupId),
         simple_selection_(std::move(selection)),
-        num_partitions_(num_partitions),
         input_relation_block_ids_(num_partitions),
         num_workorders_generated_(num_partitions),
         simple_projection_(true),
@@ -239,7 +237,6 @@ class SelectOperator : public RelationalOperator {
   const QueryContext::scalar_group_id selection_index_;
   const std::vector<attribute_id> simple_selection_;
 
-  const std::size_t num_partitions_;
   // A vector of vectors V where V[i] indicates the list of block IDs of the
   // input relation that belong to the partition i.
   std::vector<std::vector<block_id>> input_relation_block_ids_;
