@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
@@ -142,6 +143,9 @@ class QueryManagerSingleNode final : public QueryManagerBase {
   std::unique_ptr<WorkOrdersContainer> workorders_container_;
 
   const CatalogDatabase &database_;
+
+  // The index is 'dag_node_index'.
+  std::vector<std::size_t> num_partitions_;
 
   DISALLOW_COPY_AND_ASSIGN(QueryManagerSingleNode);
 };

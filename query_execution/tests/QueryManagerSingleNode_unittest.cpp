@@ -334,7 +334,7 @@ TEST_F(QueryManagerTest, SingleNodeDAGStaticWorkOrdersTest) {
 
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(0, -1));
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
 
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
@@ -386,7 +386,7 @@ TEST_F(QueryManagerTest, SingleNodeDAGDynamicWorkOrdersTest) {
     unique_ptr<WorkerMessage> worker_message;
     worker_message.reset(query_manager_->getNextWorkerMessage(id, -1));
 
-    EXPECT_TRUE(worker_message != nullptr);
+    ASSERT_TRUE(worker_message != nullptr);
     EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
               worker_message->getType());
     EXPECT_EQ(id, worker_message->getRelationalOpIndex());
@@ -455,7 +455,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGBlockingLinkTest) {
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(id1, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id1, worker_message->getRelationalOpIndex());
@@ -479,7 +479,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGBlockingLinkTest) {
   EXPECT_FALSE(getOperatorFinishedStatus(id2));
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id2, -1));
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id2, worker_message->getRelationalOpIndex());
@@ -558,7 +558,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPipeLinkTest) {
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(id1, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id1, worker_message->getRelationalOpIndex());
@@ -597,7 +597,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPipeLinkTest) {
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id2, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id2, worker_message->getRelationalOpIndex());
@@ -611,7 +611,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPipeLinkTest) {
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id2, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id2, worker_message->getRelationalOpIndex());
@@ -699,7 +699,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest) {
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(id1, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
   EXPECT_EQ(id1, worker_message->getRelationalOpIndex());
@@ -712,7 +712,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest) {
   EXPECT_EQ(0, getNumWorkOrdersInExecution(id1));
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id1, -1));
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kRebuildWorkOrder,
             worker_message->getType());
 
@@ -732,7 +732,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest) {
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id2, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
 
@@ -794,7 +794,7 @@ TEST_F(QueryManagerTest, MultipleNodesNoOutputTest) {
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(ids[0], -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
 
@@ -836,7 +836,7 @@ TEST_F(QueryManagerTest, OutOfOrderWorkOrderCompletionTest) {
   unique_ptr<WorkerMessage> worker_message;
   worker_message.reset(query_manager_->getNextWorkerMessage(id1, -1));
 
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
 
@@ -853,7 +853,7 @@ TEST_F(QueryManagerTest, OutOfOrderWorkOrderCompletionTest) {
   EXPECT_FALSE(getOperatorFinishedStatus(id2));
 
   worker_message.reset(query_manager_->getNextWorkerMessage(id2, -1));
-  EXPECT_TRUE(worker_message != nullptr);
+  ASSERT_TRUE(worker_message != nullptr);
   EXPECT_EQ(WorkerMessage::WorkerMessageType::kWorkOrder,
             worker_message->getType());
 

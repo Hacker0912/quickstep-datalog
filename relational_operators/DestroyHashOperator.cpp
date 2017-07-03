@@ -38,7 +38,7 @@ bool DestroyHashOperator::getAllWorkOrders(
     for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
       container->addNormalWorkOrder(
           new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
-          op_index_);
+          op_index_, part_id);
     }
     work_generated_ = true;
   }

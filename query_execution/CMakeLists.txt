@@ -334,7 +334,10 @@ target_link_libraries(quickstep_queryexecution_WorkOrderProtosContainer
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryexecution_WorkOrdersContainer
                       glog
+                      quickstep_catalog_CatalogTypedefs
+                      quickstep_relationaloperators_RelationalOperator
                       quickstep_relationaloperators_WorkOrder
+                      quickstep_utility_DAG
                       quickstep_utility_Macros
                       quickstep_utility_PtrVector)
 target_link_libraries(quickstep_queryexecution_Worker
@@ -458,7 +461,7 @@ target_link_libraries(WorkOrdersContainer_unittest
                       quickstep_relationaloperators_WorkOrder
                       quickstep_utility_Macros
                       quickstep_utility_PtrVector)
-add_test(WorkOrdersContainer_unittest WorkOrdersContainer_unittest)
+#add_test(WorkOrdersContainer_unittest WorkOrdersContainer_unittest)
 
 add_executable(WorkerDirectory_unittest
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/WorkerDirectory_unittest.cpp")

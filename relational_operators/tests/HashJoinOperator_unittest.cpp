@@ -71,6 +71,7 @@
 #include "types/containers/Tuple.hpp"
 #include "types/operations/comparisons/ComparisonFactory.hpp"
 #include "types/operations/comparisons/ComparisonID.hpp"
+#include "utility/DAG.hpp"
 #include "utility/Macros.hpp"
 
 #include "gflags/gflags.h"
@@ -340,7 +341,7 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
     // index for each operator should be set, so that the WorkOrdersContainer
     // class' checks about operator index are successful.
     op->setOperatorIndex(kOpIndex);
-    WorkOrdersContainer container(1, 0);
+    WorkOrdersContainer container(1, 0, query_dag_.get());
     const std::size_t op_index = 0;
     op->getAllWorkOrders(&container,
                          query_context_.get(),
@@ -348,10 +349,13 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
                          foreman_client_id_,
                          &bus_);
 
-    while (container.hasNormalWorkOrder(op_index)) {
-      WorkOrder *work_order = container.getNormalWorkOrder(op_index);
-      work_order->execute();
-      delete work_order;
+    const std::size_t num_partitions = op->getNumPartitions();
+    for (partition_id part_id = 0; part_id < num_partitions; ++part_id) {
+      while (container.hasNormalWorkOrder(op_index, part_id)) {
+        WorkOrder *work_order = container.getNormalWorkOrder(op_index, part_id);
+        work_order->execute();
+        delete work_order;
+      }
     }
   }
 
@@ -371,6 +375,8 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
   CatalogRelation *dim_table_, *fact_table_;
   // The following PartitionSchemes are owned by its own CatalogRelation, respectively.
   PartitionScheme *dim_part_scheme_ = nullptr, *fact_part_scheme_ = nullptr;
+
+  std::unique_ptr<DAG<RelationalOperator, bool>> query_dag_;
 };
 
 TEST_P(HashJoinOperatorTest, LongKeyHashJoinTest) {
@@ -1456,7 +1462,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedLongKeyHashJoinTest) {
   insert_destination_proto->set_relation_id(output_relation_id);
   insert_destination_proto->set_relational_op_index(kOpIndex);
 
-  unique_ptr<HashJoinOperator> prober(new HashJoinOperator(
+  HashJoinOperator *prober = new HashJoinOperator(
       kQueryId,
       *dim_table_,
       *fact_table_,
@@ -1468,17 +1474,21 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedLongKeyHashJoinTest) {
       output_destination_index,
       join_hash_table_index,
       QueryContext::kInvalidPredicateId /* residual_predicate_index */,
-      selection_index));
+      selection_index);
 
   // Set up the QueryContext.
   query_context_ =
       make_unique<QueryContext>(query_context_proto, *db_, storage_manager_.get(), foreman_client_id_, &bus_);
 
   // Execute the operators.
-  fetchAndExecuteWorkOrders(builder.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(builder.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   prober->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(prober.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(prober);
+  fetchAndExecuteWorkOrders(prober);
 
   // Check result values
   // Note that the results might be in a different order.
@@ -1520,7 +1530,9 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedLongKeyHashJoinTest) {
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
   cleaner->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(cleaner.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(cleaner.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   db_->dropRelationById(output_relation_id);
 }
@@ -1604,7 +1616,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinTest)
   insert_destination_proto->set_relation_id(output_relation_id);
   insert_destination_proto->set_relational_op_index(kOpIndex);
 
-  unique_ptr<HashJoinOperator> prober(new HashJoinOperator(
+  HashJoinOperator *prober = new HashJoinOperator(
       kQueryId,
       *dim_table_,
       *fact_table_,
@@ -1616,17 +1628,21 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinTest)
       output_destination_index,
       join_hash_table_index,
       QueryContext::kInvalidPredicateId /* residual_predicate_index */,
-      selection_index));
+      selection_index);
 
   // Set up the QueryContext.
   query_context_ =
      make_unique<QueryContext>(query_context_proto, *db_, storage_manager_.get(), foreman_client_id_, &bus_);
 
   // Execute the operators.
-  fetchAndExecuteWorkOrders(builder.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(builder.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   prober->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(prober.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(prober);
+  fetchAndExecuteWorkOrders(prober);
 
   // Check result values
   // Note that the results might be in a different order.
@@ -1693,7 +1709,9 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinTest)
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
   cleaner->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(cleaner.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(cleaner.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   db_->dropRelationById(output_relation_id);
 }
@@ -1787,7 +1805,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinWithR
   const QueryContext::predicate_id residual_pred_index = query_context_proto.predicates_size();
   query_context_proto.add_predicates()->MergeFrom(residual_pred->getProto());
 
-  unique_ptr<HashJoinOperator> prober(new HashJoinOperator(
+  HashJoinOperator *prober = new HashJoinOperator(
       kQueryId,
       *dim_table_,
       *fact_table_,
@@ -1799,17 +1817,21 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinWithR
       output_destination_index,
       join_hash_table_index,
       residual_pred_index,
-      selection_index));
+      selection_index);
 
   // Set up the QueryContext.
   query_context_ =
       make_unique<QueryContext>(query_context_proto, *db_, storage_manager_.get(), foreman_client_id_, &bus_);
 
   // Execute the operators.
-  fetchAndExecuteWorkOrders(builder.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(builder.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   prober->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(prober.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(prober);
+  fetchAndExecuteWorkOrders(prober);
 
   // Check result values
   // Note that the results might be in a different order.
@@ -1876,7 +1898,9 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinWithR
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
   cleaner->informAllBlockingDependenciesMet();
-  fetchAndExecuteWorkOrders(cleaner.get());
+  query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
+  query_dag_->createNode(cleaner.release());
+  fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
   db_->dropRelationById(output_relation_id);
 }

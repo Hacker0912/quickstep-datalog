@@ -746,6 +746,7 @@ target_link_libraries(HashJoinOperator_unittest
                       quickstep_types_containers_Tuple
                       quickstep_types_operations_comparisons_ComparisonFactory
                       quickstep_types_operations_comparisons_ComparisonID
+                      quickstep_utility_DAG
                       quickstep_utility_Macros
                       tmb
                       ${LIBS})

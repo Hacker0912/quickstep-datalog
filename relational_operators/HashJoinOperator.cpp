@@ -228,7 +228,7 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrders(
                                      any_join_key_attributes_nullable_, part_id, probe_block_id, residual_predicate,
                                      selection, hash_table, output_destination, storage_manager,
                                      CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-              op_index_);
+              op_index_, part_id);
         }
       }
       started_ = true;
@@ -245,7 +245,7 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrders(
                                      probe_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
                                      residual_predicate, selection, hash_table, output_destination, storage_manager,
                                      CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-              op_index_);
+              op_index_, part_id);
           ++num_workorders_generated_[part_id];
         }  // end while
       }  // end for
@@ -284,7 +284,7 @@ bool HashJoinOperator::getAllOuterJoinWorkOrders(
                                          any_join_key_attributes_nullable_, part_id, probe_block_id, selection,
                                          is_selection_on_build_, hash_table, output_destination, storage_manager,
                                          CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-              op_index_);
+              op_index_, part_id);
         }
       }
       started_ = true;
@@ -302,7 +302,7 @@ bool HashJoinOperator::getAllOuterJoinWorkOrders(
                                          selection, is_selection_on_build_, hash_table, output_destination,
                                          storage_manager,
                                          CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-              op_index_);
+              op_index_, part_id);
           ++num_workorders_generated_[part_id];
         }
       }

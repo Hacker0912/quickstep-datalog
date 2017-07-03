@@ -26,7 +26,10 @@
 #include <queue>
 #include <vector>
 
+#include "catalog/CatalogTypedefs.hpp"
+#include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
+#include "utility/DAG.hpp"
 #include "utility/Macros.hpp"
 #include "utility/PtrVector.hpp"
 
@@ -52,14 +55,17 @@ class WorkOrdersContainer {
    * @param num_numa_nodes Number of NUMA nodes in the system.
    **/
   WorkOrdersContainer(const std::size_t num_operators,
-                      const std::size_t num_numa_nodes)
+                      const std::size_t num_numa_nodes,
+                      const DAG<RelationalOperator, bool> *query_dag = nullptr)
       : num_operators_(num_operators), num_numa_nodes_(num_numa_nodes) {
     DEBUG_ASSERT(num_operators != 0);
     for (std::size_t op = 0; op < num_operators; ++op) {
+      const std::size_t num_partitions =
+          query_dag ? query_dag->getNodePayload(op).getNumPartitions() : 1u;
       normal_workorders_.push_back(
-          new OperatorWorkOrdersContainer(num_numa_nodes_));
+          new PartitionedOperatorWorkOrdersContainer(num_partitions));
       rebuild_workorders_.push_back(
-          new OperatorWorkOrdersContainer(num_numa_nodes_));
+          new PartitionedOperatorWorkOrdersContainer(num_partitions));
     }
   }
 
@@ -79,9 +85,10 @@ class WorkOrdersContainer {
    *
    * @return If there are pending WorkOrders.
    **/
-  inline bool hasNormalWorkOrder(const std::size_t operator_index) const {
+  inline bool hasNormalWorkOrder(const std::size_t operator_index,
+                                 const partition_id part_id = 0) const {
     DCHECK_LT(operator_index, num_operators_);
-    return normal_workorders_[operator_index].hasWorkOrder();
+    return normal_workorders_[operator_index].hasWorkOrder(part_id);
   }
 
   /**
@@ -99,8 +106,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return false;
+    /*
     return normal_workorders_[operator_index].hasWorkOrderForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -111,9 +121,10 @@ class WorkOrdersContainer {
    *
    * @return If there are pending rebuild WorkOrders.
    **/
-  inline bool hasRebuildWorkOrder(const std::size_t operator_index) const {
+  inline bool hasRebuildWorkOrder(const std::size_t operator_index,
+                                  const partition_id part_id = 0) const {
     DCHECK_LT(operator_index, num_operators_);
-    return rebuild_workorders_[operator_index].hasWorkOrder();
+    return rebuild_workorders_[operator_index].hasWorkOrder(part_id);
   }
 
   /**
@@ -131,8 +142,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return false;
+    /*
     return rebuild_workorders_[operator_index].hasWorkOrderForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -151,8 +165,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return nullptr;
+    /*
     return normal_workorders_[operator_index].getWorkOrderForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -167,10 +184,10 @@ class WorkOrdersContainer {
    *         caller is responsible for taking the ownership.
    **/
   WorkOrder* getNormalWorkOrder(const std::size_t operator_index,
+                                const partition_id part_id = 0,
                                 const bool prefer_single_NUMA_node = true) {
     DCHECK_LT(operator_index, num_operators_);
-    return normal_workorders_[operator_index].getWorkOrder(
-        prefer_single_NUMA_node);
+    return normal_workorders_[operator_index].getWorkOrder(part_id);
   }
 
   /**
@@ -189,8 +206,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return nullptr;
+    /*
     return rebuild_workorders_[operator_index].getWorkOrderForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -205,10 +225,10 @@ class WorkOrdersContainer {
    *         caller is responsible for taking the ownership.
    **/
   WorkOrder* getRebuildWorkOrder(const std::size_t operator_index,
+                                 const partition_id part_id = 0,
                                  const bool prefer_single_NUMA_node = true) {
     DCHECK_LT(operator_index, num_operators_);
-    return rebuild_workorders_[operator_index].getWorkOrder(
-        prefer_single_NUMA_node);
+    return rebuild_workorders_[operator_index].getWorkOrder(part_id);
   }
 
   /**
@@ -223,10 +243,12 @@ class WorkOrdersContainer {
    * @param workorder A pointer to the WorkOrder to be added.
    * @param operator_index The index of the operator in the query DAG.
    **/
-  void addNormalWorkOrder(WorkOrder *workorder, const std::size_t operator_index) {
+  void addNormalWorkOrder(WorkOrder *workorder,
+                          const std::size_t operator_index,
+                          const partition_id part_id = 0) {
     DCHECK(workorder != nullptr);
     DCHECK_LT(operator_index, num_operators_);
-    normal_workorders_[operator_index].addWorkOrder(workorder);
+    normal_workorders_[operator_index].addWorkOrder(workorder, part_id);
   }
 
   /**
@@ -241,10 +263,11 @@ class WorkOrdersContainer {
    * @param operator_index The index of the operator in the query DAG.
    **/
   void addRebuildWorkOrder(WorkOrder *workorder,
-                           const std::size_t operator_index) {
+                           const std::size_t operator_index,
+                           const partition_id part_id = 0) {
     DCHECK(workorder != nullptr);
     DCHECK_LT(operator_index, num_operators_);
-    rebuild_workorders_[operator_index].addWorkOrder(workorder);
+    rebuild_workorders_[operator_index].addWorkOrder(workorder, part_id);
   }
 
   /**
@@ -261,8 +284,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return 0;
+    /*
     return normal_workorders_[operator_index].getNumWorkOrdersForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -274,9 +300,9 @@ class WorkOrdersContainer {
    * @return The number of pending normal WorkOrders.
    **/
   inline std::size_t getNumNormalWorkOrders(
-      const std::size_t operator_index) const {
+      const std::size_t operator_index, const partition_id part_id = 0) const {
     DCHECK_LT(operator_index, num_operators_);
-    return normal_workorders_[operator_index].getNumWorkOrders();
+    return normal_workorders_[operator_index].getNumWorkOrders(part_id);
   }
 
   /**
@@ -293,8 +319,11 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     DCHECK_GE(numa_node_id, 0);
     DCHECK_LT(static_cast<std::size_t>(numa_node_id), num_numa_nodes_);
+    return 0;
+    /*
     return rebuild_workorders_[operator_index].getNumWorkOrdersForNUMANode(
         numa_node_id);
+        */
   }
 
   /**
@@ -306,9 +335,9 @@ class WorkOrdersContainer {
    * @return The number of pending rebuild WorkOrders.
    **/
   inline std::size_t getNumRebuildWorkOrders(
-      const std::size_t operator_index) const {
+      const std::size_t operator_index, const partition_id part_id = 0) const {
     DCHECK_LT(operator_index, num_operators_);
-    return rebuild_workorders_[operator_index].getNumWorkOrders();
+    return rebuild_workorders_[operator_index].getNumWorkOrders(part_id);
   }
 
   /**
@@ -319,9 +348,9 @@ class WorkOrdersContainer {
    * @return The total number of WorkOrders (normal + rebuild).
    **/
   inline std::size_t getNumTotalWorkOrders(
-      const std::size_t operator_index) const {
-    return getNumNormalWorkOrders(operator_index) +
-           getNumRebuildWorkOrders(operator_index);
+      const std::size_t operator_index, const partition_id part_id = 0) const {
+    return getNumNormalWorkOrders(operator_index, part_id) +
+           getNumRebuildWorkOrders(operator_index, part_id);
   }
 
  private:
@@ -512,11 +541,55 @@ class WorkOrdersContainer {
     DISALLOW_COPY_AND_ASSIGN(OperatorWorkOrdersContainer);
   };
 
+  /**
+   * @brief A container to hold all the WorkOrders generated by one operator with partitions.
+   **/
+  class PartitionedOperatorWorkOrdersContainer {
+   public:
+    explicit PartitionedOperatorWorkOrdersContainer(const std::size_t num_partitions)
+        : num_partitions_(num_partitions),
+          workorders_(num_partitions) {}
+
+    void addWorkOrder(WorkOrder *workorder, const partition_id part_id) {
+      DCHECK_LT(part_id, num_partitions_);
+      workorders_[part_id].emplace(std::unique_ptr<WorkOrder>(workorder));
+    }
+
+    bool hasWorkOrder(const partition_id part_id) const {
+      DCHECK_LT(part_id, num_partitions_);
+      return !workorders_[part_id].empty();
+    }
+
+    std::size_t getNumWorkOrders(const partition_id part_id) const {
+      DCHECK_LT(part_id, num_partitions_);
+      return workorders_[part_id].size();
+    }
+
+    WorkOrder* getWorkOrder(const partition_id part_id) {
+      DCHECK_LT(part_id, num_partitions_);
+      if (hasWorkOrder(part_id)) {
+        WorkOrder *workorder = workorders_[part_id].front().release();
+        workorders_[part_id].pop();
+
+        return workorder;
+      }
+      return nullptr;
+    }
+
+   private:
+    const std::size_t num_partitions_;
+
+    // A vector of containers to store workorders per partition for execution.
+    std::vector<std::queue<std::unique_ptr<WorkOrder>>> workorders_;
+
+    DISALLOW_COPY_AND_ASSIGN(PartitionedOperatorWorkOrdersContainer);
+  };
+
   const std::size_t num_operators_;
   const std::size_t num_numa_nodes_;
 
-  PtrVector<OperatorWorkOrdersContainer> normal_workorders_;
-  PtrVector<OperatorWorkOrdersContainer> rebuild_workorders_;
+  PtrVector<PartitionedOperatorWorkOrdersContainer> normal_workorders_;
+  PtrVector<PartitionedOperatorWorkOrdersContainer> rebuild_workorders_;
 
   DISALLOW_COPY_AND_ASSIGN(WorkOrdersContainer);
 };

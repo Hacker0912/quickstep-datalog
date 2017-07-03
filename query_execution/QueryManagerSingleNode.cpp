@@ -59,10 +59,12 @@ QueryManagerSingleNode::QueryManagerSingleNode(
                                       foreman_client_id_,
                                       bus_)),
       workorders_container_(
-          new WorkOrdersContainer(num_operators_in_dag_, num_numa_nodes)),
-      database_(static_cast<const CatalogDatabase&>(*catalog_database)) {
+          new WorkOrdersContainer(num_operators_in_dag_, num_numa_nodes, query_dag_)),
+      database_(static_cast<const CatalogDatabase&>(*catalog_database)),
+      num_partitions_(num_operators_in_dag_) {
   // Collect all the workorders from all the relational operators in the DAG.
   for (dag_node_index index = 0; index < num_operators_in_dag_; ++index) {
+    num_partitions_[index] = query_dag_->getNodePayload(index).getNumPartitions();
     if (checkAllBlockingDependenciesMet(index)) {
       query_dag_->getNodePayloadMutable(index)->informAllBlockingDependenciesMet();
       processOperator(index, false);
@@ -81,6 +83,7 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     if (query_exec_state_->hasExecutionFinished(index)) {
       continue;
     }
+    /*
     if (numa_node != kAnyNUMANodeID) {
       // First try to get a normal WorkOrder from the specified NUMA node.
       work_order = workorders_container_->getNormalWorkOrderForNUMANode(index, numa_node);
@@ -99,16 +102,19 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     }
     // Either no workorder found on the given NUMA node, or numa_node is
     // 'kAnyNUMANodeID'.
+    */
     // Try to get a normal WorkOrder from other NUMA nodes.
-    work_order = workorders_container_->getNormalWorkOrder(index);
-    if (work_order != nullptr) {
-      query_exec_state_->incrementNumQueuedWorkOrders(index);
-      return WorkerMessage::WorkOrderMessage(work_order, index);
-    } else {
-      // Normal WorkOrder not found, look for a RebuildWorkOrder.
-      work_order = workorders_container_->getRebuildWorkOrder(index);
+    for (partition_id part_id = 0; part_id < num_partitions_[index]; ++part_id) {
+      work_order = workorders_container_->getNormalWorkOrder(index, part_id);
       if (work_order != nullptr) {
-        return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
+        query_exec_state_->incrementNumQueuedWorkOrders(index);
+        return WorkerMessage::WorkOrderMessage(work_order, index);
+      } else {
+        // Normal WorkOrder not found, look for a RebuildWorkOrder.
+        work_order = workorders_container_->getRebuildWorkOrder(index, part_id);
+        if (work_order != nullptr) {
+          return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
+        }
       }
     }
   }
