@@ -342,6 +342,7 @@ target_link_libraries(quickstep_queryexecution_WorkOrdersContainer
                       quickstep_utility_PtrVector)
 target_link_libraries(quickstep_queryexecution_Worker
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_QueryExecutionMessages_proto
                       quickstep_queryexecution_QueryExecutionTypedefs
                       quickstep_queryexecution_QueryExecutionUtil

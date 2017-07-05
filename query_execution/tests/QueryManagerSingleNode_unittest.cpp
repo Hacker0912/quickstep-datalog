@@ -261,14 +261,14 @@ class QueryManagerTest : public ::testing::Test {
   inline bool placeWorkOrderCompleteMessage(const QueryPlan::DAGNodeIndex index) {
     VLOG(3) << "Place WorkOrderComplete message for Op[" << index << "]";
 
-    query_manager_->processWorkOrderCompleteMessage(index);
+    query_manager_->processWorkOrderCompleteMessage(index, 0 /* partition_id */);
     return query_manager_->getQueryExecutionState().hasQueryExecutionFinished();
   }
 
   inline bool placeRebuildWorkOrderCompleteMessage(const QueryPlan::DAGNodeIndex index) {
     VLOG(3) << "Place RebuildWorkOrderComplete message for Op[" << index << "]";
 
-    query_manager_->processRebuildWorkOrderCompleteMessage(index);
+    query_manager_->processRebuildWorkOrderCompleteMessage(index, 0 /* partition_id */);
     return query_manager_->getQueryExecutionState().hasQueryExecutionFinished();
   }
 

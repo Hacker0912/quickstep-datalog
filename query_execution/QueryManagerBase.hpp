@@ -93,7 +93,8 @@ class QueryManagerBase {
    * @param op_index The index of the specified operator node in the query DAG
    *        for the completed WorkOrder.
    **/
-  void processWorkOrderCompleteMessage(const dag_node_index op_index);
+  void processWorkOrderCompleteMessage(const dag_node_index op_index,
+                                       const partition_id part_id);
 
   /**
    * @brief Process the received RebuildWorkOrder complete message.
@@ -101,7 +102,8 @@ class QueryManagerBase {
    * @param op_index The index of the specified operator node in the query DAG
    *        for the completed RebuildWorkOrder.
    **/
-  void processRebuildWorkOrderCompleteMessage(const dag_node_index op_index);
+  void processRebuildWorkOrderCompleteMessage(const dag_node_index op_index,
+                                              const partition_id part_id);
 
   /**
    * @brief Process the received data pipeline message.

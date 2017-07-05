@@ -64,9 +64,13 @@ QueryManagerSingleNode::QueryManagerSingleNode(
       num_partitions_(num_operators_in_dag_) {
   // Collect all the workorders from all the relational operators in the DAG.
   for (dag_node_index index = 0; index < num_operators_in_dag_; ++index) {
-    num_partitions_[index] = query_dag_->getNodePayload(index).getNumPartitions();
+    RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
+
+    const std::size_t num_partitions = op->getNumPartitions();
+    num_partitions_[index] = num_partitions;
+
     if (checkAllBlockingDependenciesMet(index)) {
-      query_dag_->getNodePayloadMutable(index)->informAllBlockingDependenciesMet();
+      op->informAllBlockingDependenciesMet();
       processOperator(index, false);
     }
   }

@@ -302,11 +302,10 @@ class RelationalOperator {
    *        pipeline have been met.
    **/
   explicit RelationalOperator(const std::size_t query_id,
-                              const std::size_t num_partitions = 1u,
-                              const bool blocking_dependencies_met = false)
+                              const std::size_t num_partitions = 1u)
       : query_id_(query_id),
         num_partitions_(num_partitions),
-        blocking_dependencies_met_(blocking_dependencies_met),
+        blocking_dependencies_met_(false),
         done_feeding_input_relation_(false),
         lip_deployment_index_(QueryContext::kInvalidLIPDeploymentId) {}
 
