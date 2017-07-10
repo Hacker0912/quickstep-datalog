@@ -35,6 +35,7 @@
 namespace quickstep {
 
 bool FinalizeAggregationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -42,36 +43,34 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
     tmb::MessageBus *bus) {
   DCHECK(query_context != nullptr);
 
-  if (blocking_dependencies_met_ && !started_) {
-    started_ = true;
+  if (blocking_dependencies_met_[part_id] && !started_[part_id]) {
+    started_[part_id] = true;
 
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      AggregationOperationState *agg_state =
-          query_context->getAggregationState(aggr_state_index_, part_id);
-      DCHECK(agg_state != nullptr);
-      for (std::size_t state_part_id = 0;
-           state_part_id < agg_state->getNumFinalizationPartitions();
-           ++state_part_id) {
-        container->addNormalWorkOrder(
-            new FinalizeAggregationWorkOrder(
-                query_id_,
-                part_id,
-                state_part_id,
-                agg_state,
-                query_context->getInsertDestination(output_destination_index_)),
-            op_index_);
-      }
+    AggregationOperationState *agg_state =
+        query_context->getAggregationState(aggr_state_index_, part_id);
+    DCHECK(agg_state != nullptr);
+    for (std::size_t state_part_id = 0;
+         state_part_id < agg_state->getNumFinalizationPartitions();
+         ++state_part_id) {
+      container->addNormalWorkOrder(
+          new FinalizeAggregationWorkOrder(
+              query_id_,
+              part_id,
+              state_part_id,
+              agg_state,
+              query_context->getInsertDestination(output_destination_index_)),
+          op_index_, part_id);
     }
   }
-  return started_;
+  return started_[part_id];
 }
 
 // TODO(quickstep-team) : Think about how the number of partitions could be
 // accessed in this function. Until then, we can't use partitioned aggregation
 // finalization with the distributed version.
 bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !started_) {
-    started_ = true;
+  if (blocking_dependencies_met_[0] && !started_[0]) {
+    started_[0] = true;
 
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       serialization::WorkOrder *proto = new serialization::WorkOrder;
@@ -89,11 +88,10 @@ bool FinalizeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer
       container->addWorkOrderProto(proto, op_index_);
     }
   }
-  return started_;
+  return started_[0];
 }
 
 void FinalizeAggregationWorkOrder::execute() {
-  (void) part_id_;
   state_->finalizeAggregate(state_partition_id_, output_destination_);
 }
 

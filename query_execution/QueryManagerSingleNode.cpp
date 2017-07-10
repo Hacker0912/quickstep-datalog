@@ -60,24 +60,22 @@ QueryManagerSingleNode::QueryManagerSingleNode(
                                       bus_)),
       workorders_container_(
           new WorkOrdersContainer(num_operators_in_dag_, num_numa_nodes, query_dag_)),
-      database_(static_cast<const CatalogDatabase&>(*catalog_database)),
-      num_partitions_(num_operators_in_dag_) {
+      database_(static_cast<const CatalogDatabase&>(*catalog_database)) {
   // Collect all the workorders from all the relational operators in the DAG.
   for (dag_node_index index = 0; index < num_operators_in_dag_; ++index) {
     RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
 
-    const std::size_t num_partitions = op->getNumPartitions();
-    num_partitions_[index] = num_partitions;
-
-    if (checkAllBlockingDependenciesMet(index)) {
-      op->informAllBlockingDependenciesMet();
-      processOperator(index, false);
+    for (partition_id part_id = 0; part_id < input_num_partitions_[index]; ++part_id) {
+      if (checkAllBlockingDependenciesMet(index, part_id)) {
+        op->informAllBlockingDependenciesMet(part_id);
+        processOperator(index, part_id, false);
+      }
     }
   }
 }
 
 WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
-    const dag_node_index start_operator_index, const numa_node_id numa_node) {
+    const dag_node_index start_operator_index) {
   // Default policy: Operator with lowest index first.
   WorkOrder *work_order = nullptr;
   size_t num_operators_checked = 0;
@@ -87,34 +85,17 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     if (query_exec_state_->hasExecutionFinished(index)) {
       continue;
     }
-    /*
-    if (numa_node != kAnyNUMANodeID) {
-      // First try to get a normal WorkOrder from the specified NUMA node.
-      work_order = workorders_container_->getNormalWorkOrderForNUMANode(index, numa_node);
-      if (work_order != nullptr) {
-        // A WorkOrder found on the given NUMA node.
-        query_exec_state_->incrementNumQueuedWorkOrders(index);
-        return WorkerMessage::WorkOrderMessage(work_order, index);
-      } else {
-        // Normal workorder not found on this node. Look for a rebuild workorder
-        // on this NUMA node.
-        work_order = workorders_container_->getRebuildWorkOrderForNUMANode(index, numa_node);
-        if (work_order != nullptr) {
-          return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
-        }
-      }
-    }
-    // Either no workorder found on the given NUMA node, or numa_node is
-    // 'kAnyNUMANodeID'.
-    */
-    // Try to get a normal WorkOrder from other NUMA nodes.
-    for (partition_id part_id = 0; part_id < num_partitions_[index]; ++part_id) {
+    for (partition_id part_id = 0; part_id < input_num_partitions_[index]; ++part_id) {
       work_order = workorders_container_->getNormalWorkOrder(index, part_id);
       if (work_order != nullptr) {
-        query_exec_state_->incrementNumQueuedWorkOrders(index);
+        query_exec_state_->incrementNumQueuedWorkOrders(index, part_id);
         return WorkerMessage::WorkOrderMessage(work_order, index);
-      } else {
-        // Normal WorkOrder not found, look for a RebuildWorkOrder.
+      }
+    }
+
+    const auto cit = output_num_partitions_.find(index);
+    if (cit != output_num_partitions_.end()) {
+      for (partition_id part_id = 0; part_id < cit->second; ++part_id) {
         work_order = workorders_container_->getRebuildWorkOrder(index, part_id);
         if (work_order != nullptr) {
           return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
@@ -126,25 +107,27 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
   return nullptr;
 }
 
-bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {
+bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index,
+                                                   const partition_id part_id) {
   bool generated_new_workorders = false;
-  if (!query_exec_state_->hasDoneGenerationWorkOrders(index)) {
+  if (!query_exec_state_->hasDoneGenerationWorkOrders(index, part_id)) {
     // Do not fetch any work units until all blocking dependencies are met.
     // The releational operator is not aware of blocking dependencies for
     // uncorrelated scalar queries.
-    if (!checkAllBlockingDependenciesMet(index)) {
+    if (!checkAllBlockingDependenciesMet(index, part_id)) {
       return false;
     }
     const size_t num_pending_workorders_before =
-        workorders_container_->getNumNormalWorkOrders(index);
+        workorders_container_->getNumNormalWorkOrders(index, part_id);
     const bool done_generation =
-        query_dag_->getNodePayloadMutable(index)->getAllWorkOrders(workorders_container_.get(),
+        query_dag_->getNodePayloadMutable(index)->getAllWorkOrders(part_id,
+                                                                   workorders_container_.get(),
                                                                    query_context_.get(),
                                                                    storage_manager_,
                                                                    foreman_client_id_,
                                                                    bus_);
     if (done_generation) {
-      query_exec_state_->setDoneGenerationWorkOrders(index);
+      query_exec_state_->setDoneGenerationWorkOrders(index, part_id);
     }
 
     // TODO(shoban): It would be a good check to see if operator is making
@@ -156,42 +139,54 @@ bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {
 
     generated_new_workorders =
         (num_pending_workorders_before <
-         workorders_container_->getNumNormalWorkOrders(index));
+         workorders_container_->getNumNormalWorkOrders(index, part_id));
   }
   return generated_new_workorders;
 }
 
-bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index) {
-  DCHECK(!workorders_container_->hasRebuildWorkOrder(index));
+bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index,
+                                             const partition_id part_id) {
+  DCHECK(!workorders_container_->hasRebuildWorkOrder(index, part_id));
   DCHECK(checkRebuildRequired(index));
-  DCHECK(!checkRebuildInitiated(index));
+  DCHECK(!checkRebuildInitiated(index, part_id));
 
-  getRebuildWorkOrders(index, workorders_container_.get());
+  getRebuildWorkOrders(index, part_id, workorders_container_.get());
 
   query_exec_state_->setRebuildStatus(
-      index, workorders_container_->getNumRebuildWorkOrders(index), true);
+      index, part_id, workorders_container_->getNumRebuildWorkOrders(index, part_id), true);
 
-  return (query_exec_state_->getNumRebuildWorkOrders(index) == 0);
+  return (query_exec_state_->getNumRebuildWorkOrders(index, part_id) == 0);
+}
+
+bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index) {
+  bool rebuild_result = true;
+  const auto cit = output_num_partitions_.find(index);
+  DCHECK(cit != output_num_partitions_.end());
+  for (partition_id output_part_id = 0; output_part_id < cit->second; ++output_part_id) {
+    if (!initiateRebuild(index, output_part_id) && rebuild_result) {
+      rebuild_result = false;
+    }
+  }
+
+  return rebuild_result;
 }
 
 void QueryManagerSingleNode::getRebuildWorkOrders(const dag_node_index index,
+                                                  const partition_id part_id,
                                                   WorkOrdersContainer *container) {
   const RelationalOperator &op = query_dag_->getNodePayload(index);
   const QueryContext::insert_destination_id insert_destination_index = op.getInsertDestinationID();
-
-  if (insert_destination_index == QueryContext::kInvalidInsertDestinationId) {
-    return;
-  }
+  DCHECK_NE(insert_destination_index, QueryContext::kInvalidInsertDestinationId);
 
   std::vector<MutableBlockReference> partially_filled_block_refs;
-  std::vector<partition_id> part_ids;
 
   DCHECK(query_context_ != nullptr);
   InsertDestination *insert_destination = query_context_->getInsertDestination(insert_destination_index);
   DCHECK(insert_destination != nullptr);
 
-  insert_destination->getPartiallyFilledBlocks(&partially_filled_block_refs, &part_ids);
+  insert_destination->getPartiallyFilledBlocksInPartition(part_id, &partially_filled_block_refs);
 
+  const relation_id output_rel = op.getOutputRelationID();
   for (std::vector<MutableBlockReference>::size_type i = 0;
        i < partially_filled_block_refs.size();
        ++i) {
@@ -199,11 +194,11 @@ void QueryManagerSingleNode::getRebuildWorkOrders(const dag_node_index index,
         new RebuildWorkOrder(query_id_,
                              std::move(partially_filled_block_refs[i]),
                              index,
-                             op.getOutputRelationID(),
-                             part_ids[i],
+                             output_rel,
+                             part_id,
                              foreman_client_id_,
                              bus_),
-        index);
+        index, part_id);
   }
 }
 

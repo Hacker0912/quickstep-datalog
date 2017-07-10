@@ -25,7 +25,8 @@
 
 namespace quickstep {
 
-bool CreateIndexOperator::getAllWorkOrders(WorkOrdersContainer *container,
+bool CreateIndexOperator::getAllWorkOrders(const partition_id part_id,
+                                           WorkOrdersContainer *container,
                                            QueryContext *query_context,
                                            StorageManager *storage_manager,
                                            const tmb::client_id scheduler_client_id,

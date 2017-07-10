@@ -114,9 +114,9 @@ class NestedLoopsJoinOperator : public RelationalOperator {
         right_relation_block_ids_(num_partitions),
         num_left_workorders_generated_(num_partitions),
         num_right_workorders_generated_(num_partitions),
-        done_feeding_left_relation_(false),
-        done_feeding_right_relation_(false),
-        all_workorders_generated_(false) {
+        done_feeding_left_relation_(num_partitions),
+        done_feeding_right_relation_(num_partitions),
+        all_workorders_generated_(num_partitions) {
     DCHECK_NE(join_predicate_index_, QueryContext::kInvalidPredicateId);
 
     if (left_relation_is_stored) {
@@ -156,7 +156,8 @@ class NestedLoopsJoinOperator : public RelationalOperator {
     return "NestedLoopsJoinOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -164,11 +165,11 @@ class NestedLoopsJoinOperator : public RelationalOperator {
 
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
-  void doneFeedingInputBlocks(const relation_id rel_id) override {
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override {
     if (rel_id == left_input_relation_.getID()) {
-      done_feeding_left_relation_ = true;
+      done_feeding_left_relation_[part_id] = true;
     } else if (rel_id == right_input_relation_.getID()) {
-      done_feeding_right_relation_ = true;
+      done_feeding_right_relation_[part_id] = true;
     } else {
       FATAL_ERROR("Wrong relation ID in doneFeedingInputBlocks method.");
     }
@@ -188,6 +189,11 @@ class NestedLoopsJoinOperator : public RelationalOperator {
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
     return output_destination_index_;
+  }
+
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
   }
 
   const relation_id getOutputRelationID() const override {
@@ -217,10 +223,10 @@ class NestedLoopsJoinOperator : public RelationalOperator {
    * @return The number of workorders generated during the execution of this
    *         function.
    **/
-  std::size_t getAllWorkOrdersHelperBothNotStored(WorkOrdersContainer *container,
+  std::size_t getAllWorkOrdersHelperBothNotStored(const partition_id part_id,
+                                                  WorkOrdersContainer *container,
                                                   QueryContext *query_context,
                                                   StorageManager *storage_manager,
-                                                  const partition_id part_id,
                                                   std::vector<block_id>::size_type left_min,
                                                   std::vector<block_id>::size_type left_max,
                                                   std::vector<block_id>::size_type right_min,
@@ -238,7 +244,8 @@ class NestedLoopsJoinOperator : public RelationalOperator {
    *
    * @return Whether all work orders have been generated.
    **/
-  bool getAllWorkOrdersHelperOneStored(WorkOrdersContainer *container,
+  bool getAllWorkOrdersHelperOneStored(const partition_id part_id,
+                                       WorkOrdersContainer *container,
                                        QueryContext *query_context,
                                        StorageManager *storage_manager);
 
@@ -308,11 +315,11 @@ class NestedLoopsJoinOperator : public RelationalOperator {
   std::vector<std::size_t> num_left_workorders_generated_;
   std::vector<std::size_t> num_right_workorders_generated_;
 
-  bool done_feeding_left_relation_;
-  bool done_feeding_right_relation_;
+  std::vector<bool> done_feeding_left_relation_;
+  std::vector<bool> done_feeding_right_relation_;
 
   // Applicable only when both the relations are stored relations.
-  bool all_workorders_generated_;
+  std::vector<bool> all_workorders_generated_;
 
   DISALLOW_COPY_AND_ASSIGN(NestedLoopsJoinOperator);
 };

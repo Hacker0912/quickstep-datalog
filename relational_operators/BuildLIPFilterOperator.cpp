@@ -44,6 +44,7 @@
 namespace quickstep {
 
 bool BuildLIPFilterOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -55,49 +56,45 @@ bool BuildLIPFilterOperator::getAllWorkOrders(
       query_context->getPredicate(build_side_predicate_index_);
 
   if (input_relation_is_stored_) {
-    if (started_) {
+    if (started_[part_id]) {
       return true;
     }
 
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
-        container->addNormalWorkOrder(
-            new BuildLIPFilterWorkOrder(
-                query_id_,
-                input_relation_,
-                input_block_id,
-                build_side_predicate,
-                storage_manager,
-                CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
-                CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-            op_index_);
-      }
+    for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
+      container->addNormalWorkOrder(
+          new BuildLIPFilterWorkOrder(
+              query_id_,
+              input_relation_,
+              input_block_id,
+              build_side_predicate,
+              storage_manager,
+              CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
+              CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
+          op_index_);
     }
-    started_ = true;
+    started_[part_id] = true;
     return true;
   } else {
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
-        container->addNormalWorkOrder(
-            new BuildLIPFilterWorkOrder(
-                query_id_,
-                input_relation_,
-                input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                build_side_predicate,
-                storage_manager,
-                CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
-                CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-            op_index_);
-        ++num_workorders_generated_[part_id];
-      }
+    while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
+      container->addNormalWorkOrder(
+          new BuildLIPFilterWorkOrder(
+              query_id_,
+              input_relation_,
+              input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+              build_side_predicate,
+              storage_manager,
+              CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
+              CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
+          op_index_);
+      ++num_workorders_generated_[part_id];
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[part_id];
   }
 }
 
 bool BuildLIPFilterOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (input_relation_is_stored_) {
-    if (started_) {
+    if (started_[0]) {
       return true;
     }
 
@@ -106,7 +103,7 @@ bool BuildLIPFilterOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *con
         container->addWorkOrderProto(createWorkOrderProto(part_id, block), op_index_);
       }
     }
-    started_ = true;
+    started_[0] = true;
     return true;
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
@@ -117,7 +114,7 @@ bool BuildLIPFilterOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *con
         ++num_workorders_generated_[part_id];
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

@@ -98,7 +98,7 @@ class BuildHashOperator : public RelationalOperator {
         hash_table_index_(hash_table_index),
         input_relation_block_ids_(num_partitions),
         num_workorders_generated_(num_partitions),
-        started_(false) {
+        started_(num_partitions, false) {
     if (input_relation_is_stored) {
       if (input_relation.hasPartitionScheme()) {
         const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
@@ -129,7 +129,8 @@ class BuildHashOperator : public RelationalOperator {
     return "BuildHashOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -167,8 +168,7 @@ class BuildHashOperator : public RelationalOperator {
   // The index is the partition id.
   std::vector<BlocksInPartition> input_relation_block_ids_;
   std::vector<std::size_t> num_workorders_generated_;
-
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(BuildHashOperator);
 };

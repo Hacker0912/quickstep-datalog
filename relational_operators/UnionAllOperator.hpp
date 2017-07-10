@@ -111,6 +111,10 @@ class UnionAllOperator : public RelationalOperator {
     return output_destination_index_;
   }
 
+  std::size_t getOutputNumPartitions() const override {
+    return 1u;
+  }
+
   /**
    * @return The input relations to this UnionAll operator.
    */
@@ -133,9 +137,10 @@ class UnionAllOperator : public RelationalOperator {
                       const relation_id input_relation_id,
                       const partition_id part_id) override;
 
-  void doneFeedingInputBlocks(const relation_id rel_id) override;
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override;
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,

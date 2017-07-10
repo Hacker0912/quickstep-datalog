@@ -87,6 +87,7 @@ namespace {
 
 constexpr std::size_t kQueryId = 0;
 constexpr const std::size_t kOpIndex = 0;
+constexpr partition_id kPartitionId = 0;
 
 // Helper struct for test tuple that will that will be inserted and sorted.
 class TestTuple {
@@ -1496,13 +1497,14 @@ class SortMergeRunOperatorTest : public ::testing::Test {
     bool done;
     WorkOrdersContainer container(kOpIndex + 1, 0);
     do {
-      done = merge_op_->getAllWorkOrders(&container,
+      done = merge_op_->getAllWorkOrders(kPartitionId,
+                                         &container,
                                          query_context_.get(),
                                          storage_manager_.get(),
                                          foreman_client_id_,
                                          &bus_);
-      while (container.hasNormalWorkOrder(kOpIndex)) {
-        std::unique_ptr<WorkOrder> order(container.getNormalWorkOrder(kOpIndex));
+      while (container.hasNormalWorkOrder(kOpIndex, kPartitionId)) {
+        std::unique_ptr<WorkOrder> order(container.getNormalWorkOrder(kOpIndex, kPartitionId));
         order->execute();
         processMessages(1);
       }
@@ -1516,7 +1518,8 @@ class SortMergeRunOperatorTest : public ::testing::Test {
     do {
       if (!done) {
         // Find work orders to execute, if not done already.
-        done = merge_op_->getAllWorkOrders(&container,
+        done = merge_op_->getAllWorkOrders(kPartitionId,
+                                           &container,
                                            query_context_.get(),
                                            storage_manager_.get(),
                                            foreman_client_id_,
@@ -1524,13 +1527,13 @@ class SortMergeRunOperatorTest : public ::testing::Test {
       }
 
       executed = false;
-      if (container.hasNormalWorkOrder(kOpIndex)) {
-        std::unique_ptr<WorkOrder> order(container.getNormalWorkOrder(kOpIndex));
+      if (container.hasNormalWorkOrder(kOpIndex, kPartitionId)) {
+        std::unique_ptr<WorkOrder> order(container.getNormalWorkOrder(kOpIndex, kPartitionId));
         order->execute();
         processMessages(1);
         executed = true;
       }
-    } while (container.hasNormalWorkOrder(kOpIndex) || executed);
+    } while (container.hasNormalWorkOrder(kOpIndex, kPartitionId) || executed);
     return done;
   }
 

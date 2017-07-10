@@ -21,6 +21,7 @@
 #define QUICKSTEP_RELATIONAL_OPERATORS_DESTROY_HASH_OPERATOR_HPP_
 
 #include <string>
+#include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
@@ -61,7 +62,7 @@ class DestroyHashOperator : public RelationalOperator {
                       const QueryContext::join_hash_table_id hash_table_index)
       : RelationalOperator(query_id, build_num_partitions),
         hash_table_index_(hash_table_index),
-        work_generated_(false) {}
+        work_generated_(build_num_partitions) {}
 
   ~DestroyHashOperator() override {}
 
@@ -73,7 +74,8 @@ class DestroyHashOperator : public RelationalOperator {
     return "DestroyHashOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -83,7 +85,7 @@ class DestroyHashOperator : public RelationalOperator {
 
  private:
   const QueryContext::join_hash_table_id hash_table_index_;
-  bool work_generated_;
+  std::vector<bool> work_generated_;
 
   DISALLOW_COPY_AND_ASSIGN(DestroyHashOperator);
 };

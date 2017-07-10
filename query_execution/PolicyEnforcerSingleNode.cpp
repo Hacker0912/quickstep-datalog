@@ -67,7 +67,7 @@ void PolicyEnforcerSingleNode::getWorkerMessages(
     std::size_t messages_collected_curr_query = 0;
     while (messages_collected_curr_query < per_query_share) {
       WorkerMessage *next_worker_message =
-          static_cast<QueryManagerSingleNode*>(curr_query_manager)->getNextWorkerMessage(0, kAnyNUMANodeID);
+          static_cast<QueryManagerSingleNode*>(curr_query_manager)->getNextWorkerMessage(0);
       if (next_worker_message != nullptr) {
         ++messages_collected_curr_query;
         worker_messages->push_back(std::unique_ptr<WorkerMessage>(next_worker_message));

@@ -30,25 +30,24 @@
 namespace quickstep {
 
 bool DestroyAggregationStateOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (blocking_dependencies_met_ && !work_generated_) {
-    work_generated_ = true;
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      container->addNormalWorkOrder(
-          new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
-          op_index_);
-    }
+  if (blocking_dependencies_met_[part_id] && !work_generated_[part_id]) {
+    work_generated_[part_id] = true;
+    container->addNormalWorkOrder(
+        new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
+        op_index_, part_id);
   }
-  return work_generated_;
+  return work_generated_[part_id];
 }
 
 bool DestroyAggregationStateOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !work_generated_) {
-    work_generated_ = true;
+  if (blocking_dependencies_met_[0] && !work_generated_[0]) {
+    work_generated_[0] = true;
 
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       serialization::WorkOrder *proto = new serialization::WorkOrder;
@@ -60,11 +59,11 @@ bool DestroyAggregationStateOperator::getAllWorkOrderProtos(WorkOrderProtosConta
       container->addWorkOrderProto(proto, op_index_);
     }
   }
-  return work_generated_;
+  return work_generated_[0];
 }
 
 void DestroyAggregationStateWorkOrder::execute() {
-  query_context_->destroyAggregationState(aggr_state_index_, part_id_);
+  query_context_->destroyAggregationState(aggr_state_index_, partition_id_);
 }
 
 }  // namespace quickstep

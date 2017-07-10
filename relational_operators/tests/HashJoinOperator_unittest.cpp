@@ -336,6 +336,12 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
     }
   }
 
+  void informAllBlockingDependenciesMet(RelationalOperator *op) {
+    for (partition_id part_id = 0; part_id < op->getNumPartitions(); ++part_id) {
+      op->informAllBlockingDependenciesMet(part_id);
+    }
+  }
+
   void fetchAndExecuteWorkOrders(RelationalOperator *op) {
     // Note: We treat each operator as an individual query plan DAG. The
     // index for each operator should be set, so that the WorkOrdersContainer
@@ -343,13 +349,16 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
     op->setOperatorIndex(kOpIndex);
     WorkOrdersContainer container(1, 0, query_dag_.get());
     const std::size_t op_index = 0;
-    op->getAllWorkOrders(&container,
-                         query_context_.get(),
-                         storage_manager_.get(),
-                         foreman_client_id_,
-                         &bus_);
-
     const std::size_t num_partitions = op->getNumPartitions();
+    for (partition_id part_id = 0; part_id < num_partitions; ++part_id) {
+      op->getAllWorkOrders(part_id,
+                           &container,
+                           query_context_.get(),
+                           storage_manager_.get(),
+                           foreman_client_id_,
+                           &bus_);
+    }
+
     for (partition_id part_id = 0; part_id < num_partitions; ++part_id) {
       while (container.hasNormalWorkOrder(op_index, part_id)) {
         WorkOrder *work_order = container.getNormalWorkOrder(op_index, part_id);
@@ -476,7 +485,7 @@ TEST_P(HashJoinOperatorTest, LongKeyHashJoinTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -518,7 +527,7 @@ TEST_P(HashJoinOperatorTest, LongKeyHashJoinTest) {
 
   // Create cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -630,7 +639,7 @@ TEST_P(HashJoinOperatorTest, IntDuplicateKeyHashJoinTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -693,7 +702,7 @@ TEST_P(HashJoinOperatorTest, IntDuplicateKeyHashJoinTest) {
 
   // Create cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -791,7 +800,7 @@ TEST_P(HashJoinOperatorTest, CharKeyCartesianProductHashJoinTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -833,7 +842,7 @@ TEST_P(HashJoinOperatorTest, CharKeyCartesianProductHashJoinTest) {
 
   // Create cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -938,7 +947,7 @@ TEST_P(HashJoinOperatorTest, VarCharDuplicateKeyHashJoinTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -1005,7 +1014,7 @@ TEST_P(HashJoinOperatorTest, VarCharDuplicateKeyHashJoinTest) {
 
   // Create the cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -1119,7 +1128,7 @@ TEST_P(HashJoinOperatorTest, CompositeKeyHashJoinTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -1186,7 +1195,7 @@ TEST_P(HashJoinOperatorTest, CompositeKeyHashJoinTest) {
 
   // Create cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -1311,7 +1320,7 @@ TEST_P(HashJoinOperatorTest, CompositeKeyHashJoinWithResidualPredicateTest) {
   // Execute the operators.
   fetchAndExecuteWorkOrders(builder.get());
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober.get());
   fetchAndExecuteWorkOrders(prober.get());
 
   // Check result values
@@ -1378,7 +1387,7 @@ TEST_P(HashJoinOperatorTest, CompositeKeyHashJoinWithResidualPredicateTest) {
 
   // Create cleaner operator.
   unique_ptr<DestroyHashOperator> cleaner(new DestroyHashOperator(kQueryId, kSinglePartition, join_hash_table_index));
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   fetchAndExecuteWorkOrders(cleaner.get());
 
   db_->dropRelationById(output_relation_id);
@@ -1485,7 +1494,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedLongKeyHashJoinTest) {
   query_dag_->createNode(builder.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober);
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(prober);
   fetchAndExecuteWorkOrders(prober);
@@ -1529,7 +1538,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedLongKeyHashJoinTest) {
 
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(cleaner.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
@@ -1639,7 +1648,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinTest)
   query_dag_->createNode(builder.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober);
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(prober);
   fetchAndExecuteWorkOrders(prober);
@@ -1708,7 +1717,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinTest)
 
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(cleaner.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
@@ -1828,7 +1837,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinWithR
   query_dag_->createNode(builder.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));
 
-  prober->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(prober);
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(prober);
   fetchAndExecuteWorkOrders(prober);
@@ -1897,7 +1906,7 @@ TEST_P(HashJoinOperatorTest, SinlgeAttributePartitionedCompositeKeyHashJoinWithR
 
   // Create cleaner operator.
   auto cleaner = make_unique<DestroyHashOperator>(kQueryId, kMultiplePartitions, join_hash_table_index);
-  cleaner->informAllBlockingDependenciesMet();
+  informAllBlockingDependenciesMet(cleaner.get());
   query_dag_ = make_unique<DAG<RelationalOperator, bool>>();
   query_dag_->createNode(cleaner.release());
   fetchAndExecuteWorkOrders(query_dag_->getNodePayloadMutable(kOpIndex));

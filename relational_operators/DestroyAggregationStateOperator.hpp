@@ -21,6 +21,7 @@
 #define QUICKSTEP_RELATIONAL_OPERATORS_DESTROY_AGGREGATION_STATE_OPERATOR_HPP_
 
 #include <string>
+#include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
@@ -63,7 +64,7 @@ class DestroyAggregationStateOperator : public RelationalOperator {
       const std::size_t num_partitions)
       : RelationalOperator(query_id, num_partitions),
         aggr_state_index_(aggr_state_index),
-        work_generated_(false) {}
+        work_generated_(num_partitions) {}
 
   ~DestroyAggregationStateOperator() override {}
 
@@ -75,7 +76,8 @@ class DestroyAggregationStateOperator : public RelationalOperator {
     return "DestroyAggregationStateOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -85,7 +87,7 @@ class DestroyAggregationStateOperator : public RelationalOperator {
 
  private:
   const QueryContext::aggregation_state_id aggr_state_index_;
-  bool work_generated_;
+  std::vector<bool> work_generated_;
 
   DISALLOW_COPY_AND_ASSIGN(DestroyAggregationStateOperator);
 };
@@ -108,9 +110,8 @@ class DestroyAggregationStateWorkOrder : public WorkOrder {
       const QueryContext::aggregation_state_id aggr_state_index,
       const partition_id part_id,
       QueryContext *query_context)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         aggr_state_index_(aggr_state_index),
-        part_id_(part_id),
         query_context_(DCHECK_NOTNULL(query_context)) {}
 
   ~DestroyAggregationStateWorkOrder() override {}
@@ -119,7 +120,6 @@ class DestroyAggregationStateWorkOrder : public WorkOrder {
 
  private:
   const QueryContext::aggregation_state_id aggr_state_index_;
-  const partition_id part_id_;
   QueryContext *query_context_;
 
   DISALLOW_COPY_AND_ASSIGN(DestroyAggregationStateWorkOrder);

@@ -34,12 +34,14 @@
 namespace quickstep {
 
 bool InsertOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (blocking_dependencies_met_ && !work_generated_) {
+  DCHECK_EQ(0, part_id);
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     DCHECK(query_context != nullptr);
 
     work_generated_ = true;
@@ -54,7 +56,7 @@ bool InsertOperator::getAllWorkOrders(
 }
 
 bool InsertOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !work_generated_) {
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     work_generated_ = true;
 
     serialization::WorkOrder *proto = new serialization::WorkOrder;

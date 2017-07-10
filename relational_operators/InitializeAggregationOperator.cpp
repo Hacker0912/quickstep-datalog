@@ -34,28 +34,28 @@
 namespace quickstep {
 
 bool InitializeAggregationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (!started_) {
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      AggregationOperationState *agg_state =
-          query_context->getAggregationState(aggr_state_index_, part_id);
-      DCHECK(agg_state != nullptr);
+  if (!started_[part_id]) {
+    AggregationOperationState *agg_state =
+        query_context->getAggregationState(aggr_state_index_, part_id);
+    DCHECK(agg_state != nullptr);
 
-      for (std::size_t state_part_id = 0;
-           state_part_id < agg_state->getNumInitializationPartitions();
-           ++state_part_id) {
-        container->addNormalWorkOrder(
-            new InitializeAggregationWorkOrder(query_id_,
-                                               state_part_id,
-                                               agg_state),
-            op_index_);
-      }
+    for (std::size_t state_part_id = 0;
+         state_part_id < agg_state->getNumInitializationPartitions();
+         ++state_part_id) {
+      container->addNormalWorkOrder(
+          new InitializeAggregationWorkOrder(query_id_,
+                                             part_id,
+                                             state_part_id,
+                                             agg_state),
+          op_index_, part_id);
     }
-    started_ = true;
+    started_[part_id] = true;
   }
   return true;
 }
@@ -66,7 +66,7 @@ bool InitializeAggregationOperator::getAllWorkOrders(
 bool InitializeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   LOG(FATAL) << "Not supported";
 
-  if (started_) {
+  if (started_[0]) {
     return true;
   }
 
@@ -81,7 +81,7 @@ bool InitializeAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContain
 
     container->addWorkOrderProto(proto, op_index_);
   }
-  started_ = true;
+  started_[0] = true;
   return true;
 }
 

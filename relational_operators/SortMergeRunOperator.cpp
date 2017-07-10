@@ -45,6 +45,7 @@ using merge_run_operator::RunMerger;
 using merge_run_operator::MergeTree;
 
 bool SortMergeRunOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -211,7 +212,8 @@ void SortMergeRunOperator::initializeInputRuns() {
   }
 }
 
-void SortMergeRunOperator::doneFeedingInputBlocks(const relation_id input_relation_id) {
+void SortMergeRunOperator::doneFeedingInputBlocks(const relation_id input_relation_id,
+                                                  const partition_id part_id) {
   if (input_relation_is_stored_) {
     return;
   }

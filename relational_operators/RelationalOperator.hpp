@@ -127,7 +127,8 @@ class RelationalOperator {
    *         false, the execution engine will invoke this method after at least
    *         one pending work order has finished executing.
    **/
-  virtual bool getAllWorkOrders(WorkOrdersContainer *container,
+  virtual bool getAllWorkOrders(const partition_id part_id,
+                                WorkOrdersContainer *container,
                                 QueryContext *query_context,
                                 StorageManager *storage_manager,
                                 const tmb::client_id scheduler_client_id,
@@ -171,8 +172,9 @@ class RelationalOperator {
    *       Such operators can start generating WorkOrders when all the pipeline
    *       breaking dependencies are met.
    **/
-  inline void informAllBlockingDependenciesMet() {
-    blocking_dependencies_met_ = true;
+  inline void informAllBlockingDependenciesMet(const partition_id part_id) {
+    DCHECK_LT(part_id, num_partitions_);
+    blocking_dependencies_met_[part_id] = true;
   }
 
   /**
@@ -204,8 +206,9 @@ class RelationalOperator {
    *       execution of downstream operator feeding input to this operator by
    *       specified relation.
    **/
-  virtual void doneFeedingInputBlocks(const relation_id rel_id) {
-    done_feeding_input_relation_ = true;
+  virtual void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id = 0) {
+    DCHECK_LT(part_id, num_partitions_);
+    done_feeding_input_relation_[part_id] = true;
   }
 
   /**
@@ -219,6 +222,17 @@ class RelationalOperator {
    **/
   virtual QueryContext::insert_destination_id getInsertDestinationID() const {
     return QueryContext::kInvalidInsertDestinationId;
+  }
+
+  /**
+   * @brief Get the number of partitions of the output relation in this operator
+   *        in the query plan DAG.
+   *        If no partitions, return one.
+   *
+   * @return The number of partitions of the output relation.
+   **/
+  virtual std::size_t getOutputNumPartitions() const {
+    return 0;
   }
 
   /**
@@ -305,15 +319,15 @@ class RelationalOperator {
                               const std::size_t num_partitions = 1u)
       : query_id_(query_id),
         num_partitions_(num_partitions),
-        blocking_dependencies_met_(false),
-        done_feeding_input_relation_(false),
+        blocking_dependencies_met_(num_partitions),
+        done_feeding_input_relation_(num_partitions),
         lip_deployment_index_(QueryContext::kInvalidLIPDeploymentId) {}
 
   const std::size_t query_id_;
   const std::size_t num_partitions_;
 
-  bool blocking_dependencies_met_;
-  bool done_feeding_input_relation_;
+  std::vector<bool> blocking_dependencies_met_;
+  std::vector<bool> done_feeding_input_relation_;
   std::size_t op_index_;
 
   QueryContext::lip_deployment_id lip_deployment_index_;

@@ -437,6 +437,18 @@ void BlockPoolInsertDestination::getPartiallyFilledBlocks(std::vector<MutableBlo
   available_block_refs_.clear();
 }
 
+void BlockPoolInsertDestination::getPartiallyFilledBlocksInPartition(const partition_id part_id,
+                                                                     vector<MutableBlockReference> *partial_blocks) {
+  DCHECK_EQ(0u, part_id);
+
+  SpinMutexLock lock(mutex_);
+  for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_.size(); ++i) {
+    partial_blocks->push_back((std::move(available_block_refs_[i])));
+  }
+
+  available_block_refs_.clear();
+}
+
 MutableBlockReference BlockPoolInsertDestination::getBlockForInsertion() {
   SpinMutexLock lock(mutex_);
   if (available_block_refs_.empty()) {

@@ -33,6 +33,7 @@
 namespace quickstep {
 
 bool SaveBlocksOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -42,13 +43,14 @@ bool SaveBlocksOperator::getAllWorkOrders(
     container->addNormalWorkOrder(
         new SaveBlocksWorkOrder(
             query_id_,
+            part_id,
             destination_block_ids_[num_workorders_generated_],
             force_,
             storage_manager),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_;
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool SaveBlocksOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -56,6 +58,7 @@ bool SaveBlocksOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contain
     serialization::WorkOrder *proto = new serialization::WorkOrder;
     proto->set_work_order_type(serialization::SAVE_BLOCKS);
     proto->set_query_id(query_id_);
+    proto->SetExtension(serialization::SaveBlocksWorkOrder::partition_id, 0u);
     proto->SetExtension(serialization::SaveBlocksWorkOrder::block_id,
                         destination_block_ids_[num_workorders_generated_]);
     proto->SetExtension(serialization::SaveBlocksWorkOrder::force, force_);
@@ -64,7 +67,7 @@ bool SaveBlocksOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contain
 
     ++num_workorders_generated_;
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 void SaveBlocksOperator::updateCatalogOnCompletion() {

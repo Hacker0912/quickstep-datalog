@@ -22,9 +22,12 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "catalog/CatalogRelation.hpp"
 #include "catalog/CatalogTypedefs.hpp"
+#include "catalog/PartitionScheme.hpp"
+#include "catalog/PartitionSchemeHeader.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
@@ -51,7 +54,7 @@ class WorkOrdersContainer;
 /**
  * @brief An operator which finalizes aggregation and writes output tuples.
  */
-class FinalizeAggregationOperator : public RelationalOperator {
+class FinalizeAggregationOperator final : public RelationalOperator {
  public:
   /**
    * @brief Constructor for finalizing aggregation state and writing output
@@ -75,7 +78,7 @@ class FinalizeAggregationOperator : public RelationalOperator {
         aggr_state_index_(aggr_state_index),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
-        started_(false) {}
+        started_(num_partitions, false) {}
 
   ~FinalizeAggregationOperator() override {}
 
@@ -87,7 +90,8 @@ class FinalizeAggregationOperator : public RelationalOperator {
     return "FinalizeAggregationOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -99,6 +103,11 @@ class FinalizeAggregationOperator : public RelationalOperator {
     return output_destination_index_;
   }
 
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
+  }
+
   const relation_id getOutputRelationID() const override {
     return output_relation_.getID();
   }
@@ -107,7 +116,7 @@ class FinalizeAggregationOperator : public RelationalOperator {
   const QueryContext::aggregation_state_id aggr_state_index_;
   const CatalogRelation &output_relation_;
   const QueryContext::insert_destination_id output_destination_index_;
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(FinalizeAggregationOperator);
 };
@@ -135,8 +144,7 @@ class FinalizeAggregationWorkOrder : public WorkOrder {
                                const std::size_t state_partition_id,
                                AggregationOperationState *state,
                                InsertDestination *output_destination)
-      : WorkOrder(query_id),
-        part_id_(part_id),
+      : WorkOrder(query_id, part_id),
         state_partition_id_(state_partition_id),
         state_(DCHECK_NOTNULL(state)),
         output_destination_(DCHECK_NOTNULL(output_destination)) {}
@@ -146,7 +154,7 @@ class FinalizeAggregationWorkOrder : public WorkOrder {
   void execute() override;
 
  private:
-  const std::size_t part_id_, state_partition_id_;
+  const std::size_t state_partition_id_;
   AggregationOperationState *state_;
   InsertDestination *output_destination_;
 

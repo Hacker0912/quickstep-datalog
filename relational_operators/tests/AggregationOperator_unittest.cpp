@@ -411,45 +411,55 @@ class AggregationOperatorTest : public ::testing::Test {
   void execute() {
     const std::size_t op_index = 0;
     WorkOrdersContainer op_container(1, 0);
-    op_->getAllWorkOrders(&op_container,
+
+    const partition_id kPartitionId = 0;
+    op_->getAllWorkOrders(kPartitionId,
+                          &op_container,
                           query_context_.get(),
                           storage_manager_.get(),
                           foreman_client_id_,
                           &bus_);
 
-    while (op_container.hasNormalWorkOrder(op_index)) {
-      WorkOrder *work_order = op_container.getNormalWorkOrder(op_index);
+    while (op_container.hasNormalWorkOrder(op_index, kPartitionId)) {
+      WorkOrder *work_order = op_container.getNormalWorkOrder(op_index, kPartitionId);
       work_order->execute();
       delete work_order;
     }
 
-    finalize_op_->informAllBlockingDependenciesMet();
+    for (partition_id part_id = 0; part_id < finalize_op_->getNumPartitions(); ++part_id) {
+      finalize_op_->informAllBlockingDependenciesMet(part_id);
+    }
 
     WorkOrdersContainer finalize_op_container(1, 0);
     const std::size_t finalize_op_index = 0;
-    finalize_op_->getAllWorkOrders(&finalize_op_container,
+    finalize_op_->getAllWorkOrders(kPartitionId,
+                                   &finalize_op_container,
                                    query_context_.get(),
                                    storage_manager_.get(),
                                    foreman_client_id_,
                                    &bus_);
 
-    while (finalize_op_container.hasNormalWorkOrder(finalize_op_index)) {
-      WorkOrder *work_order = finalize_op_container.getNormalWorkOrder(finalize_op_index);
+    while (finalize_op_container.hasNormalWorkOrder(finalize_op_index, kPartitionId)) {
+      WorkOrder *work_order = finalize_op_container.getNormalWorkOrder(finalize_op_index, kPartitionId);
       work_order->execute();
       delete work_order;
     }
 
-    destroy_aggr_state_op_->informAllBlockingDependenciesMet();
+    for (partition_id part_id = 0; part_id < destroy_aggr_state_op_->getNumPartitions(); ++part_id) {
+      destroy_aggr_state_op_->informAllBlockingDependenciesMet(part_id);
+    }
 
     WorkOrdersContainer destroy_aggr_state_op_container(1, 0);
     const std::size_t destroy_aggr_state_op_index = 0;
-    destroy_aggr_state_op_->getAllWorkOrders(&destroy_aggr_state_op_container,
+    destroy_aggr_state_op_->getAllWorkOrders(kPartitionId,
+                                             &destroy_aggr_state_op_container,
                                              query_context_.get(),
                                              storage_manager_.get(),
                                              foreman_client_id_,
                                              &bus_);
-    while (destroy_aggr_state_op_container.hasNormalWorkOrder(destroy_aggr_state_op_index)) {
-      WorkOrder *work_order = destroy_aggr_state_op_container.getNormalWorkOrder(destroy_aggr_state_op_index);
+    while (destroy_aggr_state_op_container.hasNormalWorkOrder(destroy_aggr_state_op_index, kPartitionId)) {
+      WorkOrder *work_order =
+          destroy_aggr_state_op_container.getNormalWorkOrder(destroy_aggr_state_op_index, kPartitionId);
       work_order->execute();
       delete work_order;
     }

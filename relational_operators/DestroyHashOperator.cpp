@@ -29,24 +29,23 @@
 namespace quickstep {
 
 bool DestroyHashOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (blocking_dependencies_met_ && !work_generated_) {
-    for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-      container->addNormalWorkOrder(
-          new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
-          op_index_, part_id);
-    }
-    work_generated_ = true;
+  if (blocking_dependencies_met_[part_id] && !work_generated_[part_id]) {
+    container->addNormalWorkOrder(
+        new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
+        op_index_, part_id);
+    work_generated_[part_id] = true;
   }
-  return work_generated_;
+  return work_generated_[part_id];
 }
 
 bool DestroyHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !work_generated_) {
+  if (blocking_dependencies_met_[0] && !work_generated_[0]) {
     for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
       serialization::WorkOrder *proto = new serialization::WorkOrder;
       proto->set_work_order_type(serialization::DESTROY_HASH);
@@ -57,9 +56,9 @@ bool DestroyHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contai
       container->addWorkOrderProto(proto, op_index_);
     }
 
-    work_generated_ = true;
+    work_generated_[0] = true;
   }
-  return work_generated_;
+  return work_generated_[0];
 }
 
 

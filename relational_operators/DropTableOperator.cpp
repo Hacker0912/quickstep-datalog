@@ -37,12 +37,14 @@
 namespace quickstep {
 
 bool DropTableOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (blocking_dependencies_met_ && !work_generated_) {
+  DCHECK_EQ(0, part_id);
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     work_generated_ = true;
 
     std::vector<block_id> relation_blocks(relation_.getBlocksSnapshot());
@@ -60,7 +62,7 @@ bool DropTableOperator::getAllWorkOrders(
 }
 
 bool DropTableOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !work_generated_) {
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     work_generated_ = true;
 
     serialization::WorkOrder *proto = new serialization::WorkOrder;
@@ -94,6 +96,7 @@ void DropTableOperator::updateCatalogOnCompletion() {
 
 void DropTableWorkOrder::execute() {
   for (const block_id block : blocks_) {
+    LOG(INFO) << "DropTableWorkOrder on block " << BlockIdUtil::ToString(block);
     storage_manager_->deleteBlockOrBlobFile(block);
   }
 

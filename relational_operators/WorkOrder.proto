@@ -235,6 +235,7 @@ message SaveBlocksWorkOrder {
     // All required.
     optional fixed64 block_id = 224;
     optional bool force = 225;
+    optional uint64 partition_id = 226;
   }
 }
 

@@ -120,7 +120,8 @@ class SortRunGenerationOperator : public RelationalOperator {
     return "SortRunGenerationOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -136,6 +137,10 @@ class SortRunGenerationOperator : public RelationalOperator {
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
     return output_destination_index_;
+  }
+
+  std::size_t getOutputNumPartitions() const override {
+    return 1u;
   }
 
   const relation_id getOutputRelationID() const override {

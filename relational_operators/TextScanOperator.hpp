@@ -28,6 +28,8 @@
 
 #include "catalog/CatalogRelation.hpp"
 #include "catalog/CatalogTypedefs.hpp"
+#include "catalog/PartitionScheme.hpp"
+#include "catalog/PartitionSchemeHeader.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
@@ -143,7 +145,8 @@ class TextScanOperator : public RelationalOperator {
     return "TextScanOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -153,6 +156,11 @@ class TextScanOperator : public RelationalOperator {
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
     return output_destination_index_;
+  }
+
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
   }
 
   const relation_id getOutputRelationID() const override {

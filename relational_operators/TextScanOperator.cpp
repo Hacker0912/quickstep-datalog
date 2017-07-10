@@ -100,11 +100,13 @@ size_t getFileSize(const string &file_name) {
 }  // namespace
 
 bool TextScanOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
+  DCHECK_EQ(0, part_id);
   DCHECK(query_context != nullptr);
 
   const std::vector<std::string> files = utility::file::GlobExpand(file_pattern_);
@@ -115,7 +117,7 @@ bool TextScanOperator::getAllWorkOrders(
   InsertDestination *output_destination =
       query_context->getInsertDestination(output_destination_index_);
 
-  if (blocking_dependencies_met_ && !work_generated_) {
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     for (const std::string &file : files) {
 #ifdef QUICKSTEP_HAVE_UNISTD
       // Check file permissions before trying to open it.
@@ -162,7 +164,7 @@ bool TextScanOperator::getAllWorkOrders(
 
 bool TextScanOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   const std::vector<std::string> files = utility::file::GlobExpand(file_pattern_);
-  if (blocking_dependencies_met_ && !work_generated_) {
+  if (blocking_dependencies_met_[0] && !work_generated_) {
     for (const string &file : files) {
       const std::size_t file_size = getFileSize(file);
 

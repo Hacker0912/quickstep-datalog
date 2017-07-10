@@ -110,21 +110,23 @@ class TextScanOperatorTest : public ::testing::Test {
     op->setOperatorIndex(kOpIndex);
     WorkOrdersContainer container(1, 0);
     const std::size_t op_index = 0;
-    op->informAllBlockingDependenciesMet();
-    op->getAllWorkOrders(&container,
+    const partition_id kPartitionId = 0;
+    op->informAllBlockingDependenciesMet(kPartitionId);
+    op->getAllWorkOrders(kPartitionId,
+                         &container,
                          query_context_.get(),
                          storage_manager_.get(),
                          foreman_client_id_,
                          &bus_);
 
-    while (container.hasNormalWorkOrder(op_index)) {
-      std::unique_ptr<WorkOrder> work_order(container.getNormalWorkOrder(op_index));
+    while (container.hasNormalWorkOrder(op_index, kPartitionId)) {
+      std::unique_ptr<WorkOrder> work_order(container.getNormalWorkOrder(op_index, kPartitionId));
       work_order->execute();
       processCatalogRelationNewBlockMessages();
     }
 
-    while (container.hasRebuildWorkOrder(op_index)) {
-      std::unique_ptr<WorkOrder> work_order(container.getRebuildWorkOrder(op_index));
+    while (container.hasRebuildWorkOrder(op_index, kPartitionId)) {
+      std::unique_ptr<WorkOrder> work_order(container.getRebuildWorkOrder(op_index, kPartitionId));
       work_order->execute();
     }
   }

@@ -72,7 +72,8 @@ class QueryManagerSingleNode final : public QueryManagerBase {
 
   ~QueryManagerSingleNode() override {}
 
-  bool fetchNormalWorkOrders(const dag_node_index index) override;
+  bool fetchNormalWorkOrders(const dag_node_index index,
+                             const partition_id part_id) override;
 
  /**
    * @brief Get the next workorder to be excuted, wrapped in a WorkerMessage.
@@ -86,8 +87,7 @@ class QueryManagerSingleNode final : public QueryManagerBase {
    *         executed, return NULL.
    **/
   WorkerMessage* getNextWorkerMessage(
-      const dag_node_index start_operator_index,
-      const numa_node_id node_id = kAnyNUMANodeID);
+      const dag_node_index start_operator_index);
 
   /**
    * @brief Get a pointer to the QueryContext.
@@ -99,19 +99,35 @@ class QueryManagerSingleNode final : public QueryManagerBase {
   std::size_t getQueryMemoryConsumptionBytes() const override;
 
  private:
-  bool checkNormalExecutionOver(const dag_node_index index) const override {
-    return (checkAllDependenciesMet(index) &&
-            !workorders_container_->hasNormalWorkOrder(index) &&
-            query_exec_state_->getNumQueuedWorkOrders(index) == 0 &&
-            query_exec_state_->hasDoneGenerationWorkOrders(index));
+  bool checkNormalExecutionOver(const dag_node_index index, const partition_id part_id) const override {
+    return (checkAllDependenciesMet(index, part_id) &&
+            !workorders_container_->hasNormalWorkOrder(index, part_id) &&
+            query_exec_state_->getNumQueuedWorkOrders(index, part_id) == 0 &&
+            query_exec_state_->hasDoneGenerationWorkOrders(index, part_id));
   }
+
+  bool initiateRebuild(const dag_node_index index,
+                       const partition_id part_id) override;
 
   bool initiateRebuild(const dag_node_index index) override;
 
+  bool checkRebuildOver(const dag_node_index index,
+                        const partition_id part_id) const override {
+    return query_exec_state_->hasRebuildInitiated(index, part_id) &&
+           !workorders_container_->hasRebuildWorkOrder(index, part_id) &&
+           (query_exec_state_->getNumRebuildWorkOrders(index, part_id) == 0);
+  }
+
   bool checkRebuildOver(const dag_node_index index) const override {
-    return query_exec_state_->hasRebuildInitiated(index) &&
-           !workorders_container_->hasRebuildWorkOrder(index) &&
-           (query_exec_state_->getNumRebuildWorkOrders(index) == 0);
+    const auto cit = output_num_partitions_.find(index);
+    DCHECK(cit != output_num_partitions_.end());
+    for (partition_id output_part_id = 0; output_part_id < cit->second; ++output_part_id) {
+      if (!checkRebuildOver(index, output_part_id)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -125,6 +141,7 @@ class QueryManagerSingleNode final : public QueryManagerBase {
    *        generated WorkOrders.
    **/
   void getRebuildWorkOrders(const dag_node_index index,
+                            const partition_id part_id,
                             WorkOrdersContainer *container);
 
   /**
@@ -143,9 +160,6 @@ class QueryManagerSingleNode final : public QueryManagerBase {
   std::unique_ptr<WorkOrdersContainer> workorders_container_;
 
   const CatalogDatabase &database_;
-
-  // The index is 'dag_node_index'.
-  std::vector<std::size_t> num_partitions_;
 
   DISALLOW_COPY_AND_ASSIGN(QueryManagerSingleNode);
 };

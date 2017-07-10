@@ -82,7 +82,7 @@ class AggregationOperator : public RelationalOperator {
         aggr_state_index_(aggr_state_index),
         input_relation_block_ids_(num_partitions),
         num_workorders_generated_(num_partitions),
-        started_(false) {
+        started_(num_partitions, false) {
     if (input_relation_is_stored) {
       if (input_relation.hasPartitionScheme()) {
         const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
@@ -110,7 +110,8 @@ class AggregationOperator : public RelationalOperator {
     return input_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -139,7 +140,7 @@ class AggregationOperator : public RelationalOperator {
   // The index is the partition id.
   std::vector<BlocksInPartition> input_relation_block_ids_;
   std::vector<std::size_t> num_workorders_generated_;
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(AggregationOperator);
 };
@@ -158,10 +159,11 @@ class AggregationWorkOrder : public WorkOrder {
    * @param lip_filter_adaptive_prober The attached LIP filter prober.
    **/
   AggregationWorkOrder(const std::size_t query_id,
+                       const partition_id part_id,
                        const block_id input_block_id,
                        AggregationOperationState *state,
                        LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         input_block_id_(input_block_id),
         state_(DCHECK_NOTNULL(state)),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}

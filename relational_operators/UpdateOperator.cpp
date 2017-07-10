@@ -47,12 +47,14 @@
 namespace quickstep {
 
 bool UpdateOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (blocking_dependencies_met_ && !started_) {
+  DCHECK_EQ(0, part_id);
+  if (blocking_dependencies_met_[0] && !started_) {
     DCHECK(query_context != nullptr);
 
     for (const block_id input_block_id : input_blocks_) {
@@ -77,7 +79,7 @@ bool UpdateOperator::getAllWorkOrders(
 }
 
 bool UpdateOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !started_) {
+  if (blocking_dependencies_met_[0] && !started_) {
     for (const block_id input_block_id : input_blocks_) {
       serialization::WorkOrder *proto = new serialization::WorkOrder;
       proto->set_work_order_type(serialization::UPDATE);

@@ -154,7 +154,7 @@ class HashJoinOperator : public RelationalOperator {
         join_type_(join_type),
         probe_relation_block_ids_(num_partitions),
         num_workorders_generated_(num_partitions),
-        started_(false) {
+        started_(num_partitions, false) {
     DCHECK(join_type != JoinType::kLeftOuterJoin ||
                (is_selection_on_build != nullptr &&
                 residual_predicate_index == QueryContext::kInvalidPredicateId));
@@ -212,7 +212,8 @@ class HashJoinOperator : public RelationalOperator {
     return probe_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -230,26 +231,33 @@ class HashJoinOperator : public RelationalOperator {
     return output_destination_index_;
   }
 
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
+  }
+
   const relation_id getOutputRelationID() const override {
     return output_relation_.getID();
   }
 
-  void doneFeedingInputBlocks(const relation_id rel_id) override {
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override {
     // The HashJoinOperator depends on BuildHashOperator too, but it
     // should ignore a doneFeedingInputBlocks() message that comes
     // after completion of BuildHashOperator. Therefore we need this check.
     if (probe_relation_.getID() == rel_id) {
-      done_feeding_input_relation_ = true;
+      done_feeding_input_relation_[part_id] = true;
     }
   }
 
  private:
   template <class JoinWorkOrderClass>
-  bool getAllNonOuterJoinWorkOrders(WorkOrdersContainer *container,
+  bool getAllNonOuterJoinWorkOrders(const partition_id part_id,
+                                    WorkOrdersContainer *container,
                                     QueryContext *query_context,
                                     StorageManager *storage_manager);
 
-  bool getAllOuterJoinWorkOrders(WorkOrdersContainer *container,
+  bool getAllOuterJoinWorkOrders(const partition_id part_id,
+                                 WorkOrdersContainer *container,
                                  QueryContext *query_context,
                                  StorageManager *storage_manager);
 
@@ -286,8 +294,7 @@ class HashJoinOperator : public RelationalOperator {
   // The index is the partition id.
   std::vector<BlocksInPartition> probe_relation_block_ids_;
   std::vector<std::size_t> num_workorders_generated_;
-
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(HashJoinOperator);
 };

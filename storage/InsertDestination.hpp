@@ -203,6 +203,20 @@ class InsertDestination : public InsertDestinationInterface {
                                         std::vector<partition_id> *part_ids) = 0;
 
   /**
+   * @brief Get the set of blocks that were partially filled by clients of this
+   *        InsertDestination for insertion.
+   * @warning Should only be called AFTER this InsertDestination will no longer
+   *          be used, and all blocks have been returned to it via
+   *          returnBlock() and BEFORE getTouchedBlocks() is called, at all.
+   *
+   * @param part_id The partiiton id.
+   * @param partial_blocks A pointer to the vector of block IDs in which the
+   *                       partially filled block IDs will be added.
+   **/
+  virtual void getPartiallyFilledBlocksInPartition(const partition_id part_id,
+                                                   std::vector<MutableBlockReference> *partial_blocks) = 0;
+
+  /**
    * @brief Set the input partition id. Used when the partition attributes are
    *        empty.
    *
@@ -366,6 +380,10 @@ class AlwaysCreateBlockInsertDestination : public InsertDestination {
                                 std::vector<partition_id> *part_ids) override {
   }
 
+  void getPartiallyFilledBlocksInPartition(const partition_id part_id,
+                                           std::vector<MutableBlockReference> *partial_blocks) override {
+  }
+
  private:
   std::vector<block_id> returned_block_ids_;
 
@@ -454,6 +472,9 @@ class BlockPoolInsertDestination : public InsertDestination {
   void getPartiallyFilledBlocks(std::vector<MutableBlockReference> *partial_blocks,
                                 std::vector<partition_id> *part_ids) override;
 
+  void getPartiallyFilledBlocksInPartition(const partition_id part_id,
+                                           std::vector<MutableBlockReference> *partial_blocks) override;
+
   const std::vector<block_id>& getTouchedBlocksInternal() override;
 
   MutableBlockReference createNewBlock() override;
@@ -524,8 +545,18 @@ class PartitionAwareInsertDestination : public InsertDestination {
     // Iterate through each partition and return the partially filled blocks
     // in each partition.
     for (partition_id part_id = 0; part_id < partition_scheme_header_->getNumPartitions(); ++part_id) {
-      getPartiallyFilledBlocksInPartition(partial_blocks, part_ids, part_id);
+      getPartiallyFilledBlocksHelper(part_id, partial_blocks, part_ids);
     }
+  }
+
+  void getPartiallyFilledBlocksInPartition(const partition_id part_id,
+                                           std::vector<MutableBlockReference> *partial_blocks) override {
+    SpinMutexLock lock(mutexes_for_partition_[part_id]);
+    for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_[part_id].size(); ++i) {
+      partial_blocks->push_back((std::move(available_block_refs_[part_id][i])));
+    }
+
+    available_block_refs_[part_id].clear();
   }
 
   PartitionSchemeHeader::PartitionAttributeIds getPartitioningAttributes() const override;
@@ -600,9 +631,9 @@ class PartitionAwareInsertDestination : public InsertDestination {
    *                       partially filled block IDs will be added.
    * @param part_id The partition id for which we want the partially filled blocks.
    **/
-  void getPartiallyFilledBlocksInPartition(std::vector<MutableBlockReference> *partial_blocks,
-                                           std::vector<partition_id> *part_ids,
-                                           const partition_id part_id) {
+  void getPartiallyFilledBlocksHelper(const partition_id part_id,
+                                      std::vector<MutableBlockReference> *partial_blocks,
+                                      std::vector<partition_id> *part_ids) {
     SpinMutexLock lock(mutexes_for_partition_[part_id]);
     for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_[part_id].size(); ++i) {
       partial_blocks->push_back((std::move(available_block_refs_[part_id][i])));

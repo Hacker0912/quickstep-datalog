@@ -96,6 +96,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
                 << " in Shiftboss " << shiftboss_index;
       return new AggregationWorkOrder(
           query_id,
+          part_id,
           proto.GetExtension(serialization::AggregationWorkOrder::block_id),
           query_context->getAggregationState(
               proto.GetExtension(serialization::AggregationWorkOrder::aggr_state_index), part_id),
@@ -111,6 +112,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
 
       return new BuildAggregationExistenceMapWorkOrder(
           query_id,
+          part_id,
           catalog_database->getRelationSchemaById(
               proto.GetExtension(serialization::BuildAggregationExistenceMapWorkOrder::relation_id)),
           proto.GetExtension(serialization::BuildAggregationExistenceMapWorkOrder::build_block_id),
@@ -379,6 +381,7 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           query_context->getAggregationState(
               proto.GetExtension(serialization::InitializeAggregationWorkOrder::aggr_state_index), part_id);
       return new InitializeAggregationWorkOrder(query_id,
+                                                part_id,
                                                 proto.GetExtension(
                                                     serialization::InitializeAggregationWorkOrder::state_partition_id),
                                                 aggr_state);
@@ -425,10 +428,13 @@ WorkOrder* WorkOrderFactory::ReconstructFromProto(const serialization::WorkOrder
           storage_manager);
     }
     case serialization::SAVE_BLOCKS: {
-      LOG(INFO) << "Creating SaveBlocksWorkOrder for Query " << query_id
+      const partition_id part_id =
+          proto.GetExtension(serialization::SaveBlocksWorkOrder::partition_id);
+      LOG(INFO) << "Creating SaveBlocksWorkOrder (Partition " << part_id << ") for Query " << query_id
                 << " in Shiftboss " << shiftboss_index;
       return new SaveBlocksWorkOrder(
           query_id,
+          part_id,
           proto.GetExtension(serialization::SaveBlocksWorkOrder::block_id),
           proto.GetExtension(serialization::SaveBlocksWorkOrder::force),
           storage_manager);

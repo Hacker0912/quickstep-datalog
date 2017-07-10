@@ -34,14 +34,16 @@
 namespace quickstep {
 
 bool WindowAggregationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
+  DCHECK_EQ(0, part_id);
   DCHECK(query_context != nullptr);
 
-  if (blocking_dependencies_met_ && !generated_) {
+  if (blocking_dependencies_met_[0] && !generated_) {
     std::vector<block_id> relation_blocks =
         input_relation_.getBlocksSnapshot();
 
@@ -59,7 +61,7 @@ bool WindowAggregationOperator::getAllWorkOrders(
 }
 
 bool WindowAggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
-  if (blocking_dependencies_met_ && !generated_) {
+  if (blocking_dependencies_met_[0] && !generated_) {
     container->addWorkOrderProto(createWorkOrderProto(), op_index_);
     generated_ = true;
   }

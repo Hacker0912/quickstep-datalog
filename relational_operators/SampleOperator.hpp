@@ -27,6 +27,8 @@
 
 #include "catalog/CatalogRelation.hpp"
 #include "catalog/CatalogTypedefs.hpp"
+#include "catalog/PartitionScheme.hpp"
+#include "catalog/PartitionSchemeHeader.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
@@ -76,7 +78,7 @@ class SampleOperator : public RelationalOperator {
   SampleOperator(
       const std::size_t query_id,
       const CatalogRelation &input_relation,
-      const CatalogRelationSchema &output_relation,
+      const CatalogRelation &output_relation,
       const QueryContext::insert_destination_id output_destination_index,
       const bool input_relation_is_stored,
       const bool is_block_sample,
@@ -104,7 +106,8 @@ class SampleOperator : public RelationalOperator {
     return "SampleOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -121,6 +124,11 @@ class SampleOperator : public RelationalOperator {
     return output_destination_index_;
   }
 
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
+  }
+
   const relation_id getOutputRelationID() const override {
     return output_relation_.getID();
   }
@@ -134,7 +142,7 @@ class SampleOperator : public RelationalOperator {
   serialization::WorkOrder* createWorkOrderProto(const block_id block);
 
   const CatalogRelation &input_relation_;
-  const CatalogRelationSchema &output_relation_;
+  const CatalogRelation &output_relation_;
   const QueryContext::insert_destination_id output_destination_index_;
   const bool input_relation_is_stored_;
   const bool is_block_sample_;

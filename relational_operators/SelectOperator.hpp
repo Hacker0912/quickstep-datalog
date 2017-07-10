@@ -32,6 +32,7 @@
 #include "catalog/NUMAPlacementScheme.hpp"
 #endif
 
+#include "catalog/PartitionScheme.hpp"
 #include "catalog/PartitionSchemeHeader.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
@@ -103,11 +104,11 @@ class SelectOperator : public RelationalOperator {
         output_destination_index_(output_destination_index),
         predicate_index_(predicate_index),
         selection_index_(selection_index),
-        input_relation_block_ids_(num_partitions),
-        num_workorders_generated_(num_partitions),
         simple_projection_(false),
         input_relation_is_stored_(input_relation_is_stored),
-        started_(false) {
+        input_relation_block_ids_(num_partitions),
+        num_workorders_generated_(num_partitions),
+        started_(num_partitions, false) {
 #ifdef QUICKSTEP_HAVE_LIBNUMA
     placement_scheme_ = input_relation.getNUMAPlacementSchemePtr();
 #endif
@@ -161,11 +162,11 @@ class SelectOperator : public RelationalOperator {
         predicate_index_(predicate_index),
         selection_index_(QueryContext::kInvalidScalarGroupId),
         simple_selection_(std::move(selection)),
-        input_relation_block_ids_(num_partitions),
-        num_workorders_generated_(num_partitions),
         simple_projection_(true),
         input_relation_is_stored_(input_relation_is_stored),
-        started_(false) {
+        input_relation_block_ids_(num_partitions),
+        num_workorders_generated_(num_partitions),
+        started_(num_partitions, false) {
 #ifdef QUICKSTEP_HAVE_LIBNUMA
     placement_scheme_ = input_relation.getNUMAPlacementSchemePtr();
 #endif
@@ -196,7 +197,8 @@ class SelectOperator : public RelationalOperator {
     return input_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -214,6 +216,11 @@ class SelectOperator : public RelationalOperator {
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
     return output_destination_index_;
+  }
+
+  std::size_t getOutputNumPartitions() const override {
+    const PartitionScheme *part_scheme = output_relation_.getPartitionScheme();
+    return part_scheme ? part_scheme->getPartitionSchemeHeader().getNumPartitions() : 1u;
   }
 
   const relation_id getOutputRelationID() const override {
@@ -237,18 +244,19 @@ class SelectOperator : public RelationalOperator {
   const QueryContext::scalar_group_id selection_index_;
   const std::vector<attribute_id> simple_selection_;
 
+  const bool simple_projection_;
+  const bool input_relation_is_stored_;
+
+#ifdef QUICKSTEP_HAVE_LIBNUMA
+  const NUMAPlacementScheme *placement_scheme_;
+#endif
+
   // A vector of vectors V where V[i] indicates the list of block IDs of the
   // input relation that belong to the partition i.
   std::vector<std::vector<block_id>> input_relation_block_ids_;
   // A single workorder is generated for each block in each partition of input relation.
   std::vector<std::size_t> num_workorders_generated_;
-
-  const bool simple_projection_;
-  const bool input_relation_is_stored_;
-#ifdef QUICKSTEP_HAVE_LIBNUMA
-  const NUMAPlacementScheme *placement_scheme_;
-#endif
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(SelectOperator);
 };
@@ -292,9 +300,8 @@ class SelectWorkOrder : public WorkOrder {
                   StorageManager *storage_manager,
                   LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
                   const numa_node_id numa_node = 0)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         input_relation_(input_relation),
-        part_id_(part_id),
         input_block_id_(input_block_id),
         predicate_(predicate),
         simple_projection_(simple_projection),
@@ -340,9 +347,8 @@ class SelectWorkOrder : public WorkOrder {
                   StorageManager *storage_manager,
                   LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
                   const numa_node_id numa_node = 0)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         input_relation_(input_relation),
-        part_id_(part_id),
         input_block_id_(input_block_id),
         predicate_(predicate),
         simple_projection_(simple_projection),
@@ -368,7 +374,6 @@ class SelectWorkOrder : public WorkOrder {
 
  private:
   const CatalogRelationSchema &input_relation_;
-  const partition_id part_id_;
   const block_id input_block_id_;
   const Predicate *predicate_;
 

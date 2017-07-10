@@ -20,7 +20,9 @@
 #ifndef QUICKSTEP_RELATIONAL_OPERATORS_INITIALIZE_AGGREGATION_OPERATOR_HPP_
 #define QUICKSTEP_RELATIONAL_OPERATORS_INITIALIZE_AGGREGATION_OPERATOR_HPP_
 
+#include <cstddef>
 #include <string>
+#include <vector>
 
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
@@ -64,7 +66,7 @@ class InitializeAggregationOperator : public RelationalOperator {
                                 const std::size_t num_partitions)
       : RelationalOperator(query_id, num_partitions),
         aggr_state_index_(aggr_state_index),
-        started_(false) {}
+        started_(num_partitions, false) {}
 
   ~InitializeAggregationOperator() override {}
 
@@ -76,7 +78,8 @@ class InitializeAggregationOperator : public RelationalOperator {
     return "InitializeAggregationOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -86,7 +89,7 @@ class InitializeAggregationOperator : public RelationalOperator {
 
  private:
   const QueryContext::aggregation_state_id aggr_state_index_;
-  bool started_;
+  std::vector<bool> started_;
 
   DISALLOW_COPY_AND_ASSIGN(InitializeAggregationOperator);
 };
@@ -104,9 +107,10 @@ class InitializeAggregationWorkOrder : public WorkOrder {
    * @param state The AggregationOperationState to be initialized.
    */
   InitializeAggregationWorkOrder(const std::size_t query_id,
+                                 const partition_id part_id,
                                  const std::size_t state_partition_id,
                                  AggregationOperationState *state)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         state_partition_id_(state_partition_id),
         state_(DCHECK_NOTNULL(state)) {}
 

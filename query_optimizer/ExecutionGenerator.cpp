@@ -1082,10 +1082,14 @@ void ExecutionGenerator::convertCopyFrom(
       query_context_proto_->insert_destinations_size();
   S::InsertDestination *insert_destination_proto = query_context_proto_->add_insert_destinations();
 
+  std::size_t num_partitions = 1u;
   if (output_relation->hasPartitionScheme()) {
+    const PartitionScheme &part_scheme = *output_relation->getPartitionScheme();
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
     insert_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
-        ->MergeFrom(output_relation->getPartitionScheme()->getProto());
+        ->MergeFrom(part_scheme.getProto());
+
+    num_partitions = part_scheme.getPartitionSchemeHeader().getNumPartitions();
   } else {
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
 
@@ -1114,7 +1118,7 @@ void ExecutionGenerator::convertCopyFrom(
       catalog_database_->getRelationByIdMutable(output_rel_id);
   const QueryPlan::DAGNodeIndex save_blocks_operator_index =
       execution_plan_->addRelationalOperator(
-          new SaveBlocksOperator(query_handle_->query_id(), mutable_output_relation));
+          new SaveBlocksOperator(query_handle_->query_id(), num_partitions, mutable_output_relation));
   execution_plan_->addDirectDependency(save_blocks_operator_index,
                                        scan_operator_index,
                                        false /* is_pipeline_breaker */);
@@ -1267,9 +1271,15 @@ void ExecutionGenerator::convertDeleteTuples(
 
     CatalogRelation *mutable_relation =
         catalog_database_->getRelationByIdMutable(input_relation->getID());
+
+    const PartitionScheme *input_partition_scheme = input_relation->getPartitionScheme();
+    const std::size_t num_partitions =
+        input_partition_scheme
+            ? input_partition_scheme->getPartitionSchemeHeader().getNumPartitions()
+            : 1u;
     const QueryPlan::DAGNodeIndex save_blocks_index =
         execution_plan_->addRelationalOperator(
-            new SaveBlocksOperator(query_handle_->query_id(), mutable_relation));
+            new SaveBlocksOperator(query_handle_->query_id(), num_partitions, mutable_relation));
     execution_plan_->addDirectDependency(save_blocks_index,
                                          delete_tuples_index,
                                          false /* is_pipeline_breaker */);
@@ -1334,10 +1344,14 @@ void ExecutionGenerator::convertInsertTuple(
   insert_destination_proto->mutable_layout()->MergeFrom(
       input_relation.getDefaultStorageBlockLayout().getDescription());
 
+  std::size_t num_partitions = 1u;
   if (input_relation.hasPartitionScheme()) {
+    const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
     insert_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
-        ->MergeFrom(input_relation.getPartitionScheme()->getProto());
+        ->MergeFrom(part_scheme.getProto());
+
+    num_partitions = part_scheme.getPartitionSchemeHeader().getNumPartitions();
   } else {
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
 
@@ -1359,7 +1373,7 @@ void ExecutionGenerator::convertInsertTuple(
       catalog_database_->getRelationByIdMutable(input_relation.getID());
   const QueryPlan::DAGNodeIndex save_blocks_index =
       execution_plan_->addRelationalOperator(
-          new SaveBlocksOperator(query_handle_->query_id(), mutable_relation));
+          new SaveBlocksOperator(query_handle_->query_id(), num_partitions, mutable_relation));
   if (!input_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(insert_operator_index,
                                          input_relation_info->producer_operator_index,
@@ -1399,10 +1413,14 @@ void ExecutionGenerator::convertInsertSelection(
   insert_destination_proto->mutable_layout()->MergeFrom(
       destination_relation.getDefaultStorageBlockLayout().getDescription());
 
+  std::size_t output_num_partitions = 1u;
   if (destination_relation.hasPartitionScheme()) {
+    const PartitionScheme &part_scheme = *destination_relation.getPartitionScheme();
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
     insert_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
-        ->MergeFrom(destination_relation.getPartitionScheme()->getProto());
+        ->MergeFrom(part_scheme.getProto());
+
+    output_num_partitions = part_scheme.getPartitionSchemeHeader().getNumPartitions();
   } else {
     insert_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
 
@@ -1457,7 +1475,7 @@ void ExecutionGenerator::convertInsertSelection(
       catalog_database_->getRelationByIdMutable(destination_relation.getID());
   const QueryPlan::DAGNodeIndex save_blocks_index =
       execution_plan_->addRelationalOperator(
-          new SaveBlocksOperator(query_handle_->query_id(), mutable_relation));
+          new SaveBlocksOperator(query_handle_->query_id(), output_num_partitions, mutable_relation));
 
   if (!selection_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(insert_selection_index,
@@ -1548,10 +1566,14 @@ void ExecutionGenerator::convertUpdateTable(
       query_context_proto_->insert_destinations_size();
   S::InsertDestination *relocation_destination_proto = query_context_proto_->add_insert_destinations();
 
+  std::size_t num_partitions = 1u;
   if (input_relation->hasPartitionScheme()) {
+    const PartitionScheme &part_scheme = *input_relation->getPartitionScheme();
     relocation_destination_proto->set_insert_destination_type(S::InsertDestinationType::PARTITION_AWARE);
     relocation_destination_proto->MutableExtension(S::PartitionAwareInsertDestination::partition_scheme)
-        ->MergeFrom(input_relation->getPartitionScheme()->getProto());
+        ->MergeFrom(part_scheme.getProto());
+
+    num_partitions = part_scheme.getPartitionSchemeHeader().getNumPartitions();
   } else {
     relocation_destination_proto->set_insert_destination_type(S::InsertDestinationType::BLOCK_POOL);
   }
@@ -1605,7 +1627,7 @@ void ExecutionGenerator::convertUpdateTable(
 
   const QueryPlan::DAGNodeIndex save_blocks_index =
       execution_plan_->addRelationalOperator(
-          new SaveBlocksOperator(query_handle_->query_id(),
+          new SaveBlocksOperator(query_handle_->query_id(), num_partitions,
                                  catalog_database_->getRelationByIdMutable(input_rel_id)));
   if (!input_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(update_operator_index,

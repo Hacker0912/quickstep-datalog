@@ -62,9 +62,10 @@ class SaveBlocksOperator : public RelationalOperator {
    *        write dirty blocks.
    **/
   SaveBlocksOperator(const std::size_t query_id,
+                     const std::size_t num_partitions,
                      CatalogRelation *relation,
                      const bool force = false)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, num_partitions),
         force_(force),
         relation_(relation),
         num_workorders_generated_(0) {}
@@ -79,7 +80,8 @@ class SaveBlocksOperator : public RelationalOperator {
     return "SaveBlocksOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -120,10 +122,11 @@ class SaveBlocksWorkOrder : public WorkOrder {
    * @param storage_manager The StorageManager to use.
    **/
   SaveBlocksWorkOrder(const std::size_t query_id,
+                      const partition_id part_id,
                       const block_id save_block_id,
                       const bool force,
                       StorageManager *storage_manager)
-      : WorkOrder(query_id),
+      : WorkOrder(query_id, part_id),
         save_block_id_(save_block_id),
         force_(force),
         storage_manager_(DCHECK_NOTNULL(storage_manager)) {}

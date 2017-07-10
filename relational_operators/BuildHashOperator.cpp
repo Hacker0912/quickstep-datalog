@@ -63,6 +63,7 @@ class TupleReferenceGenerator {
 }  // namespace
 
 bool BuildHashOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -71,43 +72,39 @@ bool BuildHashOperator::getAllWorkOrders(
   DCHECK(query_context != nullptr);
 
   if (input_relation_is_stored_) {
-    if (started_) {
+    if (started_[part_id]) {
       return true;
     }
 
-    for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-      JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
-      for (const block_id block : input_relation_block_ids_[part_id]) {
-        container->addNormalWorkOrder(
-            new BuildHashWorkOrder(query_id_, input_relation_, join_key_attributes_, any_join_key_attributes_nullable_,
-                                   part_id, block, hash_table, storage_manager,
-                                   CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-            op_index_, part_id);
-      }
+    JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
+    for (const block_id block : input_relation_block_ids_[part_id]) {
+      container->addNormalWorkOrder(
+          new BuildHashWorkOrder(query_id_, input_relation_, join_key_attributes_, any_join_key_attributes_nullable_,
+                                 part_id, block, hash_table, storage_manager,
+                                 CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
+          op_index_, part_id);
     }
-    started_ = true;
+    started_[part_id] = true;
     return true;
   } else {
-    for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-      JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
-      while (num_workorders_generated_[part_id] <
-             input_relation_block_ids_[part_id].size()) {
-        container->addNormalWorkOrder(
-            new BuildHashWorkOrder(query_id_, input_relation_, join_key_attributes_, any_join_key_attributes_nullable_,
-                                   part_id, input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                                   hash_table, storage_manager,
-                                   CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-            op_index_, part_id);
-        ++num_workorders_generated_[part_id];
-      }
+    JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
+    while (num_workorders_generated_[part_id] <
+           input_relation_block_ids_[part_id].size()) {
+      container->addNormalWorkOrder(
+          new BuildHashWorkOrder(query_id_, input_relation_, join_key_attributes_, any_join_key_attributes_nullable_,
+                                 part_id, input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+                                 hash_table, storage_manager,
+                                 CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
+          op_index_, part_id);
+      ++num_workorders_generated_[part_id];
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[part_id];
   }
 }
 
 bool BuildHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (input_relation_is_stored_) {
-    if (started_) {
+    if (started_[0]) {
       return true;
     }
 
@@ -116,7 +113,7 @@ bool BuildHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *containe
         container->addWorkOrderProto(createWorkOrderProto(block, part_id), op_index_);
       }
     }
-    started_ = true;
+    started_[0] = true;
     return true;
   } else {
     for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
@@ -127,7 +124,7 @@ bool BuildHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *containe
         ++num_workorders_generated_[part_id];
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

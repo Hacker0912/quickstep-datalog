@@ -45,11 +45,13 @@
 namespace quickstep {
 
 bool DeleteOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
+  DCHECK_EQ(0, part_id);
   const Predicate *predicate = query_context->getPredicate(predicate_index_);
 
   if (relation_is_stored_) {
@@ -84,7 +86,7 @@ bool DeleteOperator::getAllWorkOrders(
           op_index_);
       ++num_workorders_generated_;
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 
@@ -105,7 +107,7 @@ bool DeleteOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) 
           op_index_);
       ++num_workorders_generated_;
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

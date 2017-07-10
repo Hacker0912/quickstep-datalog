@@ -140,7 +140,8 @@ class SortMergeRunOperator : public RelationalOperator {
     return "SortMergeRunOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -156,12 +157,17 @@ class SortMergeRunOperator : public RelationalOperator {
     }
   }
 
-  void doneFeedingInputBlocks(const relation_id input_relation_id) override;
+  void doneFeedingInputBlocks(const relation_id input_relation_id,
+                              const partition_id part_id = 0) override;
 
   void receiveFeedbackMessage(const WorkOrder::FeedbackMessage &msg) override;
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
     return output_destination_index_;
+  }
+
+  std::size_t getOutputNumPartitions() const override {
+    return 1u;
   }
 
   const relation_id getOutputRelationID() const override {
