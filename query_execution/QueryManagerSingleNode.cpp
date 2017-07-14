@@ -19,6 +19,7 @@
 
 #include "query_execution/QueryManagerSingleNode.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <utility>
@@ -37,6 +38,8 @@
 #include "glog/logging.h"
 
 #include "tmb/id_typedefs.h"
+
+using std::min;
 
 namespace quickstep {
 
@@ -76,19 +79,88 @@ QueryManagerSingleNode::QueryManagerSingleNode(
 
 WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     const dag_node_index start_operator_index) {
+  LOG(INFO) << workorders_container_->debugString();
+
   // Default policy: Operator with lowest index first.
   WorkOrder *work_order = nullptr;
-  size_t num_operators_checked = 0;
-  for (dag_node_index index = start_operator_index;
-       num_operators_checked < num_operators_in_dag_;
-       index = (index + 1) % num_operators_in_dag_, ++num_operators_checked) {
+
+  if (valid_recently_complete_work_order_info_) {
+    valid_recently_complete_work_order_info_ = false;
+
+    for (const dag_node_index dependent_op_index : pipelining_operators_[recently_complete_work_order_operator_]) {
+      work_order = workorders_container_->getNormalWorkOrder(dependent_op_index,
+                                                             recently_complete_work_order_partition_id_);
+      if (work_order != nullptr) {
+        query_exec_state_->incrementNumQueuedWorkOrders(dependent_op_index, recently_complete_work_order_partition_id_);
+        LOG(INFO) << "NormalWorkOrder from Operator " << dependent_op_index
+                  << " for partition " << recently_complete_work_order_partition_id_;
+        return WorkerMessage::WorkOrderMessage(work_order, dependent_op_index);
+      }
+    }
+
+    for (partition_id part_id = 0;
+         part_id < min(recently_complete_work_order_partition_id_ + 1,
+                       input_num_partitions_[recently_complete_work_order_operator_]);
+         ++part_id) {
+      work_order = workorders_container_->getNormalWorkOrder(recently_complete_work_order_operator_, part_id);
+      if (work_order != nullptr) {
+        LOG(INFO) << "NormalWorkOrder from Operator " << recently_complete_work_order_operator_
+                  << " for partition " << part_id;
+        query_exec_state_->incrementNumQueuedWorkOrders(recently_complete_work_order_operator_, part_id);
+        return WorkerMessage::WorkOrderMessage(work_order, recently_complete_work_order_operator_);
+      }
+    }
+
+    const auto cit = output_num_partitions_.find(recently_complete_work_order_operator_);
+    if (cit != output_num_partitions_.end()) {
+      for (partition_id part_id = 0;
+           part_id < min(recently_complete_work_order_partition_id_ + 1, cit->second);
+           ++part_id) {
+        work_order = workorders_container_->getRebuildWorkOrder(recently_complete_work_order_operator_, part_id);
+        if (work_order != nullptr) {
+          LOG(INFO) << "RebuildWorkOrder from Operator " << recently_complete_work_order_operator_
+                    << " for partition " << part_id;
+          return WorkerMessage::RebuildWorkOrderMessage(work_order, recently_complete_work_order_operator_);
+        }
+      }
+    }
+
+    for (partition_id part_id = recently_complete_work_order_partition_id_ + 1;
+         part_id < input_num_partitions_[recently_complete_work_order_operator_];
+         ++part_id) {
+      work_order = workorders_container_->getNormalWorkOrder(recently_complete_work_order_operator_, part_id);
+      if (work_order != nullptr) {
+        LOG(INFO) << "NormalWorkOrder from Operator " << recently_complete_work_order_operator_
+                  << " for partition " << part_id;
+        query_exec_state_->incrementNumQueuedWorkOrders(recently_complete_work_order_operator_, part_id);
+        return WorkerMessage::WorkOrderMessage(work_order, recently_complete_work_order_operator_);
+      }
+    }
+
+    if (cit != output_num_partitions_.end()) {
+      for (partition_id part_id = recently_complete_work_order_partition_id_ + 1; part_id < cit->second; ++part_id) {
+        work_order = workorders_container_->getRebuildWorkOrder(recently_complete_work_order_operator_, part_id);
+        if (work_order != nullptr) {
+          LOG(INFO) << "RebuildWorkOrder from Operator " << recently_complete_work_order_operator_
+                    << " for partition " << part_id;
+          return WorkerMessage::RebuildWorkOrderMessage(work_order, recently_complete_work_order_operator_);
+        }
+      }
+    }
+  }
+
+  for (dag_node_index index = least_runable_operator_in_dag_; index < num_operators_in_dag_; ++index) {
     if (query_exec_state_->hasExecutionFinished(index)) {
+      if (index == least_runable_operator_in_dag_) {
+        ++least_runable_operator_in_dag_;
+      }
       continue;
     }
     for (partition_id part_id = 0; part_id < input_num_partitions_[index]; ++part_id) {
       work_order = workorders_container_->getNormalWorkOrder(index, part_id);
       if (work_order != nullptr) {
         query_exec_state_->incrementNumQueuedWorkOrders(index, part_id);
+        LOG(INFO) << "NormalWorkOrder from Operator " << index << " for partition " << part_id;
         return WorkerMessage::WorkOrderMessage(work_order, index);
       }
     }
@@ -98,6 +170,7 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
       for (partition_id part_id = 0; part_id < cit->second; ++part_id) {
         work_order = workorders_container_->getRebuildWorkOrder(index, part_id);
         if (work_order != nullptr) {
+          LOG(INFO) << "RebuildWorkOrder from Operator " << index << " for partition " << part_id;
           return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
         }
       }
@@ -138,7 +211,7 @@ bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index,
         (num_pending_workorders_before <
          workorders_container_->getNumNormalWorkOrders(index, part_id));
     LOG_IF(INFO, generated_new_workorders)
-        << "Generated WorkOrder(s) from " << op->getName() << " for Partition " << part_id
+        << "Generated WorkOrder(s) from " << op->getName() << "(" << index << ") for Partition " << part_id
         << " in Query " << query_id_;
   }
   return generated_new_workorders;

@@ -313,6 +313,12 @@ class QueryManagerBase {
 
   std::unique_ptr<ExecutionDAGVisualizer> dag_visualizer_;
 
+  dag_node_index least_runable_operator_in_dag_, recently_complete_work_order_operator_;
+  partition_id recently_complete_work_order_partition_id_;
+  bool valid_recently_complete_work_order_info_;
+
+  std::vector<std::vector<dag_node_index>> pipelining_operators_;
+
  private:
   bool checkNormalExecutionOver(const dag_node_index index) const {
     for (partition_id part_id = input_num_partitions_[index] - 1; part_id > 0; --part_id) {

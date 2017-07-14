@@ -24,6 +24,7 @@
 #include <list>
 #include <memory>
 #include <queue>
+#include <string>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
@@ -80,6 +81,8 @@ class WorkOrdersContainer {
    *       pending WorkOrders.
    **/
   ~WorkOrdersContainer();
+
+  std::string debugString() const;
 
   /**
    * @brief Check if there are some pending WorkOrders for the given operator.

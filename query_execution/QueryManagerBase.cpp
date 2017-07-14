@@ -50,7 +50,12 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       num_operators_in_dag_(query_dag_->size()),
       input_num_partitions_(num_operators_in_dag_),
       output_consumers_(num_operators_in_dag_),
-      blocking_dependencies_(num_operators_in_dag_) {
+      blocking_dependencies_(num_operators_in_dag_),
+      least_runable_operator_in_dag_(0),
+      recently_complete_work_order_operator_(0),
+      recently_complete_work_order_partition_id_(0),
+      valid_recently_complete_work_order_info_(false),
+      pipelining_operators_(num_operators_in_dag_) {
   if (FLAGS_visualize_execution_dag) {
     dag_visualizer_ =
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
@@ -80,6 +85,10 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
         // The link is a pipeline-breaker. Streaming of blocks is not possible
         // between these two operators.
         blocking_dependencies_[dependent_op_index].push_back(node_index);
+      }
+
+      if (input_num_partitions_[node_index] == input_num_partitions_[dependent_op_index]) {
+        pipelining_operators_[node_index].push_back(dependent_op_index);
       }
     }
   }
@@ -152,6 +161,10 @@ void QueryManagerBase::processWorkOrderCompleteMessage(
     const partition_id part_id) {
   query_exec_state_->decrementNumQueuedWorkOrders(op_index, part_id);
 
+  recently_complete_work_order_operator_ = op_index;
+  recently_complete_work_order_partition_id_ = part_id;
+  valid_recently_complete_work_order_info_ = true;
+
   // Check if new work orders are available and fetch them if so.
   fetchNormalWorkOrders(op_index, part_id);
 
@@ -175,6 +188,10 @@ void QueryManagerBase::processWorkOrderCompleteMessage(
 void QueryManagerBase::processRebuildWorkOrderCompleteMessage(const dag_node_index op_index,
                                                               const partition_id part_id) {
   query_exec_state_->decrementNumRebuildWorkOrders(op_index, part_id);
+
+  recently_complete_work_order_operator_ = op_index;
+  recently_complete_work_order_partition_id_ = part_id;
+  valid_recently_complete_work_order_info_ = true;
 
   if (input_num_partitions_[op_index] == output_num_partitions_[op_index]) {
     if (checkRebuildOver(op_index, part_id)) {
@@ -219,6 +236,10 @@ void QueryManagerBase::processDataPipelineMessage(const dag_node_index op_index,
                                                   const block_id block,
                                                   const relation_id rel_id,
                                                   const partition_id part_id) {
+  recently_complete_work_order_operator_ = op_index;
+  recently_complete_work_order_partition_id_ = part_id;
+  valid_recently_complete_work_order_info_ = true;
+
   for (const dag_node_index consumer_index :
        output_consumers_[op_index]) {
     // Feed the streamed block to the consumer. Note that 'output_consumers_'

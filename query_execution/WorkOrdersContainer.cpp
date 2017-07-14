@@ -23,13 +23,17 @@
 #include <cstddef>
 #include <list>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "relational_operators/WorkOrder.hpp"
 
 #include "glog/logging.h"
 
+using std::string;
+using std::to_string;
 using std::unique_ptr;
+using std::vector;
 
 namespace quickstep {
 
@@ -58,6 +62,53 @@ WorkOrdersContainer::~WorkOrdersContainer() {
       break;
     }
   }
+}
+
+string WorkOrdersContainer::debugString() const {
+  string result(1, '\n');
+  for (std::size_t op = 0; op < num_operators_; ++op) {
+    const std::size_t input_num_partitions = normal_workorders_[op].size();
+    vector<std::size_t> num_normal_work_orders_per_partition(input_num_partitions);
+    bool has_work_order = false;
+    for (partition_id part_id = 0; part_id < input_num_partitions; ++part_id) {
+      const std::size_t num_normal_work_orders = getNumNormalWorkOrders(op, part_id);
+      num_normal_work_orders_per_partition[part_id] = num_normal_work_orders;
+
+      if (!has_work_order && num_normal_work_orders != 0) {
+        has_work_order = true;
+      }
+    }
+
+    const std::size_t output_num_partitions = rebuild_workorders_[op].size();
+    vector<std::size_t> num_rebuild_work_orders_per_partition(output_num_partitions);
+    for (partition_id part_id = 0; part_id < output_num_partitions; ++part_id) {
+      const std::size_t num_rebuild_work_orders = getNumRebuildWorkOrders(op, part_id);
+      num_rebuild_work_orders_per_partition[part_id] = num_rebuild_work_orders;
+
+      if (!has_work_order && num_rebuild_work_orders != 0) {
+        has_work_order = true;
+      }
+    }
+
+    if (has_work_order) {
+      result += "\tOperator " + to_string(op) + ":\n";
+      for (partition_id part_id = 0; part_id < input_num_partitions; ++part_id) {
+        if (num_normal_work_orders_per_partition[part_id] != 0) {
+          result += "\t\tInput Partition " + to_string(part_id) + ": "
+            + to_string(num_normal_work_orders_per_partition[part_id]) + " normal work orders\n";
+        }
+      }
+
+      for (partition_id part_id = 0; part_id < output_num_partitions; ++part_id) {
+        if (num_rebuild_work_orders_per_partition[part_id] != 0) {
+          result += "\t\tOutput Partition " + to_string(part_id) + ": "
+            + to_string(num_rebuild_work_orders_per_partition[part_id]) + " rebuild work orders\n";
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 WorkOrder* WorkOrdersContainer::InternalListContainer::getWorkOrderForNUMANode(
