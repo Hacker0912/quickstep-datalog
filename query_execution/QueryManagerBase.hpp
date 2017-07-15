@@ -297,6 +297,8 @@ class QueryManagerBase {
 
   std::unique_ptr<ExecutionDAGVisualizer> dag_visualizer_;
 
+  dag_node_index least_runable_operator_;
+
  private:
   /**
    * @brief Check if the given operator's normal execution is over.

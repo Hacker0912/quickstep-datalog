@@ -74,11 +74,11 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     const dag_node_index start_operator_index, const numa_node_id numa_node) {
   // Default policy: Operator with lowest index first.
   WorkOrder *work_order = nullptr;
-  size_t num_operators_checked = 0;
-  for (dag_node_index index = start_operator_index;
-       num_operators_checked < num_operators_in_dag_;
-       index = (index + 1) % num_operators_in_dag_, ++num_operators_checked) {
+  for (dag_node_index index = least_runable_operator_; index < num_operators_in_dag_; ++index) {
     if (query_exec_state_->hasExecutionFinished(index)) {
+      if (index == least_runable_operator_) {
+        ++least_runable_operator_;
+      }
       continue;
     }
     if (numa_node != kAnyNUMANodeID) {

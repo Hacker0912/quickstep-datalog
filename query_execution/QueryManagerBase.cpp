@@ -50,7 +50,8 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       num_operators_in_dag_(query_dag_->size()),
       output_consumers_(num_operators_in_dag_),
       blocking_dependencies_(num_operators_in_dag_),
-      query_exec_state_(new QueryExecutionState(num_operators_in_dag_)) {
+      query_exec_state_(new QueryExecutionState(num_operators_in_dag_)),
+      least_runable_operator_(0) {
   if (FLAGS_visualize_execution_dag) {
     dag_visualizer_ =
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
