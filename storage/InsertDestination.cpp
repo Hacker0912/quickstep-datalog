@@ -524,6 +524,8 @@ MutableBlockReference PartitionAwareInsertDestination::createNewBlockInPartition
   proto.set_block_id(new_id);
   proto.set_partition_id(part_id);
   proto.set_query_id(getQueryID());
+  LOG(INFO) << "createNewBlock " << BlockIdUtil::Counter(new_id) << " for Relation " << relation_.getName()
+            << " with Partition " << part_id;
 
   const size_t proto_length = proto.ByteSize();
   char *proto_bytes = static_cast<char*>(malloc(proto_length));

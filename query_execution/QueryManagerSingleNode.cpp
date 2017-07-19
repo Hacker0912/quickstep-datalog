@@ -87,12 +87,14 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
       if (work_order != nullptr) {
         // A WorkOrder found on the given NUMA node.
         query_exec_state_->incrementNumQueuedWorkOrders(index);
+        LOG(INFO) << "NormalWorkOrder from Operator " << index;
         return WorkerMessage::WorkOrderMessage(work_order, index);
       } else {
         // Normal workorder not found on this node. Look for a rebuild workorder
         // on this NUMA node.
         work_order = workorders_container_->getRebuildWorkOrderForNUMANode(index, numa_node);
         if (work_order != nullptr) {
+          LOG(INFO) << "RebuildWorkOrder from Operator " << index;
           return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
         }
       }
@@ -103,11 +105,13 @@ WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     work_order = workorders_container_->getNormalWorkOrder(index);
     if (work_order != nullptr) {
       query_exec_state_->incrementNumQueuedWorkOrders(index);
+      LOG(INFO) << "NormalWorkOrder from Operator " << index;
       return WorkerMessage::WorkOrderMessage(work_order, index);
     } else {
       // Normal WorkOrder not found, look for a RebuildWorkOrder.
       work_order = workorders_container_->getRebuildWorkOrder(index);
       if (work_order != nullptr) {
+        LOG(INFO) << "RebuildWorkOrder from Operator " << index;
         return WorkerMessage::RebuildWorkOrderMessage(work_order, index);
       }
     }

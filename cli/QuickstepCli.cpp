@@ -358,9 +358,11 @@ int main(int argc, char* argv[]) {
           query_processor->generateQueryHandle(statement, query_handle.get());
           DCHECK(query_handle->getQueryPlanMutable() != nullptr);
 
-          if (quickstep::FLAGS_visualize_execution_dag) {
-            dag_visualizer =
-                std::make_unique<quickstep::ExecutionDAGVisualizer>(*query_handle->getQueryPlanMutable());
+          dag_visualizer =
+              std::make_unique<quickstep::ExecutionDAGVisualizer>(*query_handle->getQueryPlanMutable());
+
+          if (!quickstep::FLAGS_visualize_execution_dag) {
+            std::cerr << "\n" << dag_visualizer->toDOT() << "\n";
           }
 
           query_result_relation = query_handle->getQueryResultRelation();

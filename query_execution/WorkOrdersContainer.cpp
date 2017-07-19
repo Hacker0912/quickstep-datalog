@@ -23,12 +23,16 @@
 #include <cstddef>
 #include <list>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "relational_operators/WorkOrder.hpp"
 
 #include "glog/logging.h"
 
+using std::size_t;
+using std::string;
+using std::to_string;
 using std::unique_ptr;
 
 namespace quickstep {
@@ -41,6 +45,27 @@ WorkOrdersContainer::~WorkOrdersContainer() {
       break;
     }
   }
+}
+
+string WorkOrdersContainer::debugString() const {
+  string result(1, '\n');
+  for (size_t op = 0; op < num_operators_; ++op) {
+    const size_t num_normal_work_orders = getNumNormalWorkOrders(op);
+    const bool has_normal_work_orders = num_normal_work_orders > 0;
+    if (has_normal_work_orders) {
+      result += "\tOperator " + to_string(op) + ":\n\t\t"
+             + to_string(num_normal_work_orders) + " normal work order(s)\n";
+    }
+
+    const size_t num_rebuild_work_orders = getNumRebuildWorkOrders(op);
+    if (num_rebuild_work_orders > 0) {
+      if (!has_normal_work_orders) {
+        result += "\tOperator " + to_string(op) + ":\n";
+      }
+      result += to_string(num_rebuild_work_orders) + " rebuild work order(s)\n";
+    }
+  }
+  return result;
 }
 
 WorkOrder* WorkOrdersContainer::InternalListContainer::getWorkOrderForNUMANode(

@@ -56,6 +56,7 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
   }
 
+  LOG(INFO) << "num_operators: " << num_operators_in_dag_;
   for (dag_node_index node_index = 0;
        node_index < num_operators_in_dag_;
        ++node_index) {
