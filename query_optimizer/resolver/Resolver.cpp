@@ -769,13 +769,16 @@ StorageBlockLayoutDescription* Resolver::resolveBlockProperties(
           << "The COMPRESS property must be specified as ALL or a list of attributes.";
       }
       for (const ParseString &compressed_attribute_name : *compress_parse_strings) {
-        const attribute_id column_id = GetAttributeIdFromName(create_table_statement.attribute_definition_list(),
-                                                              compressed_attribute_name.value());
-        if (column_id == kInvalidAttributeID) {
-          THROW_SQL_ERROR_AT(&compressed_attribute_name)
-              << "The given attribute was not found.";
-        } else {
-          compressed_column_ids.push_back(static_cast<std::size_t>(column_id));
+        const std::string &name = compressed_attribute_name.value();
+        if (name != "NONE") {
+          const attribute_id column_id = GetAttributeIdFromName(
+              create_table_statement.attribute_definition_list(), name);
+          if (column_id == kInvalidAttributeID) {
+            THROW_SQL_ERROR_AT(&compressed_attribute_name)
+                << "The given attribute was not found.";
+          } else {
+            compressed_column_ids.push_back(static_cast<std::size_t>(column_id));
+          }
         }
       }
     }

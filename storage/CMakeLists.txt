@@ -489,6 +489,7 @@ target_link_libraries(quickstep_storage_CompressedBlockBuilder
                       quickstep_types_operations_comparisons_ComparisonUtil
                       quickstep_utility_BitManipulation
                       quickstep_utility_BitVector
+                      quickstep_utility_EventProfiler
                       quickstep_utility_Macros
                       quickstep_utility_PtrMap
                       quickstep_utility_PtrVector)

@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <exception>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -66,6 +67,7 @@
 #include "storage/StorageConstants.hpp"
 #include "storage/StorageManager.hpp"
 #include "threading/ThreadIDBasedMap.hpp"
+#include "utility/EventProfiler.hpp"
 #include "utility/ExecutionDAGVisualizer.hpp"
 #include "utility/Macros.hpp"
 #include "utility/PtrVector.hpp"
@@ -143,6 +145,8 @@ DEFINE_string(profile_file_name, "",
               // To put things in perspective, the first run is, in my experiments, about 5-10
               // times more expensive than the average run. That means the query needs to be
               // run at least a hundred times to make the impact of the first run small (< 5 %).
+DEFINE_string(profile_output, "",
+              "Output file name for dumping the profiled events.");
 
 DEFINE_string(mode, "local",
               "Defines which interaction mode to use. Options are either 'local' which "
@@ -355,6 +359,7 @@ int main(int argc, char* argv[]) {
         const std::size_t query_id = query_processor->query_id();
         const CatalogRelation *query_result_relation = nullptr;
         std::unique_ptr<quickstep::ExecutionDAGVisualizer> dag_visualizer;
+        quickstep::simple_profiler.clear();
 
         try {
           auto query_handle = std::make_unique<QueryHandle>(query_id,
@@ -419,6 +424,13 @@ int main(int argc, char* argv[]) {
               dag_visualizer->bindProfilingStats(*profiling_stats);
             }
             std::cerr << "\n" << dag_visualizer->toDOT() << "\n";
+          }
+          if (!quickstep::FLAGS_profile_output.empty()) {
+            std::ofstream ofs(
+                quickstep::FLAGS_profile_output + std::to_string(query_processor->query_id()),
+                std::ios::out);
+            quickstep::simple_profiler.writeToStream(ofs);
+            ofs.close();
           }
         } catch (const std::exception &e) {
           fprintf(io_handle->err(), "QUERY EXECUTION ERROR: %s\n", e.what());
