@@ -21,12 +21,13 @@ package quickstep.serialization;
 
 import "relational_operators/SortMergeRunOperator.proto";
 
-// Next tag: 26.
+// Next tag: 28.
 enum WorkOrderType {
   AGGREGATION = 1;
   BUILD_AGGREGATION_EXISTENCE_MAP = 23;
   BUILD_HASH = 2;
   BUILD_LIP_FILTER = 3;
+  BUILD_VECTOR = 27;
   CREATE_INDEX = 4;  // Placeholder.
   CREATE_TABLE = 5;  // Placeholder.
   DELETE = 6;
@@ -36,6 +37,7 @@ enum WorkOrderType {
   FINALIZE_AGGREGATION = 9;
   HASH_JOIN = 10;
   INITIALIZE_AGGREGATION = 25;
+  INITIALIZE_VECTOR = 26;
   INSERT = 11;
   NESTED_LOOP_JOIN = 12;
   SAMPLE = 13;
@@ -192,6 +194,15 @@ message InitializeAggregationWorkOrder {
     optional uint32 aggr_state_index = 400;
     optional uint64 partition_id = 401;
     optional uint64 state_partition_id = 402;
+  }
+}
+
+message InitializeVectorWorkOrder {
+  extend WorkOrder {
+    // All required.
+    optional uint32 vector_index = 416;
+    optional uint64 partition_id = 417;
+    optional uint64 vector_partition_id = 418;
   }
 }
 

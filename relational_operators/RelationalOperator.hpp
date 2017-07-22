@@ -65,15 +65,18 @@ class RelationalOperator {
     kAggregation = 0,
     kBuildAggregationExistenceMap,
     kBuildHash,
+    kBuildVector,
     kBuildLIPFilter,
     kCreateIndex,
     kCreateTable,
     kDelete,
     kDestroyAggregationState,
     kDestroyHash,
+    kDestroyVector,
     kDropTable,
     kFinalizeAggregation,
     kInitializeAggregation,
+    kInitializeVector,
     kInnerJoin,
     kInsert,
     kLeftAntiJoin,
@@ -91,6 +94,13 @@ class RelationalOperator {
     kUpdate,
     kWindowAggregation,
     kMockOperator
+  };
+
+  enum class JoinType {
+    kInnerJoin = 0,
+    kLeftSemiJoin,
+    kLeftAntiJoin,
+    kLeftOuterJoin
   };
 
   /**

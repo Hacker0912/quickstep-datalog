@@ -123,15 +123,18 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_relationaloperators_BuildAggregationExistenceMapOperator
                       quickstep_relationaloperators_BuildHashOperator
                       quickstep_relationaloperators_BuildLIPFilterOperator
+                      quickstep_relationaloperators_BuildVectorOperator
                       quickstep_relationaloperators_CreateIndexOperator
                       quickstep_relationaloperators_CreateTableOperator
                       quickstep_relationaloperators_DeleteOperator
                       quickstep_relationaloperators_DestroyAggregationStateOperator
                       quickstep_relationaloperators_DestroyHashOperator
+                      quickstep_relationaloperators_DestroyVectorOperator
                       quickstep_relationaloperators_DropTableOperator
                       quickstep_relationaloperators_FinalizeAggregationOperator
                       quickstep_relationaloperators_HashJoinOperator
                       quickstep_relationaloperators_InitializeAggregationOperator
+                      quickstep_relationaloperators_InitializeVectorOperator
                       quickstep_relationaloperators_InsertOperator
                       quickstep_relationaloperators_NestedLoopsJoinOperator
                       quickstep_relationaloperators_RelationalOperator
@@ -144,8 +147,10 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_relationaloperators_TextScanOperator
                       quickstep_relationaloperators_UnionAllOperator
                       quickstep_relationaloperators_UpdateOperator
+                      quickstep_relationaloperators_VectorJoinOperator
                       quickstep_relationaloperators_WindowAggregationOperator
                       quickstep_storage_AggregationOperationState_proto
+                      quickstep_storage_CollisionFreeVector
                       quickstep_storage_HashTableFactory
                       quickstep_storage_HashTable_proto
                       quickstep_storage_InsertDestination_proto

@@ -35,11 +35,15 @@ class TupleStorageSubBlock;
  **/
 struct TupleReference {
   TupleReference()
-      : block(0), tuple(-1) {
+      : block(kInvalidBlockId), tuple(-1) {
   }
 
   TupleReference(block_id block_in, tuple_id tuple_in)
       : block(block_in), tuple(tuple_in) {
+  }
+
+  bool isValid() const {
+    return block != kInvalidBlockId;
   }
 
   block_id block;

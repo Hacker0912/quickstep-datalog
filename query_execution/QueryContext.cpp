@@ -33,6 +33,7 @@
 #include "expressions/table_generator/GeneratorFunctionHandle.hpp"
 #include "query_execution/QueryContext.pb.h"
 #include "storage/AggregationOperationState.hpp"
+#include "storage/CollisionFreeVector.hpp"
 #include "storage/HashTable.hpp"
 #include "storage/HashTableFactory.hpp"
 #include "storage/InsertDestination.hpp"
@@ -82,6 +83,18 @@ QueryContext::QueryContext(const serialization::QueryContext &proto,
     DCHECK(func_handle != nullptr);
     generator_functions_.emplace_back(
         std::unique_ptr<const GeneratorFunctionHandle>(func_handle));
+  }
+
+  for (int i = 0; i < proto.collision_free_vectors_size(); ++i) {
+    PartitionedCollisionFreeVectors partitioned_collision_free_vectors;
+
+    const serialization::QueryContext::HashTableContext &hash_table_context_proto = proto.collision_free_vectors(i);
+    for (std::uint64_t j = 0; j < hash_table_context_proto.num_partitions(); ++j) {
+      partitioned_collision_free_vectors.emplace_back(
+          CollisionFreeVector::ReconstructFromProto(hash_table_context_proto.join_hash_table(), storage_manager));
+    }
+
+    collision_free_vectors_.push_back(move(partitioned_collision_free_vectors));
   }
 
   for (int i = 0; i < proto.join_hash_tables_size(); ++i) {
@@ -186,6 +199,12 @@ bool QueryContext::ProtoIsValid(const serialization::QueryContext &proto,
       if (!TypedValue::ProtoIsValid(func_proto.args(j))) {
         return false;
       }
+    }
+  }
+
+  for (int i = 0; i < proto.collision_free_vectors_size(); ++i) {
+    if (!CollisionFreeVector::ProtoIsValid(proto.collision_free_vectors(i).join_hash_table())) {
+      return false;
     }
   }
 

@@ -142,9 +142,10 @@ class StarSchemaSimpleCostModel : public CostModel {
   TypedValue findMinValueStat(
       const physical::PhysicalPtr &physical_plan,
       const expressions::AttributeReferencePtr &attribute,
-      bool *is_exact_stat = nullptr) {
+      bool *is_exact_stat = nullptr,
+      bool *is_unique = nullptr) {
     return findCatalogRelationStat(
-        physical_plan, attribute->id(), StatType::kMin, is_exact_stat);
+        physical_plan, attribute->id(), StatType::kMin, is_exact_stat, is_unique);
   }
 
   /**
@@ -163,9 +164,10 @@ class StarSchemaSimpleCostModel : public CostModel {
   TypedValue findMaxValueStat(
       const physical::PhysicalPtr &physical_plan,
       const expressions::AttributeReferencePtr &attribute,
-      bool *is_exact_stat = nullptr) {
+      bool *is_exact_stat = nullptr,
+      bool *is_unique = nullptr) {
     return findCatalogRelationStat(
-        physical_plan, attribute->id(), StatType::kMax, is_exact_stat);
+        physical_plan, attribute->id(), StatType::kMax, is_exact_stat, is_unique);
   }
 
   /**
@@ -195,6 +197,18 @@ class StarSchemaSimpleCostModel : public CostModel {
    */
   bool canUseTwoPhaseCompactKeyAggregation(const physical::AggregatePtr &aggregate,
                                            const std::size_t estimated_num_groups);
+
+  /**
+   * @brief Checks whether a hash join node can be efficiently evaluated with
+   *        the collision-free hash join fast path.
+   *
+   * @param hash_join The physical hash join node to be checked.
+   * @param num_entries The number of entries in CollisionFreeVectorJoin.
+   * @return A bool value indicating whether collision-free hash join can be
+   *         used to evaluate \p hash_join.
+   */
+  bool canUseCollisionFreeVectorJoin(const physical::HashJoinPtr &hash_join,
+                                     std::size_t *num_entries);
 
  private:
   std::size_t estimateCardinalityForAggregate(
@@ -257,7 +271,8 @@ class StarSchemaSimpleCostModel : public CostModel {
       const physical::PhysicalPtr &physical_plan,
       const expressions::ExprId expr_id,
       const StatType stat_type,
-      bool *is_exact_stat);
+      bool *is_exact_stat,
+      bool *is_unique = nullptr);
 
   // For a table reference attribute, find its correponding catalog attribute.
   attribute_id findCatalogRelationAttributeId(

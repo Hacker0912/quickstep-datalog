@@ -446,7 +446,7 @@ class ExecutionGenerator {
   /**
    * @brief The cost model to use for estimating join hash table size.
    */
-  std::unique_ptr<cost::CostModel> cost_model_for_hash_join_;
+  std::unique_ptr<cost::StarSchemaSimpleCostModel> cost_model_for_hash_join_;
 
   physical::TopLevelPlanPtr top_level_physical_plan_;
 

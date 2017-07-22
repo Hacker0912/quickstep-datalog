@@ -31,6 +31,7 @@
 #include "expressions/scalar/Scalar.hpp"
 #include "expressions/table_generator/GeneratorFunctionHandle.hpp"
 #include "storage/AggregationOperationState.hpp"
+#include "storage/CollisionFreeVector.hpp"
 #include "storage/HashTable.hpp"
 #include "storage/InsertDestination.hpp"
 #include "storage/WindowAggregationOperationState.hpp"
@@ -271,6 +272,43 @@ class QueryContext {
     DCHECK_GE(id, 0);
     DCHECK_LT(static_cast<std::size_t>(id), insert_destinations_.size());
     insert_destinations_[id].reset();
+  }
+
+  /**
+   * @brief Whether the given CollisionFreeVector id is valid.
+   *
+   * @param id The CollisionFreeVector id.
+   * @param part_id The partition id.
+   *
+   * @return True if valid, otherwise false.
+   **/
+  bool isValidCollisionFreeVectorId(const join_hash_table_id id, const partition_id part_id) const {
+    return id < collision_free_vectors_.size() &&
+           part_id < collision_free_vectors_[id].size();
+  }
+
+  /**
+   * @brief Get the CollisionFreeVector.
+   *
+   * @param id The CollisionFreeVector id in the query.
+   * @param part_id The partition id.
+   *
+   * @return The CollisionFreeVector, already created in the constructor.
+   **/
+  inline CollisionFreeVector* getCollisionFreeVector(const join_hash_table_id id, const partition_id part_id) {
+    DCHECK(isValidCollisionFreeVectorId(id, part_id));
+    return collision_free_vectors_[id][part_id].get();
+  }
+
+  /**
+   * @brief Destory the given CollisionFreeVector.
+   *
+   * @param id The id of the CollisionFreeVector to destroy.
+   * @param part_id The partition id.
+   **/
+  inline void destroyCollisionFreeVector(const join_hash_table_id id, const partition_id part_id) {
+    DCHECK(isValidCollisionFreeVectorId(id, part_id));
+    collision_free_vectors_[id][part_id].reset();
   }
 
   /**
@@ -619,12 +657,15 @@ class QueryContext {
 
   // Per AggregationOperationState, the index is the partition id.
   typedef std::vector<std::unique_ptr<AggregationOperationState>> PartitionedAggregationOperationStates;
+  // Per vector join, the index is the partition id.
+  typedef std::vector<std::unique_ptr<CollisionFreeVector>> PartitionedCollisionFreeVectors;
   // Per hash join, the index is the partition id.
   typedef std::vector<std::unique_ptr<JoinHashTable>> PartitionedJoinHashTables;
 
   std::vector<PartitionedAggregationOperationStates> aggregation_states_;
   std::vector<std::unique_ptr<const GeneratorFunctionHandle>> generator_functions_;
   std::vector<std::unique_ptr<InsertDestination>> insert_destinations_;
+  std::vector<PartitionedCollisionFreeVectors> collision_free_vectors_;
   std::vector<PartitionedJoinHashTables> join_hash_tables_;
   std::vector<std::unique_ptr<LIPFilterDeployment>> lip_deployments_;
   std::vector<std::unique_ptr<LIPFilter>> lip_filters_;

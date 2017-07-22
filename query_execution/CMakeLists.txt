@@ -211,6 +211,7 @@ target_link_libraries(quickstep_queryexecution_QueryContext
                       quickstep_expressions_tablegenerator_GeneratorFunction_proto
                       quickstep_queryexecution_QueryContext_proto
                       quickstep_storage_AggregationOperationState
+                      quickstep_storage_CollisionFreeVector
                       quickstep_storage_HashTable
                       quickstep_storage_HashTableFactory
                       quickstep_storage_InsertDestination

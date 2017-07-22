@@ -107,15 +107,18 @@
 #include "relational_operators/BuildAggregationExistenceMapOperator.hpp"
 #include "relational_operators/BuildHashOperator.hpp"
 #include "relational_operators/BuildLIPFilterOperator.hpp"
+#include "relational_operators/BuildVectorOperator.hpp"
 #include "relational_operators/CreateIndexOperator.hpp"
 #include "relational_operators/CreateTableOperator.hpp"
 #include "relational_operators/DeleteOperator.hpp"
 #include "relational_operators/DestroyAggregationStateOperator.hpp"
 #include "relational_operators/DestroyHashOperator.hpp"
+#include "relational_operators/DestroyVectorOperator.hpp"
 #include "relational_operators/DropTableOperator.hpp"
 #include "relational_operators/FinalizeAggregationOperator.hpp"
 #include "relational_operators/HashJoinOperator.hpp"
 #include "relational_operators/InitializeAggregationOperator.hpp"
+#include "relational_operators/InitializeVectorOperator.hpp"
 #include "relational_operators/InsertOperator.hpp"
 #include "relational_operators/NestedLoopsJoinOperator.hpp"
 #include "relational_operators/RelationalOperator.hpp"
@@ -128,8 +131,10 @@
 #include "relational_operators/TextScanOperator.hpp"
 #include "relational_operators/UnionAllOperator.hpp"
 #include "relational_operators/UpdateOperator.hpp"
+#include "relational_operators/VectorJoinOperator.hpp"
 #include "relational_operators/WindowAggregationOperator.hpp"
 #include "storage/AggregationOperationState.pb.h"
+#include "storage/CollisionFreeVector.hpp"
 #include "storage/HashTable.pb.h"
 #include "storage/HashTableFactory.hpp"
 #include "storage/InsertDestination.pb.h"
@@ -316,8 +321,8 @@ void ExecutionGenerator::generatePlan(const P::PhysicalPtr &physical_plan) {
 
   cost_model_for_aggregation_.reset(
       new cost::StarSchemaSimpleCostModel(top_level_physical_plan_->shared_subplans()));
-  cost_model_for_hash_join_.reset(
-      new cost::SimpleCostModel(top_level_physical_plan_->shared_subplans()));
+  cost_model_for_hash_join_ =
+      make_unique<cost::StarSchemaSimpleCostModel>(top_level_physical_plan_->shared_subplans());
 
   const auto &lip_filter_configuration =
       top_level_physical_plan_->lip_filter_configuration();
@@ -977,44 +982,96 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
   }
 
   // Create join hash table proto.
-  const QueryContext::join_hash_table_id join_hash_table_index =
-      query_context_proto_->join_hash_tables_size();
-  S::QueryContext::HashTableContext *hash_table_context_proto =
-      query_context_proto_->add_join_hash_tables();
-
   const P::PartitionSchemeHeader *probe_partition_scheme_header = probe_physical->getOutputPartitionSchemeHeader();
   const std::size_t probe_num_partitions =
       probe_partition_scheme_header ? probe_partition_scheme_header->num_partitions : 1u;
+
+  QueryContext::join_hash_table_id join_hash_table_index;
+  S::QueryContext::HashTableContext *hash_table_context_proto = nullptr;
+  S::HashTable *hash_table_proto = nullptr;
+  bool use_collision_free_vector_join = false;
+  std::size_t collision_free_vector_num_entries = 0;
+  if (cost_model_for_hash_join_->canUseCollisionFreeVectorJoin(physical_plan, &collision_free_vector_num_entries)) {
+    use_collision_free_vector_join = true;
+
+    join_hash_table_index = query_context_proto_->collision_free_vectors_size();
+    hash_table_context_proto = query_context_proto_->add_collision_free_vectors();
+
+    hash_table_proto = hash_table_context_proto->mutable_join_hash_table();
+    hash_table_proto->set_hash_table_impl_type(S::HashTableImplType::COLLISION_FREE_VECTOR);
+    hash_table_proto->set_estimated_num_entries(collision_free_vector_num_entries);
+
+    S::CollisionFreeVectorInfo *collision_free_vector_info_proto =
+        hash_table_proto->mutable_collision_free_vector_info();
+
+    const size_t memory_size = CacheLineAlignedBytes(
+        collision_free_vector_num_entries * CollisionFreeVector::payloadSize());
+
+    collision_free_vector_info_proto->set_memory_size(memory_size);
+    collision_free_vector_info_proto->set_num_init_partitions(
+        CalculateNumInitializationPartitionsForCollisionFreeVectorTable(memory_size));
+  } else {
+    join_hash_table_index = query_context_proto_->join_hash_tables_size();
+    hash_table_context_proto = query_context_proto_->add_join_hash_tables();
+
+    hash_table_proto = hash_table_context_proto->mutable_join_hash_table();
+
+    // SimplifyHashTableImplTypeProto() switches the hash table implementation
+    // from SeparateChaining to SimpleScalarSeparateChaining when there is a
+    // single scalar key type with a reversible hash function.
+    hash_table_proto->set_hash_table_impl_type(
+        SimplifyHashTableImplTypeProto(
+            HashTableImplTypeProtoFromString(FLAGS_join_hashtable_type),
+            key_types));
+    hash_table_proto->set_estimated_num_entries(build_cardinality);
+  }
+
   hash_table_context_proto->set_num_partitions(probe_num_partitions);
 
-  S::HashTable *hash_table_proto = hash_table_context_proto->mutable_join_hash_table();
-
-  // SimplifyHashTableImplTypeProto() switches the hash table implementation
-  // from SeparateChaining to SimpleScalarSeparateChaining when there is a
-  // single scalar key type with a reversible hash function.
-  hash_table_proto->set_hash_table_impl_type(
-      SimplifyHashTableImplTypeProto(
-          HashTableImplTypeProtoFromString(FLAGS_join_hashtable_type),
-          key_types));
-
   for (const attribute_id build_attribute : build_attribute_ids) {
-    hash_table_proto->add_key_types()->CopyFrom(
+    hash_table_proto->add_key_types()->MergeFrom(
         build_relation->getAttributeById(build_attribute)->getType().getProto());
   }
 
-  hash_table_proto->set_estimated_num_entries(build_cardinality);
-
   // Create three operators.
+  unique_ptr<RelationalOperator> op;
+  if (use_collision_free_vector_join) {
+    DCHECK_EQ(1u, build_attribute_ids.size());
+    op = make_unique<BuildVectorOperator>(query_handle_->query_id(),
+                                          *build_relation,
+                                          build_relation_info->isStoredRelation(),
+                                          build_attribute_ids.front(),
+                                          any_build_attributes_nullable,
+                                          probe_num_partitions,
+                                          join_hash_table_index);
+  } else {
+    op = make_unique<BuildHashOperator>(query_handle_->query_id(),
+                                        *build_relation,
+                                        build_relation_info->isStoredRelation(),
+                                        build_attribute_ids,
+                                        any_build_attributes_nullable,
+                                        probe_num_partitions,
+                                        join_hash_table_index);
+  }
+
   const QueryPlan::DAGNodeIndex build_operator_index =
-      execution_plan_->addRelationalOperator(
-          new BuildHashOperator(
-              query_handle_->query_id(),
-              *build_relation,
-              build_relation_info->isStoredRelation(),
-              build_attribute_ids,
-              any_build_attributes_nullable,
-              probe_num_partitions,
-              join_hash_table_index));
+      execution_plan_->addRelationalOperator(op.release());
+
+#if 0
+  if (use_collision_free_vector_join) {
+    const QueryPlan::DAGNodeIndex initialize_vector_operator_index =
+        execution_plan_->addRelationalOperator(
+            new InitializeVectorOperator(
+                query_handle_->query_id(),
+                join_hash_table_index,
+                probe_num_partitions,
+                hash_table_proto->collision_free_vector_info().num_init_partitions()));
+
+    execution_plan_->addDirectDependency(build_operator_index,
+                                         initialize_vector_operator_index,
+                                         true /* is_pipeline_breaker */);
+  }
+#endif
 
   // Create InsertDestination proto.
   const CatalogRelation *output_relation = nullptr;
@@ -1026,19 +1083,19 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
                                  insert_destination_proto);
 
   // Get JoinType
-  HashJoinOperator::JoinType join_type;
+  RelationalOperator::JoinType join_type;
   switch (physical_plan->join_type()) {
     case P::HashJoin::JoinType::kInnerJoin:
-      join_type = HashJoinOperator::JoinType::kInnerJoin;
+      join_type = RelationalOperator::JoinType::kInnerJoin;
       break;
     case P::HashJoin::JoinType::kLeftSemiJoin:
-      join_type = HashJoinOperator::JoinType::kLeftSemiJoin;
+      join_type = RelationalOperator::JoinType::kLeftSemiJoin;
       break;
     case P::HashJoin::JoinType::kLeftAntiJoin:
-      join_type = HashJoinOperator::JoinType::kLeftAntiJoin;
+      join_type = RelationalOperator::JoinType::kLeftAntiJoin;
       break;
     case P::HashJoin::JoinType::kLeftOuterJoin:
-      join_type = HashJoinOperator::JoinType::kLeftOuterJoin;
+      join_type = RelationalOperator::JoinType::kLeftOuterJoin;
       break;
     default:
       LOG(FATAL) << "Invalid physical::HashJoin::JoinType: "
@@ -1047,28 +1104,51 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
   }
 
   // Create hash join operator
+  if (use_collision_free_vector_join) {
+    DCHECK_EQ(1u, probe_attribute_ids.size());
+    op = make_unique<VectorJoinOperator>(query_handle_->query_id(),
+                                         *build_relation,
+                                         *probe_operator_info->relation,
+                                         probe_operator_info->isStoredRelation(),
+                                         probe_attribute_ids.front(),
+                                         any_probe_attributes_nullable,
+                                         probe_num_partitions,
+                                         *output_relation,
+                                         insert_destination_index,
+                                         join_hash_table_index,
+                                         residual_predicate_index,
+                                         project_expressions_group_index,
+                                         is_selection_on_build.get(),
+                                         join_type);
+  } else {
+    op = make_unique<HashJoinOperator>(query_handle_->query_id(),
+                                       *build_relation,
+                                       *probe_operator_info->relation,
+                                       probe_operator_info->isStoredRelation(),
+                                       probe_attribute_ids,
+                                       any_probe_attributes_nullable,
+                                       probe_num_partitions,
+                                       *output_relation,
+                                       insert_destination_index,
+                                       join_hash_table_index,
+                                       residual_predicate_index,
+                                       project_expressions_group_index,
+                                       is_selection_on_build.get(),
+                                       join_type);
+  }
   const QueryPlan::DAGNodeIndex join_operator_index =
-      execution_plan_->addRelationalOperator(
-          new HashJoinOperator(
-              query_handle_->query_id(),
-              *build_relation,
-              *probe_operator_info->relation,
-              probe_operator_info->isStoredRelation(),
-              probe_attribute_ids,
-              any_probe_attributes_nullable,
-              probe_num_partitions,
-              *output_relation,
-              insert_destination_index,
-              join_hash_table_index,
-              residual_predicate_index,
-              project_expressions_group_index,
-              is_selection_on_build.get(),
-              join_type));
+      execution_plan_->addRelationalOperator(op.release());
   insert_destination_proto->set_relational_op_index(join_operator_index);
 
+  if (use_collision_free_vector_join) {
+    op = make_unique<DestroyVectorOperator>(
+        query_handle_->query_id(), probe_num_partitions, join_hash_table_index);
+  } else {
+    op = make_unique<DestroyHashOperator>(
+        query_handle_->query_id(), probe_num_partitions, join_hash_table_index);
+  }
   const QueryPlan::DAGNodeIndex destroy_operator_index =
-      execution_plan_->addRelationalOperator(new DestroyHashOperator(
-          query_handle_->query_id(), probe_num_partitions, join_hash_table_index));
+      execution_plan_->addRelationalOperator(op.release());
 
   if (!build_relation_info->isStoredRelation()) {
     execution_plan_->addDirectDependency(build_operator_index,

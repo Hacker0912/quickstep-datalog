@@ -17,8 +17,8 @@
  * under the License.
  **/
 
-#ifndef QUICKSTEP_RELATIONAL_OPERATORS_HASH_JOIN_OPERATOR_HPP_
-#define QUICKSTEP_RELATIONAL_OPERATORS_HASH_JOIN_OPERATOR_HPP_
+#ifndef QUICKSTEP_RELATIONAL_OPERATORS_VECTOR_JOIN_OPERATOR_HPP_
+#define QUICKSTEP_RELATIONAL_OPERATORS_VECTOR_JOIN_OPERATOR_HPP_
 
 #include <cstddef>
 #include <memory>
@@ -34,7 +34,6 @@
 #include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
 #include "relational_operators/WorkOrder.pb.h"
-#include "storage/HashTable.hpp"
 #include "storage/InsertDestination.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "utility/Macros.hpp"
@@ -49,6 +48,7 @@ namespace tmb { class MessageBus; }
 namespace quickstep {
 
 class CatalogRelationSchema;
+class CollisionFreeVector;
 class Predicate;
 class Scalar;
 class StorageManager;
@@ -60,10 +60,10 @@ class WorkOrdersContainer;
  */
 
 /**
- * @brief An operator which performs a hash-join, including inner-join,
+ * @brief An operator which performs a vector-join, including inner-join,
  *        semi-join, anti-join and outer-join on two relations.
  **/
-class HashJoinOperator : public RelationalOperator {
+class VectorJoinOperator : public RelationalOperator {
  public:
   /**
    * @brief Constructor.
@@ -75,7 +75,7 @@ class HashJoinOperator : public RelationalOperator {
    *       evaluated using vectorized probing of the hash-table, but the
    *       residual predicate will be checked using non-vectorized
    *       tuple-at-a-time evaluation (similar to NestedLoopsJoinOperator).
-   *       Alternatively, a HashJoinOperator can be used to evaluate just the
+   *       Alternatively, a VectorJoinOperator can be used to evaluate just the
    *       key-equality predicate, and its output can be piped to a subsequent
    *       SelectOperator that can evaluate the residual predicate on the
    *       materialized output of the hash join with full vectorization support
@@ -92,15 +92,14 @@ class HashJoinOperator : public RelationalOperator {
    * @param probe_relation_is_stored If probe_relation is a stored relation or
    *        not. False if probe_relation is the output of some operator in the
    *        query plan DAG. True if probe_relation is a stored relation.
-   * @param join_key_attributes The IDs of equijoin attributes in
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
+   * @param join_key_attribute The equijoin attribute id in probe_relation.
+   * @param join_key_attribute_nullable If any attribute is nullable.
    * @param num_partitions The number of partitions in 'probe_relation'.
    *        If no partitions, it is one.
    * @param output_relation The output relation.
    * @param output_destination_index The index of the InsertDestination in the
    *        QueryContext to insert the join results.
-   * @param hash_table_index The index of the JoinHashTable in QueryContext.
+   * @param hash_table_index The index of the CollisionFreeVector in QueryContext.
    * @param residual_predicate_index If not kInvalidPredicateId, apply as an
    *        additional filter to pairs of tuples that match the hash-join (i.e.
    *        key equality) predicate. Effectively, this makes the join predicate
@@ -115,13 +114,13 @@ class HashJoinOperator : public RelationalOperator {
    *        joins since this information is not utilized by these joins.
    * @param join_type The type of join corresponding to this operator.
    **/
-  HashJoinOperator(
+  VectorJoinOperator(
       const std::size_t query_id,
       const CatalogRelation &build_relation,
       const CatalogRelation &probe_relation,
       const bool probe_relation_is_stored,
-      const std::vector<attribute_id> &join_key_attributes,
-      const bool any_join_key_attributes_nullable,
+      const attribute_id join_key_attribute,
+      const bool join_key_attribute_nullable,
       const std::size_t num_partitions,
       const CatalogRelation &output_relation,
       const QueryContext::insert_destination_id output_destination_index,
@@ -134,8 +133,8 @@ class HashJoinOperator : public RelationalOperator {
         build_relation_(build_relation),
         probe_relation_(probe_relation),
         probe_relation_is_stored_(probe_relation_is_stored),
-        join_key_attributes_(join_key_attributes),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
+        join_key_attribute_(join_key_attribute),
+        join_key_attribute_nullable_(join_key_attribute_nullable),
         num_partitions_(num_partitions),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
@@ -166,7 +165,7 @@ class HashJoinOperator : public RelationalOperator {
     }
   }
 
-  ~HashJoinOperator() override {}
+  ~VectorJoinOperator() override {}
 
   OperatorType getOperatorType() const override {
     switch (join_type_) {
@@ -179,23 +178,23 @@ class HashJoinOperator : public RelationalOperator {
       case JoinType::kLeftOuterJoin:
         return kLeftOuterJoin;
       default:
-        LOG(FATAL) << "Unknown join type in HashJoinOperator::getOperatorType()";
+        LOG(FATAL) << "Unknown join type in VectorJoinOperator::getOperatorType()";
     }
   }
 
   std::string getName() const override {
     switch (join_type_) {
       case JoinType::kInnerJoin:
-        return "HashJoinOperator";
+        return "VectorJoinOperator";
       case JoinType::kLeftSemiJoin:
-        return "HashJoinOperator(LeftSemi)";
+        return "VectorJoinOperator(LeftSemi)";
       case JoinType::kLeftAntiJoin:
-        return "HashJoinOperator(LeftAnti)";
+        return "VectorJoinOperator(LeftAnti)";
       case JoinType::kLeftOuterJoin:
-        return "HashJoinOperator(LeftOuter)";
+        return "VectorJoinOperator(LeftOuter)";
       default: break;
     }
-    LOG(FATAL) << "Unknown join type in HashJoinOperator::getName()";
+    LOG(FATAL) << "Unknown join type in VectorJoinOperator::getName()";
   }
 
   const CatalogRelation& build_relation() const {
@@ -229,7 +228,7 @@ class HashJoinOperator : public RelationalOperator {
   }
 
   void doneFeedingInputBlocks(const relation_id rel_id) override {
-    // The HashJoinOperator depends on BuildHashOperator too, but it
+    // The VectorJoinOperator depends on BuildHashOperator too, but it
     // should ignore a doneFeedingInputBlocks() message that comes
     // after completion of BuildHashOperator. Therefore we need this check.
     if (probe_relation_.getID() == rel_id) {
@@ -247,18 +246,20 @@ class HashJoinOperator : public RelationalOperator {
                                  QueryContext *query_context,
                                  StorageManager *storage_manager);
 
+  /*
   bool getAllNonOuterJoinWorkOrderProtos(
       WorkOrderProtosContainer *container,
-      const serialization::HashJoinWorkOrder::HashJoinWorkOrderType hash_join_type);
+      const serialization::VectorJoinWorkOrder::VectorJoinWorkOrderType vector_join_type);
 
   serialization::WorkOrder* createNonOuterJoinWorkOrderProto(
-      const serialization::HashJoinWorkOrder::HashJoinWorkOrderType hash_join_type,
+      const serialization::VectorJoinWorkOrder::VectorJoinWorkOrderType vector_join_type,
       const block_id block, const partition_id part_id);
+      */
 
   bool getAllOuterJoinWorkOrderProtos(WorkOrderProtosContainer *container);
 
   /**
-   * @brief Create HashOuterJoinWorkOrder proto.
+   * @brief Create VectorOuterJoinWorkOrder proto.
    *
    * @param block The block id used in the Work Order.
    **/
@@ -267,8 +268,8 @@ class HashJoinOperator : public RelationalOperator {
   const CatalogRelation &build_relation_;
   const CatalogRelation &probe_relation_;
   const bool probe_relation_is_stored_;
-  const std::vector<attribute_id> join_key_attributes_;
-  const bool any_join_key_attributes_nullable_;
+  const attribute_id join_key_attribute_;
+  const bool join_key_attribute_nullable_;
   const std::size_t num_partitions_;
   const CatalogRelation &output_relation_;
   const QueryContext::insert_destination_id output_destination_index_;
@@ -284,13 +285,13 @@ class HashJoinOperator : public RelationalOperator {
 
   bool started_;
 
-  DISALLOW_COPY_AND_ASSIGN(HashJoinOperator);
+  DISALLOW_COPY_AND_ASSIGN(VectorJoinOperator);
 };
 
 /**
- * @brief An inner join WorkOrder produced by HashJoinOperator.
+ * @brief An inner join WorkOrder produced by VectorJoinOperator.
  **/
-class HashInnerJoinWorkOrder : public WorkOrder {
+class VectorInnerJoinWorkOrder : public WorkOrder {
  public:
   /**
    * @brief Constructor.
@@ -300,9 +301,8 @@ class HashInnerJoinWorkOrder : public WorkOrder {
    *        on (i.e. the inner relation in the join).
    * @param probe_relation The relation to probe the hash table with (i.e. the
    *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
+   * @param join_key_attribute The equijoin attribute id in \c probe_relation.
+   * @param join_key_attribute_nullable If any attribute is nullable.
    * @param part_id The partition id of 'probe_relation'.
    * @param lookup_block_id The block id of the probe_relation.
    * @param residual_predicate If non-null, apply as an additional filter to
@@ -312,30 +312,30 @@ class HashInnerJoinWorkOrder : public WorkOrder {
    * @param selection A list of Scalars corresponding to the relation attributes
    *        in \c output_destination. Each Scalar is evaluated for the joined
    *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
+   * @param hash_table The CollisionFreeVector to use.
    * @param output_destination The InsertDestination to insert the join results.
    * @param storage_manager The StorageManager to use.
    * @param lip_filter_adaptive_prober The attached LIP filter prober.
    **/
-  HashInnerJoinWorkOrder(
+  VectorInnerJoinWorkOrder(
       const std::size_t query_id,
       const CatalogRelationSchema &build_relation,
       const CatalogRelationSchema &probe_relation,
-      const std::vector<attribute_id> &join_key_attributes,
-      const bool any_join_key_attributes_nullable,
+      const attribute_id join_key_attribute,
+      const bool join_key_attribute_nullable,
       const partition_id part_id,
       const block_id lookup_block_id,
       const Predicate *residual_predicate,
       const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
+      const CollisionFreeVector &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
       LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
       : WorkOrder(query_id),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
-        join_key_attributes_(join_key_attributes),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
+        join_key_attribute_(join_key_attribute),
+        join_key_attribute_nullable_(join_key_attribute_nullable),
         part_id_(part_id),
         block_id_(lookup_block_id),
         residual_predicate_(residual_predicate),
@@ -345,60 +345,7 @@ class HashInnerJoinWorkOrder : public WorkOrder {
         storage_manager_(DCHECK_NOTNULL(storage_manager)),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
 
-  /**
-   * @brief Constructor for the distributed version.
-   *
-   * @param query_id The ID of the query to which this WorkOrder belongs.
-   * @param build_relation The relation that the hash table was originally built
-   *        on (i.e. the inner relation in the join).
-   * @param probe_relation The relation to probe the hash table with (i.e. the
-   *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
-   * @param part_id The partition id of 'probe_relation'.
-   * @param lookup_block_id The block id of the probe_relation.
-   * @param residual_predicate If non-null, apply as an additional filter to
-   *        pairs of tuples that match the hash-join (i.e. key equality)
-   *        predicate. Effectively, this makes the join predicate the
-   *        conjunction of the key-equality predicate and residual_predicate.
-   * @param selection A list of Scalars corresponding to the relation attributes
-   *        in \c output_destination. Each Scalar is evaluated for the joined
-   *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
-   * @param output_destination The InsertDestination to insert the join results.
-   * @param storage_manager The StorageManager to use.
-   * @param lip_filter_adaptive_prober The attached LIP filter prober.
-   **/
-  HashInnerJoinWorkOrder(
-      const std::size_t query_id,
-      const CatalogRelationSchema &build_relation,
-      const CatalogRelationSchema &probe_relation,
-      std::vector<attribute_id> &&join_key_attributes,
-      const bool any_join_key_attributes_nullable,
-      const partition_id part_id,
-      const block_id lookup_block_id,
-      const Predicate *residual_predicate,
-      const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
-      InsertDestination *output_destination,
-      StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id),
-        build_relation_(build_relation),
-        probe_relation_(probe_relation),
-        join_key_attributes_(std::move(join_key_attributes)),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        part_id_(part_id),
-        block_id_(lookup_block_id),
-        residual_predicate_(residual_predicate),
-        selection_(selection),
-        hash_table_(hash_table),
-        output_destination_(DCHECK_NOTNULL(output_destination)),
-        storage_manager_(DCHECK_NOTNULL(storage_manager)),
-        lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
-
-  ~HashInnerJoinWorkOrder() override {}
+  ~VectorInnerJoinWorkOrder() override {}
 
   /**
    * @exception TupleTooLargeForBlock A tuple produced by this join was too
@@ -426,27 +373,27 @@ class HashInnerJoinWorkOrder : public WorkOrder {
 
   const CatalogRelationSchema &build_relation_;
   const CatalogRelationSchema &probe_relation_;
-  const std::vector<attribute_id> join_key_attributes_;
-  const bool any_join_key_attributes_nullable_;
+  const attribute_id join_key_attribute_;
+  const bool join_key_attribute_nullable_;
   const partition_id part_id_;
   const block_id block_id_;
   const Predicate *residual_predicate_;
   const std::vector<std::unique_ptr<const Scalar>> &selection_;
-  const JoinHashTable &hash_table_;
+  const CollisionFreeVector &hash_table_;
 
   InsertDestination *output_destination_;
   StorageManager *storage_manager_;
 
   std::unique_ptr<LIPFilterAdaptiveProber> lip_filter_adaptive_prober_;
 
-  DISALLOW_COPY_AND_ASSIGN(HashInnerJoinWorkOrder);
+  DISALLOW_COPY_AND_ASSIGN(VectorInnerJoinWorkOrder);
 };
 
 /**
- * @brief A left semi-join WorkOrder produced by the HashJoinOperator to execute
+ * @brief A left semi-join WorkOrder produced by the VectorJoinOperator to execute
  *        EXISTS() clause.
  **/
-class HashSemiJoinWorkOrder : public WorkOrder {
+class VectorSemiJoinWorkOrder : public WorkOrder {
  public:
   /**
    * @brief Constructor.
@@ -456,9 +403,8 @@ class HashSemiJoinWorkOrder : public WorkOrder {
    *        on (i.e. the inner relation in the join).
    * @param probe_relation The relation to probe the hash table with (i.e. the
    *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
+   * @param join_key_attribute The equijoin attribute id in \c probe_relation.
+   * @param join_key_attribute_nullable If any attribute is nullable.
    * @param part_id The partition id of 'probe_relation'.
    * @param lookup_block_id The block id of the probe_relation.
    * @param residual_predicate If non-null, apply as an additional filter to
@@ -468,30 +414,30 @@ class HashSemiJoinWorkOrder : public WorkOrder {
    * @param selection A list of Scalars corresponding to the relation attributes
    *        in \c output_destination. Each Scalar is evaluated for the joined
    *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
+   * @param hash_table The CollisionFreeVector to use.
    * @param output_destination The InsertDestination to insert the join results.
    * @param storage_manager The StorageManager to use.
    * @param lip_filter_adaptive_prober The attached LIP filter prober.
    **/
-  HashSemiJoinWorkOrder(
+  VectorSemiJoinWorkOrder(
       const std::size_t query_id,
       const CatalogRelationSchema &build_relation,
       const CatalogRelationSchema &probe_relation,
-      const std::vector<attribute_id> &join_key_attributes,
-      const bool any_join_key_attributes_nullable,
+      const attribute_id join_key_attribute,
+      const bool join_key_attribute_nullable,
       const partition_id part_id,
       const block_id lookup_block_id,
       const Predicate *residual_predicate,
       const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
+      const CollisionFreeVector &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
       LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
       : WorkOrder(query_id),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
-        join_key_attributes_(join_key_attributes),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
+        join_key_attribute_(join_key_attribute),
+        join_key_attribute_nullable_(join_key_attribute_nullable),
         part_id_(part_id),
         block_id_(lookup_block_id),
         residual_predicate_(residual_predicate),
@@ -501,60 +447,7 @@ class HashSemiJoinWorkOrder : public WorkOrder {
         storage_manager_(DCHECK_NOTNULL(storage_manager)),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
 
-  /**
-   * @brief Constructor for the distributed version.
-   *
-   * @param query_id The ID of the query to which this WorkOrder belongs.
-   * @param build_relation The relation that the hash table was originally built
-   *        on (i.e. the inner relation in the join).
-   * @param probe_relation The relation to probe the hash table with (i.e. the
-   *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
-   * @param part_id The partition id of 'probe_relation'.
-   * @param lookup_block_id The block id of the probe_relation.
-   * @param residual_predicate If non-null, apply as an additional filter to
-   *        pairs of tuples that match the hash-join (i.e. key equality)
-   *        predicate. Effectively, this makes the join predicate the
-   *        conjunction of the key-equality predicate and residual_predicate.
-   * @param selection A list of Scalars corresponding to the relation attributes
-   *        in \c output_destination. Each Scalar is evaluated for the joined
-   *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
-   * @param output_destination The InsertDestination to insert the join results.
-   * @param storage_manager The StorageManager to use.
-   * @param lip_filter_adaptive_prober The attached LIP filter prober.
-   **/
-  HashSemiJoinWorkOrder(
-      const std::size_t query_id,
-      const CatalogRelationSchema &build_relation,
-      const CatalogRelationSchema &probe_relation,
-      std::vector<attribute_id> &&join_key_attributes,
-      const bool any_join_key_attributes_nullable,
-      const partition_id part_id,
-      const block_id lookup_block_id,
-      const Predicate *residual_predicate,
-      const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
-      InsertDestination *output_destination,
-      StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id),
-        build_relation_(build_relation),
-        probe_relation_(probe_relation),
-        join_key_attributes_(std::move(join_key_attributes)),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        part_id_(part_id),
-        block_id_(lookup_block_id),
-        residual_predicate_(residual_predicate),
-        selection_(selection),
-        hash_table_(hash_table),
-        output_destination_(DCHECK_NOTNULL(output_destination)),
-        storage_manager_(DCHECK_NOTNULL(storage_manager)),
-        lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
-
-  ~HashSemiJoinWorkOrder() override {}
+  ~VectorSemiJoinWorkOrder() override {}
 
   void execute() override;
 
@@ -574,27 +467,27 @@ class HashSemiJoinWorkOrder : public WorkOrder {
 
   const CatalogRelationSchema &build_relation_;
   const CatalogRelationSchema &probe_relation_;
-  const std::vector<attribute_id> join_key_attributes_;
-  const bool any_join_key_attributes_nullable_;
+  const attribute_id join_key_attribute_;
+  const bool join_key_attribute_nullable_;
   const partition_id part_id_;
   const block_id block_id_;
   const Predicate *residual_predicate_;
   const std::vector<std::unique_ptr<const Scalar>> &selection_;
-  const JoinHashTable &hash_table_;
+  const CollisionFreeVector &hash_table_;
 
   InsertDestination *output_destination_;
   StorageManager *storage_manager_;
 
   std::unique_ptr<LIPFilterAdaptiveProber> lip_filter_adaptive_prober_;
 
-  DISALLOW_COPY_AND_ASSIGN(HashSemiJoinWorkOrder);
+  DISALLOW_COPY_AND_ASSIGN(VectorSemiJoinWorkOrder);
 };
 
 /**
- * @brief A left anti-join WorkOrder produced by the HashJoinOperator to execute
+ * @brief A left anti-join WorkOrder produced by the VectorJoinOperator to execute
  *        NOT EXISTS() clause.
  **/
-class HashAntiJoinWorkOrder : public WorkOrder {
+class VectorAntiJoinWorkOrder : public WorkOrder {
  public:
   /**
    * @brief Constructor.
@@ -604,9 +497,8 @@ class HashAntiJoinWorkOrder : public WorkOrder {
    *        on (i.e. the inner relation in the join).
    * @param probe_relation The relation to probe the hash table with (i.e. the
    *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
+   * @param join_key_attribute The equijoin attribute id in \c probe_relation.
+   * @param join_key_attribute_nullable If any attribute is nullable.
    * @param part_id The partition id of 'probe_relation'.
    * @param lookup_block_id The block id of the probe_relation.
    * @param residual_predicate If non-null, apply as an additional filter to
@@ -616,30 +508,30 @@ class HashAntiJoinWorkOrder : public WorkOrder {
    * @param selection A list of Scalars corresponding to the relation attributes
    *        in \c output_destination. Each Scalar is evaluated for the joined
    *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
+   * @param hash_table The CollisionFreeVector to use.
    * @param output_destination The InsertDestination to insert the join results.
    * @param storage_manager The StorageManager to use.
    * @param lip_filter_adaptive_prober The attached LIP filter prober.
    **/
-  HashAntiJoinWorkOrder(
+  VectorAntiJoinWorkOrder(
       const std::size_t query_id,
       const CatalogRelationSchema &build_relation,
       const CatalogRelationSchema &probe_relation,
-      const std::vector<attribute_id> &join_key_attributes,
-      const bool any_join_key_attributes_nullable,
+      const attribute_id join_key_attribute,
+      const bool join_key_attribute_nullable,
       const partition_id part_id,
       const block_id lookup_block_id,
       const Predicate *residual_predicate,
       const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
+      const CollisionFreeVector &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
       LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
       : WorkOrder(query_id),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
-        join_key_attributes_(join_key_attributes),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
+        join_key_attribute_(join_key_attribute),
+        join_key_attribute_nullable_(join_key_attribute_nullable),
         part_id_(part_id),
         block_id_(lookup_block_id),
         residual_predicate_(residual_predicate),
@@ -649,60 +541,7 @@ class HashAntiJoinWorkOrder : public WorkOrder {
         storage_manager_(DCHECK_NOTNULL(storage_manager)),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
 
-  /**
-   * @brief Constructor for the distributed version.
-   *
-   * @param query_id The ID of the query to which this WorkOrder belongs.
-   * @param build_relation The relation that the hash table was originally built
-   *        on (i.e. the inner relation in the join).
-   * @param probe_relation The relation to probe the hash table with (i.e. the
-   *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
-   * @param part_id The partition id of 'probe_relation'.
-   * @param lookup_block_id The block id of the probe_relation.
-   * @param residual_predicate If non-null, apply as an additional filter to
-   *        pairs of tuples that match the hash-join (i.e. key equality)
-   *        predicate. Effectively, this makes the join predicate the
-   *        conjunction of the key-equality predicate and residual_predicate.
-   * @param selection A list of Scalars corresponding to the relation attributes
-   *        in \c output_destination. Each Scalar is evaluated for the joined
-   *        tuples, and the resulting value is inserted into the join result.
-   * @param hash_table The JoinHashTable to use.
-   * @param output_destination The InsertDestination to insert the join results.
-   * @param storage_manager The StorageManager to use.
-   * @param lip_filter_adaptive_prober The attached LIP filter prober.
-   **/
-  HashAntiJoinWorkOrder(
-      const std::size_t query_id,
-      const CatalogRelationSchema &build_relation,
-      const CatalogRelationSchema &probe_relation,
-      std::vector<attribute_id> &&join_key_attributes,
-      const bool any_join_key_attributes_nullable,
-      const partition_id part_id,
-      const block_id lookup_block_id,
-      const Predicate *residual_predicate,
-      const std::vector<std::unique_ptr<const Scalar>> &selection,
-      const JoinHashTable &hash_table,
-      InsertDestination *output_destination,
-      StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id),
-        build_relation_(build_relation),
-        probe_relation_(probe_relation),
-        join_key_attributes_(std::move(join_key_attributes)),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        part_id_(part_id),
-        block_id_(lookup_block_id),
-        residual_predicate_(residual_predicate),
-        selection_(selection),
-        hash_table_(hash_table),
-        output_destination_(DCHECK_NOTNULL(output_destination)),
-        storage_manager_(DCHECK_NOTNULL(storage_manager)),
-        lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
-
-  ~HashAntiJoinWorkOrder() override {}
+  ~VectorAntiJoinWorkOrder() override {}
 
   void execute() override {
     output_destination_->setInputPartitionId(part_id_);
@@ -730,26 +569,26 @@ class HashAntiJoinWorkOrder : public WorkOrder {
 
   const CatalogRelationSchema &build_relation_;
   const CatalogRelationSchema &probe_relation_;
-  const std::vector<attribute_id> join_key_attributes_;
-  const bool any_join_key_attributes_nullable_;
+  const attribute_id join_key_attribute_;
+  const bool join_key_attribute_nullable_;
   const partition_id part_id_;
   const block_id block_id_;
   const Predicate *residual_predicate_;
   const std::vector<std::unique_ptr<const Scalar>> &selection_;
-  const JoinHashTable &hash_table_;
+  const CollisionFreeVector &hash_table_;
 
   InsertDestination *output_destination_;
   StorageManager *storage_manager_;
 
   std::unique_ptr<LIPFilterAdaptiveProber> lip_filter_adaptive_prober_;
 
-  DISALLOW_COPY_AND_ASSIGN(HashAntiJoinWorkOrder);
+  DISALLOW_COPY_AND_ASSIGN(VectorAntiJoinWorkOrder);
 };
 
 /**
- * @brief A left outer join WorkOrder produced by the HashJoinOperator.
+ * @brief A left outer join WorkOrder produced by the VectorJoinOperator.
  **/
-class HashOuterJoinWorkOrder : public WorkOrder {
+class VectorOuterJoinWorkOrder : public WorkOrder {
  public:
   /**
    * @brief Constructor.
@@ -759,9 +598,8 @@ class HashOuterJoinWorkOrder : public WorkOrder {
    *        on (i.e. the inner relation in the join).
    * @param probe_relation The relation to probe the hash table with (i.e. the
    *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
+   * @param join_key_attribute The equijoin attribute id in \c probe_relation.
+   * @param join_key_attribute_nullable If any attribute is nullable.
    * @param part_id The partition id of 'probe_relation'.
    * @param lookup_block_id The block id of the probe_relation.
    * @param selection A list of Scalars corresponding to the relation attributes
@@ -770,30 +608,30 @@ class HashOuterJoinWorkOrder : public WorkOrder {
    * @param is_selection_on_build Whether each Scalar in the \p selection vector
    *        is using attributes from the build relation as input. Note that the
    *        length of this vector should equal the length of \p selection.
-   * @param hash_table The JoinHashTable to use.
+   * @param hash_table The CollisionFreeVector to use.
    * @param output_destination The InsertDestination to insert the join results.
    * @param storage_manager The StorageManager to use.
    * @param lip_filter_adaptive_prober The attached LIP filter prober.
    **/
-  HashOuterJoinWorkOrder(
+  VectorOuterJoinWorkOrder(
       const std::size_t query_id,
       const CatalogRelationSchema &build_relation,
       const CatalogRelationSchema &probe_relation,
-      const std::vector<attribute_id> &join_key_attributes,
-      const bool any_join_key_attributes_nullable,
+      const attribute_id join_key_attribute,
+      const bool join_key_attribute_nullable,
       const partition_id part_id,
       const block_id lookup_block_id,
       const std::vector<std::unique_ptr<const Scalar>> &selection,
       const std::vector<bool> &is_selection_on_build,
-      const JoinHashTable &hash_table,
+      const CollisionFreeVector &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
       LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
       : WorkOrder(query_id),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
-        join_key_attributes_(join_key_attributes),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
+        join_key_attribute_(join_key_attribute),
+        join_key_attribute_nullable_(join_key_attribute_nullable),
         part_id_(part_id),
         block_id_(lookup_block_id),
         selection_(selection),
@@ -803,58 +641,7 @@ class HashOuterJoinWorkOrder : public WorkOrder {
         storage_manager_(storage_manager),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
 
-  /**
-   * @brief Constructor for the distributed version.
-   *
-   * @param query_id The ID of the query to which this WorkOrder belongs.
-   * @param build_relation The relation that the hash table was originally built
-   *        on (i.e. the inner relation in the join).
-   * @param probe_relation The relation to probe the hash table with (i.e. the
-   *        outer relation in the join).
-   * @param join_key_attributes The IDs of equijoin attributes in \c
-   *        probe_relation.
-   * @param any_join_key_attributes_nullable If any attribute is nullable.
-   * @param part_id The partition id of 'probe_relation'.
-   * @param lookup_block_id The block id of the probe_relation.
-   * @param selection A list of Scalars corresponding to the relation attributes
-   *        in \c output_destination. Each Scalar is evaluated for the joined
-   *        tuples, and the resulting value is inserted into the join result.
-   * @param is_selection_on_build Whether each Scalar in the \p selection vector
-   *        is using attributes from the build relation as input. Note that the
-   *        length of this vector should equal the length of \p selection.
-   * @param hash_table The JoinHashTable to use.
-   * @param output_destination The InsertDestination to insert the join results.
-   * @param storage_manager The StorageManager to use.
-   **/
-  HashOuterJoinWorkOrder(
-      const std::size_t query_id,
-      const CatalogRelationSchema &build_relation,
-      const CatalogRelationSchema &probe_relation,
-      std::vector<attribute_id> &&join_key_attributes,
-      const bool any_join_key_attributes_nullable,
-      const partition_id part_id,
-      const block_id lookup_block_id,
-      const std::vector<std::unique_ptr<const Scalar>> &selection,
-      std::vector<bool> &&is_selection_on_build,
-      const JoinHashTable &hash_table,
-      InsertDestination *output_destination,
-      StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id),
-        build_relation_(build_relation),
-        probe_relation_(probe_relation),
-        join_key_attributes_(std::move(join_key_attributes)),
-        any_join_key_attributes_nullable_(any_join_key_attributes_nullable),
-        part_id_(part_id),
-        block_id_(lookup_block_id),
-        selection_(selection),
-        is_selection_on_build_(std::move(is_selection_on_build)),
-        hash_table_(hash_table),
-        output_destination_(output_destination),
-        storage_manager_(storage_manager),
-        lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}
-
-  ~HashOuterJoinWorkOrder() override {}
+  ~VectorOuterJoinWorkOrder() override {}
 
   void execute() override;
 
@@ -870,24 +657,24 @@ class HashOuterJoinWorkOrder : public WorkOrder {
  private:
   const CatalogRelationSchema &build_relation_;
   const CatalogRelationSchema &probe_relation_;
-  const std::vector<attribute_id> join_key_attributes_;
-  const bool any_join_key_attributes_nullable_;
+  const attribute_id join_key_attribute_;
+  const bool join_key_attribute_nullable_;
   const partition_id part_id_;
   const block_id block_id_;
   const std::vector<std::unique_ptr<const Scalar>> &selection_;
   const std::vector<bool> is_selection_on_build_;
-  const JoinHashTable &hash_table_;
+  const CollisionFreeVector &hash_table_;
 
   InsertDestination *output_destination_;
   StorageManager *storage_manager_;
 
   std::unique_ptr<LIPFilterAdaptiveProber> lip_filter_adaptive_prober_;
 
-  DISALLOW_COPY_AND_ASSIGN(HashOuterJoinWorkOrder);
+  DISALLOW_COPY_AND_ASSIGN(VectorOuterJoinWorkOrder);
 };
 
 /** @} */
 
 }  // namespace quickstep
 
-#endif  // QUICKSTEP_RELATIONAL_OPERATORS_HASH_JOIN_OPERATOR_HPP_
+#endif  // QUICKSTEP_RELATIONAL_OPERATORS_VECTOR_JOIN_OPERATOR_HPP_

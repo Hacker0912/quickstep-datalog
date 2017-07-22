@@ -42,4 +42,7 @@ message HashTable {
   required HashTableImplType hash_table_impl_type = 1;
   repeated Type key_types = 2;
   required uint64 estimated_num_entries = 3;
+
+  // Required if 'hash_table_impl_type' is 'COLLISION_FREE_VECTOR'.
+  optional CollisionFreeVectorInfo collision_free_vector_info = 4;
 }

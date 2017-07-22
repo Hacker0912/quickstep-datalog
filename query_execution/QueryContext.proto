@@ -29,6 +29,7 @@ import "types/containers/Tuple.proto";
 import "utility/SortConfiguration.proto";
 import "utility/lip_filter/LIPFilter.proto";
 
+// Next tag: 17.
 message QueryContext {
   message AggregationOperationStateContext {
     required AggregationOperationState aggregation_state = 1;
@@ -57,6 +58,7 @@ message QueryContext {
 
   repeated AggregationOperationStateContext aggregation_states = 1;
   repeated GeneratorFunctionHandle generator_functions = 2;
+  repeated HashTableContext collision_free_vectors = 16;
   repeated HashTableContext join_hash_tables = 3;
   repeated InsertDestination insert_destinations = 4;
   repeated LIPFilter lip_filters = 5;
