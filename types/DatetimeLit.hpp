@@ -38,8 +38,7 @@ namespace quickstep {
 struct DateLit {
   // Note that although there is no year 0 in the Gregorian calendar, ISO 8601
   // has year 0 equivalent to 1 BCE, year -1 equivalent to 2 BCE, and so on.
-  std::int32_t year;
-  std::uint8_t month, day;
+  std::uint64_t code;
 
   // The maximum number of characters needed to represent any date in ISO 8601
   // notation.
@@ -51,53 +50,54 @@ struct DateLit {
         + 1   // -
         + 2;  // Day
 
-  static DateLit Create(const std::int32_t _year,
-                        const std::uint8_t _month,
-                        const std::uint8_t _day) {
+  static constexpr std::uint32_t kYearSign = static_cast<std::uint32_t>(1) << 31;
+
+  inline static DateLit Create(const std::int32_t year,
+                               const std::uint8_t month,
+                               const std::uint8_t day) {
     DateLit date;
-    date.year = _year;
-    date.month = _month;
-    date.day = _day;
+    date.code = static_cast<std::uint64_t>(
+                    static_cast<std::uint32_t>(year) ^ kYearSign) << 32
+                | static_cast<std::uint64_t>(month) << 16
+                | static_cast<std::uint64_t>(day);
 
     return date;
   }
 
-  inline bool operator< (const DateLit& rhs) const {
-    return (year != rhs.year)
-        ? (year < rhs.year)
-        : ((month != rhs.month) ? (month < rhs.month) : (day < rhs.day));
+  inline bool operator<(const DateLit& rhs) const {
+    return code < rhs.code;
   }
 
   inline bool operator> (const DateLit& rhs) const {
-    return (year != rhs.year)
-        ? (year > rhs.year)
-        : ((month != rhs.month) ? (month > rhs.month) : (day > rhs.day));
+    return code > rhs.code;
   }
 
   inline bool operator<=(const DateLit& rhs) const {
-    return !(*this > rhs);
+    return code <= rhs.code;
   }
 
   inline bool operator>=(const DateLit& rhs) const {
-    return !(*this < rhs);
+    return code >= rhs.code;
   }
 
   inline bool operator==(const DateLit& rhs) const {
-    return (year == rhs.year) &&
-           (month == rhs.month) &&
-           (day == rhs.day);
+    return code == rhs.code;
   }
 
   inline bool operator!=(const DateLit& rhs) const {
-    return !(*this == rhs);
+    return code != rhs.code;
   }
 
   inline std::int32_t yearField() const {
-    return year;
+    return static_cast<std::int32_t>(code >> 32) ^ kYearSign;
   }
 
-  inline std::int32_t monthField() const {
-    return static_cast<std::int32_t>(month);
+  inline std::uint8_t monthField() const {
+    return static_cast<std::uint8_t>(code >> 16);
+  }
+
+  inline std::uint8_t dayField() const {
+    return static_cast<std::uint8_t>(code);
   }
 };
 

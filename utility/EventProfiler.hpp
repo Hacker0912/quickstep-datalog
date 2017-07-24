@@ -142,6 +142,22 @@ class EventProfiler {
     }
   }
 
+  void summarizeToStream(std::ostream &os) const {
+    std::map<TagT, double> time_slots;
+    for (const auto &thread_ctx : thread_map_) {
+      for (const auto &event_group : thread_ctx.second.events) {
+        auto &time_sum = time_slots[event_group.first];
+        for (const auto &event_info : event_group.second) {
+          time_sum += std::chrono::duration<double>(
+              event_info.end_time - event_info.start_time).count();
+        }
+      }
+    }
+    for (const auto &pair : time_slots) {
+      os << pair.first << ": \t\t" << pair.second << " seconds\n";
+    }
+  }
+
   void clear() {
     zero_time_ = clock::now();
     thread_map_.clear();
@@ -180,7 +196,7 @@ class EventProfiler {
   SpinMutex mutex_;
 };
 
-extern EventProfiler<std::string, std::string, std::string, std::size_t, std::size_t> simple_profiler;
+extern EventProfiler<std::string> simple_profiler;
 
 /** @} */
 

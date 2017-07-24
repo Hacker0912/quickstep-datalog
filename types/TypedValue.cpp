@@ -111,9 +111,9 @@ serialization::TypedValue TypedValue::getProto() const {
       proto.set_type_id(serialization::Type::DATE);
       if (!isNull()) {
         serialization::TypedValue::DateLit *literal_date_proto = proto.mutable_date_value();
-        literal_date_proto->set_year(value_union_.date_value.year);
-        literal_date_proto->set_month(value_union_.date_value.month);
-        literal_date_proto->set_day(value_union_.date_value.day);
+        literal_date_proto->set_year(value_union_.date_value.yearField());
+        literal_date_proto->set_month(value_union_.date_value.monthField());
+        literal_date_proto->set_day(value_union_.date_value.dayField());
       }
       break;
     case kDatetime:

@@ -432,6 +432,7 @@ int main(int argc, char* argv[]) {
             quickstep::simple_profiler.writeToStream(ofs);
             ofs.close();
           }
+          quickstep::simple_profiler.summarizeToStream(std::cerr);
         } catch (const std::exception &e) {
           fprintf(io_handle->err(), "QUERY EXECUTION ERROR: %s\n", e.what());
           break;

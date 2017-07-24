@@ -302,6 +302,7 @@ target_link_libraries(quickstep_storage_AggregationOperationState
                       quickstep_types_containers_ColumnVectorsValueAccessor
                       quickstep_types_containers_Tuple
                       quickstep_utility_ColumnVectorCache
+                      quickstep_utility_EventProfiler
                       quickstep_utility_Macros
                       quickstep_utility_lipfilter_LIPFilterAdaptiveProber)
 target_link_libraries(quickstep_storage_AggregationOperationState_proto

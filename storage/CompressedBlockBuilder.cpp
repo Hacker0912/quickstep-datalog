@@ -43,7 +43,6 @@
 #include "types/operations/comparisons/ComparisonUtil.hpp"
 #include "utility/BitManipulation.hpp"
 #include "utility/BitVector.hpp"
-#include "utility/EventProfiler.hpp"
 #include "utility/Macros.hpp"
 
 using std::numeric_limits;
@@ -588,9 +587,6 @@ void CompressedBlockBuilder::rollbackLastInsert(
 std::size_t CompressedBlockBuilder::buildTupleStorageSubBlockHeader(void *sub_block_memory) {
   // Build up the CompressedBlockInfo.
   size_t uncompressed_attributes_with_nulls = 0;
-  auto *container = simple_profiler.getContainer();
-  auto *eline = container->getEventLine(relation_.getName());
-
   for (CatalogRelationSchema::const_iterator attr_it = relation_.begin();
        attr_it != relation_.end();
        ++attr_it) {
@@ -600,10 +596,8 @@ std::size_t CompressedBlockBuilder::buildTupleStorageSubBlockHeader(void *sub_bl
                                 && null_present_[attr_id];
     PtrMap<attribute_id, CompressionDictionaryBuilder>::const_iterator dictionary_it
         = dictionary_builders_.find(attr_id);
-    eline->emplace_back();
     if (dictionary_it == dictionary_builders_.end()) {
       // This attribute is not compressed.
-      eline->back().setPayload("none", attr_it->getDisplayName(), 0, 0);
       compression_info_.set_attribute_size(attr_id,
                                            attr_type.maximumByteLength());
       compression_info_.set_dictionary_size(attr_id, 0);
@@ -613,7 +607,6 @@ std::size_t CompressedBlockBuilder::buildTupleStorageSubBlockHeader(void *sub_bl
       uncompressed_attributes_with_nulls += attr_has_nulls;
     } else if (attr_type.isVariableLength()) {
       // Variable-length types MUST use dictionary compression.
-      eline->back().setPayload("vardict", attr_it->getDisplayName(), 0, 0);
       compression_info_.set_attribute_size(attr_id,
                                            dictionary_it->second->codeLengthPaddedBytes());
       compression_info_.set_dictionary_size(attr_id,
@@ -641,16 +634,12 @@ std::size_t CompressedBlockBuilder::buildTupleStorageSubBlockHeader(void *sub_bl
 
       // Choose the method that uses space most efficiently.
       if (truncated_bytes + null_bitmap_bytes < dictionary_bytes) {
-        eline->back().setPayload("truncate", attr_it->getDisplayName(),
-                                 truncated_bytes, dictionary_bytes);
         compression_info_.set_attribute_size(attr_id,
                                              computeTruncatedByteLengthForAttribute(attr_id));
         compression_info_.set_dictionary_size(attr_id, 0);
         compression_info_.set_uncompressed_attribute_has_nulls(attr_id, attr_has_nulls);
         uncompressed_attributes_with_nulls += attr_has_nulls;
       } else {
-        eline->back().setPayload("dict", attr_it->getDisplayName(),
-                                 truncated_bytes, dictionary_bytes);
         compression_info_.set_attribute_size(attr_id,
                                              dictionary_it->second->codeLengthPaddedBytes());
         compression_info_.set_dictionary_size(attr_id,
@@ -658,7 +647,6 @@ std::size_t CompressedBlockBuilder::buildTupleStorageSubBlockHeader(void *sub_bl
         compression_info_.set_uncompressed_attribute_has_nulls(attr_id, false);
       }
     }
-    eline->back().endEvent();
   }
 
   if (uncompressed_attributes_with_nulls > 0) {
