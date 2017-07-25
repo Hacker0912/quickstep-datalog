@@ -17,25 +17,11 @@
  * under the License.
  **/
 
-#include "types/TypeID.hpp"
+#ifndef QUICKSTEP_UTILITY_META_TMP_HPP_
+#define QUICKSTEP_UTILITY_META_TMP_HPP_
 
-namespace quickstep {
+#include "utility/meta/Common.hpp"
+#include "utility/meta/Dispatchers.hpp"
+#include "utility/meta/TypeList.hpp"
 
-const char *kTypeNames[] = {
-  "Int",
-  "Long",
-  "Float",
-  "Double",
-  "Decimal(2)",
-  "Decimal(4)",
-  "Decimal(6)",
-  "Char",
-  "VarChar",
-  "Date",
-  "Datetime",
-  "DatetimeInterval",
-  "YearMonthInterval",
-  "NullType"
-};
-
-}  // namespace quickstep
+#endif  // QUICKSTEP_UTILITY_META_TMP_HPP_

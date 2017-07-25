@@ -27,8 +27,10 @@
 #include <functional>
 
 #include "types/DatetimeLit.hpp"
+#include "types/DecimalLit.hpp"
 #include "types/IntervalLit.hpp"
 #include "types/TypeID.hpp"
+#include "types/TypeTraits.hpp"
 #include "types/TypedValue.pb.h"
 #include "types/port/strnlen.hpp"
 #include "utility/HashPair.hpp"
@@ -126,6 +128,15 @@ class TypedValue {
       : value_info_(static_cast<std::uint64_t>(kDouble)) {
     // Canonicalize negative zero.
     value_union_.double_value = literal_double == 0 ? 0 : literal_double;
+  }
+
+  /**
+   * @brief Constructor for a literal value of DecimalType.
+   **/
+  template <std::int64_t scale>
+  explicit TypedValue(const DecimalLit<scale> literal_decimal)
+      : value_info_(static_cast<std::uint64_t>(DecimalTypeTrait<scale>::kStaticTypeID)) {
+    value_union_.decimal_value = literal_decimal.data;
   }
 
   /**
@@ -286,6 +297,9 @@ class TypedValue {
       case kLong:
       case kFloat:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:
@@ -318,6 +332,9 @@ class TypedValue {
         return sizeof(value_union_.int_value) <= sizeof(std::size_t);
       case kLong:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:
@@ -396,6 +413,9 @@ class TypedValue {
         return sizeof(int);
       case kLong:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:
@@ -482,6 +502,9 @@ class TypedValue {
                    || getTypeID() == kLong
                    || getTypeID() == kFloat
                    || getTypeID() == kDouble
+                   || getTypeID() == kDecimal2
+                   || getTypeID() == kDecimal4
+                   || getTypeID() == kDecimal6
                    || getTypeID() == kDate
                    || getTypeID() == kDatetime
                    || getTypeID() == kDatetimeInterval
@@ -578,6 +601,9 @@ class TypedValue {
       case kLong:
       case kFloat:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:
@@ -674,6 +700,9 @@ class TypedValue {
       case kLong:
       case kFloat:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:
@@ -793,6 +822,7 @@ class TypedValue {
     std::int64_t long_value;
     float float_value;
     double double_value;
+    std::int64_t decimal_value;
     const void* out_of_line_data;
     DateLit date_value;
     DatetimeLit datetime_value;
@@ -867,6 +897,27 @@ inline double TypedValue::getLiteral<double>() const {
   DCHECK_EQ(kDouble, getTypeID());
   DCHECK(!isNull());
   return value_union_.double_value;
+}
+
+template <>
+inline DecimalLit<2> TypedValue::getLiteral<DecimalLit<2>>() const {
+  DCHECK_EQ(kDecimal2, getTypeID());
+  DCHECK(!isNull());
+  return DecimalLit<2>::FromData(value_union_.decimal_value);
+}
+
+template <>
+inline DecimalLit<4> TypedValue::getLiteral<DecimalLit<4>>() const {
+  DCHECK_EQ(kDecimal4, getTypeID());
+  DCHECK(!isNull());
+  return DecimalLit<4>::FromData(value_union_.decimal_value);
+}
+
+template <>
+inline DecimalLit<6> TypedValue::getLiteral<DecimalLit<6>>() const {
+  DCHECK_EQ(kDecimal6, getTypeID());
+  DCHECK(!isNull());
+  return DecimalLit<6>::FromData(value_union_.decimal_value);
 }
 
 template <>

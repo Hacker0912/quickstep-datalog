@@ -54,6 +54,9 @@ class TypeFactory {
       case kLong:
       case kFloat:
       case kDouble:
+      case kDecimal2:
+      case kDecimal4:
+      case kDecimal6:
       case kDate:
       case kDatetime:
       case kDatetimeInterval:

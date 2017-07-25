@@ -39,6 +39,9 @@ struct DatetimeIntervalLit;
 struct DatetimeLit;
 struct YearMonthIntervalLit;
 
+template <std::int64_t>
+struct DecimalLit;
+
 /** \addtogroup Types
  *  @{
  */
@@ -373,6 +376,12 @@ class Type {
         return TypedValue(*static_cast<const float*>(value_ptr));
       case kDouble:
         return TypedValue(*static_cast<const double*>(value_ptr));
+      case kDecimal2:
+        return TypedValue(*static_cast<const DecimalLit<2>*>(value_ptr));
+      case kDecimal4:
+        return TypedValue(*static_cast<const DecimalLit<4>*>(value_ptr));
+      case kDecimal6:
+        return TypedValue(*static_cast<const DecimalLit<6>*>(value_ptr));
       case kDate:
         return TypedValue(*static_cast<const DateLit*>(value_ptr));
       case kDatetime:

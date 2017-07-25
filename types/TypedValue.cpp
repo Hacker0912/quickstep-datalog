@@ -51,6 +51,9 @@ bool TypedValue::isPlausibleInstanceOf(const TypeSignature type) const {
     case kLong:
     case kFloat:
     case kDouble:
+    case kDecimal2:
+    case kDecimal4:
+    case kDecimal6:
     case kDate:
     case kDatetime:
     case kDatetimeInterval:
@@ -105,6 +108,24 @@ serialization::TypedValue TypedValue::getProto() const {
       proto.set_type_id(serialization::Type::DOUBLE);
       if (!isNull()) {
         proto.set_double_value(getLiteral<double>());
+      }
+      break;
+    case kDecimal2:
+      proto.set_type_id(serialization::Type::DECIMAL2);
+      if (!isNull()) {
+        proto.set_decimal_value(value_union_.decimal_value);
+      }
+      break;
+    case kDecimal4:
+      proto.set_type_id(serialization::Type::DECIMAL4);
+      if (!isNull()) {
+        proto.set_decimal_value(value_union_.decimal_value);
+      }
+      break;
+    case kDecimal6:
+      proto.set_type_id(serialization::Type::DECIMAL6);
+      if (!isNull()) {
+        proto.set_decimal_value(value_union_.decimal_value);
       }
       break;
     case kDate:
@@ -183,6 +204,18 @@ TypedValue TypedValue::ReconstructFromProto(const serialization::TypedValue &pro
       return proto.has_double_value() ?
           TypedValue(static_cast<double>(proto.double_value())) :
           TypedValue(kDouble);
+    case serialization::Type::DECIMAL2:
+      return proto.has_decimal_value() ?
+          TypedValue(DecimalLit<2>::FromData(proto.decimal_value())) :
+          TypedValue(kDecimal2);
+    case serialization::Type::DECIMAL4:
+      return proto.has_decimal_value() ?
+          TypedValue(DecimalLit<4>::FromData(proto.decimal_value())) :
+          TypedValue(kDecimal4);
+    case serialization::Type::DECIMAL6:
+      return proto.has_decimal_value() ?
+          TypedValue(DecimalLit<6>::FromData(proto.decimal_value())) :
+          TypedValue(kDecimal6);
     case serialization::Type::DATE:
       if (proto.has_date_value()) {
         return TypedValue(DateLit::Create(proto.date_value().year(),

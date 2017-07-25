@@ -51,6 +51,17 @@ bool MultiplyBinaryOperation::canApplyToTypes(const Type &left, const Type &righ
               right.getTypeID() == kDatetimeInterval   ||
               right.getTypeID() == kYearMonthInterval);
     }
+    case kDecimal2: {
+      return QUICKSTEP_EQUALS_ANY_CONSTANT(
+          right.getTypeID(), kInt, kLong, kDecimal2, kDecimal4);
+    }
+    case kDecimal4: {
+      return QUICKSTEP_EQUALS_ANY_CONSTANT(
+          right.getTypeID(), kInt, kLong, kDecimal2);
+    }
+    case kDecimal6: {
+      return QUICKSTEP_EQUALS_ANY_CONSTANT(right.getTypeID(), kInt, kLong);
+    }
     case kDatetimeInterval:
     case kYearMonthInterval: {
       return (right.getSuperTypeID() == Type::kNumeric);

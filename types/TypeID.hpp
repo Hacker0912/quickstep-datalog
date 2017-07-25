@@ -29,11 +29,14 @@ namespace quickstep {
  *
  * @note TypedValue assumes that this doesn't exceed 64 TypeIDs.
  **/
-enum TypeID {
+enum TypeID : int {
   kInt = 0,
   kLong,
   kFloat,
   kDouble,
+  kDecimal2,
+  kDecimal4,
+  kDecimal6,
   kChar,
   kVarChar,
   kDate,

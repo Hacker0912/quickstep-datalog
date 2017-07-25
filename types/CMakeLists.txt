@@ -38,6 +38,8 @@ add_library(quickstep_types_DateType DateType.cpp DateType.hpp)
 add_library(quickstep_types_DatetimeIntervalType DatetimeIntervalType.cpp DatetimeIntervalType.hpp)
 add_library(quickstep_types_DatetimeLit ../empty_src.cpp DatetimeLit.hpp)
 add_library(quickstep_types_DatetimeType DatetimeType.cpp DatetimeType.hpp)
+add_library(quickstep_types_DecimalLit ../empty_src.cpp DecimalLit.hpp)
+add_library(quickstep_types_DecimalType DecimalType.cpp DecimalType.hpp)
 add_library(quickstep_types_DoubleType DoubleType.cpp DoubleType.hpp)
 add_library(quickstep_types_FloatType FloatType.cpp FloatType.hpp)
 add_library(quickstep_types_IntType IntType.cpp IntType.hpp)
@@ -52,6 +54,7 @@ add_library(quickstep_types_Type Type.cpp Type.hpp)
 add_library(quickstep_types_TypeErrors ../empty_src.cpp TypeErrors.hpp)
 add_library(quickstep_types_TypeFactory TypeFactory.cpp TypeFactory.hpp)
 add_library(quickstep_types_TypeID TypeID.cpp TypeID.hpp)
+add_library(quickstep_types_TypeTraits ../empty_src.cpp TypeTraits.hpp)
 add_library(quickstep_types_Type_proto ${types_Type_proto_srcs})
 add_library(quickstep_types_TypedValue TypedValue.cpp TypedValue.hpp)
 add_library(quickstep_types_TypedValue_proto ${types_TypedValue_proto_srcs})
@@ -105,6 +108,19 @@ target_link_libraries(quickstep_types_DatetimeType
                       quickstep_types_port_gmtime_r
                       quickstep_types_port_timegm
                       quickstep_utility_CheckSnprintf
+                      quickstep_utility_Macros)
+target_link_libraries(quickstep_types_DecimalLit
+                      quickstep_utility_meta_Common
+                      quickstep_utility_meta_Math)
+target_link_libraries(quickstep_types_DecimalType
+                      quickstep_types_DecimalLit
+                      quickstep_types_NullCoercibilityCheckMacro
+                      quickstep_types_NumericSuperType
+                      quickstep_types_Type
+                      quickstep_types_TypeID
+                      quickstep_types_TypeTraits
+                      quickstep_types_TypedValue
+                      quickstep_utility_EqualsAnyConstant
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_types_DoubleType
                       quickstep_types_NullCoercibilityCheckMacro
@@ -171,6 +187,7 @@ target_link_libraries(quickstep_types_TypeFactory
                       quickstep_types_DateType
                       quickstep_types_DatetimeIntervalType
                       quickstep_types_DatetimeType
+                      quickstep_types_DecimalType
                       quickstep_types_DoubleType
                       quickstep_types_FloatType
                       quickstep_types_IntType
@@ -182,12 +199,16 @@ target_link_libraries(quickstep_types_TypeFactory
                       quickstep_types_VarCharType
                       quickstep_types_YearMonthIntervalType
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_types_TypeTraits
+                      quickstep_types_TypeID)
 target_link_libraries(quickstep_types_TypedValue
                       farmhash
                       glog
                       quickstep_types_DatetimeLit
+                      quickstep_types_DecimalLit
                       quickstep_types_IntervalLit
                       quickstep_types_TypeID
+                      quickstep_types_TypeTraits
                       quickstep_types_Type_proto
                       quickstep_types_TypedValue_proto
                       quickstep_types_port_strnlen
@@ -227,6 +248,8 @@ target_link_libraries(quickstep_types
                       quickstep_types_DatetimeIntervalType
                       quickstep_types_DatetimeLit
                       quickstep_types_DatetimeType
+                      quickstep_types_DecimalType
+                      quickstep_types_DecimalLit
                       quickstep_types_DoubleType
                       quickstep_types_FloatType
                       quickstep_types_IntType
@@ -238,6 +261,7 @@ target_link_libraries(quickstep_types
                       quickstep_types_NumericSuperType
                       quickstep_types_NumericTypeUnifier
                       quickstep_types_Type
+                      quickstep_types_TypeTraits
                       quickstep_types_Type_proto
                       quickstep_types_TypeErrors
                       quickstep_types_TypeFactory

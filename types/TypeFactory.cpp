@@ -26,6 +26,7 @@
 #include "types/DateType.hpp"
 #include "types/DatetimeIntervalType.hpp"
 #include "types/DatetimeType.hpp"
+#include "types/DecimalType.hpp"
 #include "types/DoubleType.hpp"
 #include "types/FloatType.hpp"
 #include "types/IntType.hpp"
@@ -53,6 +54,12 @@ const Type& TypeFactory::GetType(const TypeID id,
       return FloatType::Instance(nullable);
     case kDouble:
       return DoubleType::Instance(nullable);
+    case kDecimal2:
+      return DecimalType<2>::Instance(nullable);
+    case kDecimal4:
+      return DecimalType<4>::Instance(nullable);
+    case kDecimal6:
+      return DecimalType<6>::Instance(nullable);
     case kDate:
       return DateType::Instance(nullable);
     case kDatetime:
@@ -96,6 +103,9 @@ bool TypeFactory::ProtoIsValid(const serialization::Type &proto) {
     case serialization::Type::LONG:
     case serialization::Type::FLOAT:
     case serialization::Type::DOUBLE:
+    case serialization::Type::DECIMAL2:
+    case serialization::Type::DECIMAL4:
+    case serialization::Type::DECIMAL6:
     case serialization::Type::DATE:
     case serialization::Type::DATETIME:
     case serialization::Type::DATETIME_INTERVAL:
@@ -126,6 +136,12 @@ const Type& TypeFactory::ReconstructFromProto(const serialization::Type &proto) 
       return FloatType::Instance(proto.nullable());
     case serialization::Type::DOUBLE:
       return DoubleType::Instance(proto.nullable());
+    case serialization::Type::DECIMAL2:
+      return DecimalType<2>::Instance(proto.nullable());
+    case serialization::Type::DECIMAL4:
+      return DecimalType<4>::Instance(proto.nullable());
+    case serialization::Type::DECIMAL6:
+      return DecimalType<6>::Instance(proto.nullable());
     case serialization::Type::DATE:
       return DateType::Instance(proto.nullable());
     case serialization::Type::DATETIME:

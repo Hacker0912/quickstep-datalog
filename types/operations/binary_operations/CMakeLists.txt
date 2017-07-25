@@ -55,18 +55,21 @@ target_link_libraries(quickstep_types_operations_binaryoperations_AddBinaryOpera
                       quickstep_types_DatetimeIntervalType
                       quickstep_types_DatetimeLit
                       quickstep_types_DatetimeType
+                      quickstep_types_DecimalType
                       quickstep_types_IntervalLit
                       quickstep_types_Type
                       quickstep_types_TypeErrors
                       quickstep_types_TypeFactory
                       quickstep_types_TypeID
+                      quickstep_types_TypeTraits
                       quickstep_types_TypedValue
                       quickstep_types_YearMonthIntervalType
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperation
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperators
                       quickstep_types_operations_binaryoperations_BinaryOperationID
                       quickstep_utility_EqualsAnyConstant
-                      quickstep_utility_Macros)
+                      quickstep_utility_Macros
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_binaryoperations_ArithmeticBinaryOperation
                       glog
                       quickstep_types_DoubleType

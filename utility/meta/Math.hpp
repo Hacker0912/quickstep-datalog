@@ -17,25 +17,24 @@
  * under the License.
  **/
 
-#include "types/TypeID.hpp"
+#ifndef QUICKSTEP_UTILITY_META_MATH_HPP_
+#define QUICKSTEP_UTILITY_META_MATH_HPP_
 
 namespace quickstep {
+namespace meta {
 
-const char *kTypeNames[] = {
-  "Int",
-  "Long",
-  "Float",
-  "Double",
-  "Decimal(2)",
-  "Decimal(4)",
-  "Decimal(6)",
-  "Char",
-  "VarChar",
-  "Date",
-  "Datetime",
-  "DatetimeInterval",
-  "YearMonthInterval",
-  "NullType"
-};
+template <typename T>
+inline constexpr T Sqr(T arg) {
+  return arg * arg;
+}
 
+template <typename T>
+inline constexpr T Pow(T base, T exponent) {
+  return  exponent == 0 ?
+      1 : Sqr(Pow(base, exponent >> 1)) * ((exponent & 1) ? base : 1);
+}
+
+}  // namespace meta
 }  // namespace quickstep
+
+#endif  // QUICKSTEP_UTILITY_META_MATH_HPP_
