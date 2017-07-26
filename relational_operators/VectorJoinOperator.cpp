@@ -812,7 +812,7 @@ void VectorSemiJoinWorkOrder::executeWithoutResidualPredicate() {
   // because there is no residual predicate in this case, unlike
   // executeWithResidualPredicate().
   // Call the collector to set the bit to 0 for every key without a match.
-  hash_table_.runOverKeysFromValueAccessorIfMatchNotFound(
+  hash_table_.runOverKeysFromValueAccessor<false>(
       probe_accessor.get(),
       join_key_attribute_,
       join_key_attribute_nullable_,
@@ -864,7 +864,7 @@ void VectorAntiJoinWorkOrder::executeWithoutResidualPredicate() {
   // We probe the hash table to find the keys which have an entry in the
   // hash table.
   // Call the collector to set the bit to 0 for every key with a match.
-  hash_table_.runOverKeysFromValueAccessorIfMatchFound(
+  hash_table_.runOverKeysFromValueAccessor<true>(
       probe_accessor.get(),
       join_key_attribute_,
       join_key_attribute_nullable_,

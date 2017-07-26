@@ -445,12 +445,14 @@ endif()
 # CMAKE_VALIDATE_IGNORE_END
 target_link_libraries(quickstep_storage_CollisionFreeVector
                       glog
-                      quickstep_storage_HashTable
                       quickstep_storage_HashTable_proto
                       quickstep_storage_StorageBlob
                       quickstep_storage_StorageBlockInfo
                       quickstep_storage_StorageConstants
                       quickstep_storage_StorageManager
+                      quickstep_storage_ValueAccessor
+                      quickstep_storage_ValueAccessorUtil
+                      quickstep_types_Type
                       quickstep_types_TypeFactory
                       quickstep_types_TypeID
                       quickstep_types_TypedValue
