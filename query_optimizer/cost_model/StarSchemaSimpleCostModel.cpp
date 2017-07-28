@@ -569,9 +569,13 @@ TypedValue StarSchemaSimpleCostModel::findCatalogRelationStat(
         *is_exact_stat = stat.isExact();
       }
 
-      if (is_unique && stat.isExact()) {
-        DCHECK(stat.hasNumDistinctValues(rel_attr_id) && stat.hasNumTuples());
-        *is_unique = (stat.getNumDistinctValues(rel_attr_id) == stat.getNumTuples());
+      if (is_unique) {
+        if (stat.isExact()) {
+          DCHECK(stat.hasNumDistinctValues(rel_attr_id) && stat.hasNumTuples());
+          *is_unique = (stat.getNumDistinctValues(rel_attr_id) == stat.getNumTuples());
+        } else {
+          *is_unique = false;
+        }
       }
 
       switch (stat_type) {
@@ -778,21 +782,6 @@ bool StarSchemaSimpleCostModel::canUseTwoPhaseCompactKeyAggregation(
   return true;
 }
 
-namespace {
-
-bool isInvalidStatForCollisionFreeVectorJoin(const TypedValue &min_value,
-                                             const bool min_value_stat_is_exact,
-                                             const bool min_value_stat_is_unique,
-                                             const TypedValue &max_value,
-                                             const bool max_value_stat_is_exact,
-                                             const bool max_value_stat_is_unique) {
-  return min_value.isNull() || max_value.isNull() ||
-         !min_value_stat_is_exact || !max_value_stat_is_exact ||
-         !min_value_stat_is_unique || !max_value_stat_is_unique;
-}
-
-}  // namespace
-
 bool StarSchemaSimpleCostModel::canUseCollisionFreeVectorJoin(const P::HashJoinPtr &hash_join,
                                                               size_t *num_entries) {
   // Supports only single join key.
@@ -800,55 +789,30 @@ bool StarSchemaSimpleCostModel::canUseCollisionFreeVectorJoin(const P::HashJoinP
     return false;
   }
 
-  const E::AttributeReferencePtr left_join_key_attr = hash_join->left_join_attributes().front();
-
-  bool min_value_stat_is_exact, min_value_stat_is_unique;
-  bool max_value_stat_is_exact, max_value_stat_is_unique;
-  TypedValue min_value = findMinValueStat(
-          hash_join, left_join_key_attr, &min_value_stat_is_exact, &min_value_stat_is_unique);
-  TypedValue max_value = findMaxValueStat(
-          hash_join, left_join_key_attr, &max_value_stat_is_exact, &max_value_stat_is_unique);
-  if (isInvalidStatForCollisionFreeVectorJoin(
-          min_value, min_value_stat_is_exact, min_value_stat_is_unique,
-          max_value, max_value_stat_is_exact, max_value_stat_is_unique)) {
-    return false;
-  }
+  const E::AttributeReferencePtr right_join_key_attr = hash_join->right_join_attributes().front();
+  bool min_value_stat_is_exact;
+  bool max_value_stat_is_exact;
+  bool is_unique;
+  TypedValue min_value = findMinValueStat(hash_join, right_join_key_attr, &min_value_stat_is_exact, &is_unique);
+  TypedValue max_value = findMaxValueStat(hash_join, right_join_key_attr, &max_value_stat_is_exact);
 
   std::int64_t min_cpp_value;
   std::int64_t max_cpp_value;
-  switch (left_join_key_attr->getValueType().getTypeID()) {
-    case TypeID::kInt: {
-      min_cpp_value = min_value.getLiteral<int>();
-      max_cpp_value = max_value.getLiteral<int>();
-      break;
-    }
-    case TypeID::kLong: {
-      min_cpp_value = min_value.getLiteral<std::int64_t>();
-      max_cpp_value = max_value.getLiteral<std::int64_t>();
-      break;
-    }
-    default:
-      return false;
-  }
-
-  const E::AttributeReferencePtr right_join_key_attr = hash_join->right_join_attributes().front();
-  min_value = findMinValueStat(hash_join, right_join_key_attr, &min_value_stat_is_exact, &min_value_stat_is_unique);
-  max_value = findMaxValueStat(hash_join, right_join_key_attr, &max_value_stat_is_exact, &max_value_stat_is_unique);
-  if (isInvalidStatForCollisionFreeVectorJoin(
-          min_value, min_value_stat_is_exact, min_value_stat_is_unique,
-          max_value, max_value_stat_is_exact, max_value_stat_is_unique)) {
+  if (!is_unique ||
+      min_value.isNull() || max_value.isNull() ||
+      !min_value_stat_is_exact || !max_value_stat_is_exact) {
     return false;
   }
 
   switch (right_join_key_attr->getValueType().getTypeID()) {
     case TypeID::kInt: {
-      min_cpp_value = min(min_cpp_value, static_cast<int64_t>(min_value.getLiteral<int>()));
-      max_cpp_value = max(max_cpp_value, static_cast<int64_t>(max_value.getLiteral<int>()));
+      min_cpp_value = static_cast<int64_t>(min_value.getLiteral<int>());
+      max_cpp_value = static_cast<int64_t>(max_value.getLiteral<int>());
       break;
     }
     case TypeID::kLong: {
-      min_cpp_value = min(min_cpp_value, min_value.getLiteral<int64_t>());
-      max_cpp_value = max(max_cpp_value, max_value.getLiteral<int64_t>());
+      min_cpp_value = min_value.getLiteral<int64_t>();
+      max_cpp_value = max_value.getLiteral<int64_t>();
       break;
     }
     default:

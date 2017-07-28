@@ -20,7 +20,6 @@
 #ifndef QUICKSTEP_STORAGE_COLLISION_FREE_JOIN_HASH_TABLE_HPP_
 #define QUICKSTEP_STORAGE_COLLISION_FREE_JOIN_HASH_TABLE_HPP_
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -62,7 +61,7 @@ class CollisionFreeVector {
     const serialization::CollisionFreeVectorInfo &proto_collision_free_vector_info =
         proto.collision_free_vector_info();
 
-    return new CollisionFreeVector(&TypeFactory::ReconstructFromProto(proto.key_types(0)),
+    return new CollisionFreeVector(TypeFactory::ReconstructFromProto(proto.key_types(0)),
                                    proto.estimated_num_entries(),
                                    proto_collision_free_vector_info.memory_size(),
                                    proto_collision_free_vector_info.num_init_partitions(),
@@ -182,7 +181,6 @@ class CollisionFreeVector {
 
         const std::size_t hash_code = key.getHashScalarLiteral();
         DCHECK_LT(hash_code, max_num_entries_);
-        DCHECK(values_[hash_code].isValid());
 
         values_[hash_code] = (*functor)(*accessor);
       }
@@ -225,7 +223,7 @@ class CollisionFreeVector {
    * @param storage_manager The StorageManager to use (a StorageBlob will be
    *        allocated to hold this table's contents).
    **/
-  CollisionFreeVector(const Type *key_type,
+  CollisionFreeVector(const Type &key_type,
                       const std::size_t num_entries,
                       const std::size_t memory_size,
                       const std::size_t num_init_partitions,
@@ -234,7 +232,7 @@ class CollisionFreeVector {
         memory_size_(memory_size),
         num_init_partitions_(num_init_partitions),
         storage_manager_(storage_manager) {
-    DCHECK(TypedValue::HashIsReversible(key_type->getTypeID()));
+    DCHECK(TypedValue::HashIsReversible(key_type.getTypeID()));
     DCHECK_GT(num_entries, 0u);
 
     const std::size_t num_storage_slots =

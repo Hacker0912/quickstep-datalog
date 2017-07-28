@@ -164,10 +164,9 @@ class StarSchemaSimpleCostModel : public CostModel {
   TypedValue findMaxValueStat(
       const physical::PhysicalPtr &physical_plan,
       const expressions::AttributeReferencePtr &attribute,
-      bool *is_exact_stat = nullptr,
-      bool *is_unique = nullptr) {
+      bool *is_exact_stat = nullptr) {
     return findCatalogRelationStat(
-        physical_plan, attribute->id(), StatType::kMax, is_exact_stat, is_unique);
+        physical_plan, attribute->id(), StatType::kMax, is_exact_stat);
   }
 
   /**
