@@ -49,6 +49,9 @@ add_library(quickstep_queryoptimizer_rules_StarSchemaHashJoinOrderOptimization
             StarSchemaHashJoinOrderOptimization.hpp)
 add_library(quickstep_queryoptimizer_rules_SwapProbeBuild SwapProbeBuild.cpp SwapProbeBuild.hpp)
 add_library(quickstep_queryoptimizer_rules_TopDownRule ../../empty_src.cpp TopDownRule.hpp)
+add_library(quickstep_queryoptimizer_rules_TransformMultiValueFilterJoin
+            TransformMultiValueFilterJoin.cpp
+            TransformMultiValueFilterJoin.hpp)
 add_library(quickstep_queryoptimizer_rules_UpdateExpression UpdateExpression.cpp UpdateExpression.hpp)
 add_library(quickstep_queryoptimizer_rules_UnnestSubqueries UnnestSubqueries.cpp UnnestSubqueries.hpp)
 
@@ -240,7 +243,7 @@ target_link_libraries(quickstep_queryoptimizer_rules_PushDownSemiAntiJoin
                       quickstep_queryoptimizer_logical_HashJoin
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_logical_PatternMatcher
-                      quickstep_queryoptimizer_rules_TopDownRule
+                      quickstep_queryoptimizer_rules_BottomUpRule
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_rules_ReduceGroupByAttributes
                       ${GFLAGS_LIB_NAME}
@@ -343,6 +346,14 @@ target_link_libraries(quickstep_queryoptimizer_rules_SwapProbeBuild
 target_link_libraries(quickstep_queryoptimizer_rules_TopDownRule
                       quickstep_queryoptimizer_rules_Rule
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_queryoptimizer_rules_TransformMultiValueFilterJoin
+                      quickstep_queryoptimizer_expressions_AttributeReference
+                      quickstep_queryoptimizer_expressions_ExpressionUtil
+                      quickstep_queryoptimizer_logical_HashJoin
+                      quickstep_queryoptimizer_logical_Logical
+                      quickstep_queryoptimizer_logical_PatternMatcher
+                      quickstep_queryoptimizer_rules_BottomUpRule
+                      quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_rules_InjectJoinFilters
                       quickstep_queryoptimizer_costmodel_StarSchemaSimpleCostModel
                       quickstep_queryoptimizer_expressions_AttributeReference
@@ -430,5 +441,6 @@ target_link_libraries(quickstep_queryoptimizer_rules
                       quickstep_queryoptimizer_rules_StarSchemaHashJoinOrderOptimization
                       quickstep_queryoptimizer_rules_SwapProbeBuild
                       quickstep_queryoptimizer_rules_TopDownRule
+                      quickstep_queryoptimizer_rules_TransformMultiValueFilterJoin
                       quickstep_queryoptimizer_rules_UnnestSubqueries
                       quickstep_queryoptimizer_rules_UpdateExpression)

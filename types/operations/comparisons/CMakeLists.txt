@@ -107,6 +107,7 @@ target_link_libraries(quickstep_types_operations_comparisons_ComparisonUtil
                       glog
                       quickstep_catalog_CatalogTypedefs
                       quickstep_types_DatetimeLit
+                      quickstep_types_DecimalLit
                       quickstep_types_IntervalLit
                       quickstep_types_Type
                       quickstep_types_TypeID

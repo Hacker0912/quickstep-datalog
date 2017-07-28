@@ -217,6 +217,7 @@ target_link_libraries(quickstep_expressions_aggregation_AggregationHandleHasMult
                       glog
                       quickstep_expressions_aggregation_AggregationConcreteHandle
                       quickstep_expressions_aggregation_AggregationHandle
+                      quickstep_expressions_aggregation_AggregationID
                       quickstep_storage_ValueAccessorMultiplexer
                       quickstep_types_IntType
                       quickstep_types_Type

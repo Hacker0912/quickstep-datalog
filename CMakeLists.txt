@@ -489,7 +489,7 @@ elseif(${CMAKE_CXX_COMPILER_ID} MATCHES "Intel")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /fast /QxHost")
     set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /QxHost")
   else()
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xHost")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -xHost")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -no-prec-div")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -no-prec-div")
 
@@ -514,6 +514,9 @@ elseif(MSVC)
   # Work around variadic template bug.
   add_definitions( /D _VARIADIC_MAX=10 )
 endif()
+
+# Link with atomic library.
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
 
 # Set the include directories to the project root directory and the root of the build tree (where
 # generated headers will go).

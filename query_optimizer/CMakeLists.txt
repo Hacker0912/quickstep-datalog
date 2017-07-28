@@ -196,6 +196,7 @@ target_link_libraries(quickstep_queryoptimizer_LogicalGenerator
                       quickstep_queryoptimizer_rules_PushDownFilter
                       quickstep_queryoptimizer_rules_PushDownSemiAntiJoin
                       quickstep_queryoptimizer_rules_Rule
+                      quickstep_queryoptimizer_rules_TransformMultiValueFilterJoin
                       quickstep_queryoptimizer_rules_UnnestSubqueries
                       quickstep_queryoptimizer_Validator
                       quickstep_utility_Macros)

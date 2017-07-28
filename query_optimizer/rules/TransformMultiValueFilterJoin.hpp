@@ -17,8 +17,8 @@
  * under the License.
  **/
 
-#ifndef QUICKSTEP_QUERY_OPTIMIZER_RULES_PUSH_DOWN_SEMI_ANTI_JOIN_HPP_
-#define QUICKSTEP_QUERY_OPTIMIZER_RULES_PUSH_DOWN_SEMI_ANTI_JOIN_HPP_
+#ifndef QUICKSTEP_QUERY_OPTIMIZER_RULES_TRANSFORM_MULTI_VALUE_FILTER_JOIN_HPP_
+#define QUICKSTEP_QUERY_OPTIMIZER_RULES_TRANSFORM_MULTI_VALUE_FILTER_JOIN_HPP_
 
 #include <string>
 
@@ -30,22 +30,24 @@
 namespace quickstep {
 namespace optimizer {
 
-class PushDownSemiAntiJoin : public BottomUpRule<logical::Logical> {
+class TransformMultiValueFilterJoin : public BottomUpRule<logical::Logical> {
  public:
-  PushDownSemiAntiJoin() {}
+  TransformMultiValueFilterJoin() {}
 
-  std::string getName() const override { return "PushDownSemiAntiJoin"; }
+  std::string getName() const override {
+    return "TransformMultiValueFilterJoin";
+  }
 
  protected:
   logical::LogicalPtr applyToNode(const logical::LogicalPtr &input) override;
 
  private:
-  logical::LogicalPtr pushDownSemiAntiJoin(const logical::HashJoinPtr &input);
+  logical::LogicalPtr transformInternal(const logical::HashJoinPtr &input);
 
-  DISALLOW_COPY_AND_ASSIGN(PushDownSemiAntiJoin);
+  DISALLOW_COPY_AND_ASSIGN(TransformMultiValueFilterJoin);
 };
 
 }  // namespace optimizer
 }  // namespace quickstep
 
-#endif /* QUICKSTEP_QUERY_OPTIMIZER_RULES_PUSH_DOWN_SEMI_ANTI_JOIN_HPP_ */
+#endif  // QUICKSTEP_QUERY_OPTIMIZER_RULES_TRANSFORM_MULTI_VALUE_FILTER_JOIN_HPP_

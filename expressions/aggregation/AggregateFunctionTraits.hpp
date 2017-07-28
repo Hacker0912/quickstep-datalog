@@ -483,19 +483,22 @@ struct AggregationAtomicOps<kHasMultipleValues, value_tid> {
     StateT state_val = state->load(std::memory_order_relaxed);
     StateT desired;
     do {
-      if (state_val.status == 2) {
-        break;
-      } else if (state_val.status == 1) {
-        if (state_val.value == value) {
-          break;
-        } else {
+      switch (state_val.status) {
+        case 0:
+          desired.value = value;
+          desired.status = 1;
+          continue;
+        case 1:
+          if (state_val.value == value) {
+            break;
+          }
           desired.value = value;
           desired.status = 2;
-        }
-      } else {
-        desired.value = value;
-        desired.status = 1;
+          continue;
+        default:
+          break;
       }
+      break;
     } while (!state->compare_exchange_weak(state_val, desired,
                                            std::memory_order_relaxed));
   }
