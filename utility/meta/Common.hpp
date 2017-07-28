@@ -76,10 +76,18 @@ template <typename B, typename ...Bs>
 struct Disjunction<B, Bs...>
     : std::conditional_t<B::value, B, Disjunction<Bs...>> {};
 
+
 template <typename check, typename ...cases>
 struct EqualsAny {
   static constexpr bool value =
      Disjunction<std::is_same<check, cases>...>::value;
+};
+
+template <typename T, T check, T ...cases>
+struct EqualsAnyValue {
+  static constexpr bool value =
+     Disjunction<std::is_same<std::integral_constant<T, check>,
+                              std::integral_constant<T, cases>>...>::value;
 };
 
 

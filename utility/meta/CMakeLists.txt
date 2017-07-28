@@ -9,6 +9,7 @@ add_library(quickstep_utility_meta_TypeListMetaFunctions ../../empty_src.cpp Typ
 # Link dependencies:
 target_link_libraries(quickstep_utility_meta_Dispatchers
                       glog
+                      quickstep_utility_meta_Common
                       quickstep_utility_meta_TypeList)
 target_link_libraries(quickstep_utility_meta_TMP
                       quickstep_utility_meta_Common

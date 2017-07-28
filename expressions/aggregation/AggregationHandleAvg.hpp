@@ -185,7 +185,7 @@ class AggregationHandleAvg : public AggregationConcreteHandle {
     std::int64_t *count_ptr = reinterpret_cast<std::int64_t *>(
         value_ptr + blank_state_.count_offset_);
     return divide_operator_->applyToTypedValues(
-        *sum_ptr, TypedValue(static_cast<double>(*count_ptr)));
+        *sum_ptr, TypedValue(*count_ptr));
   }
 
   ColumnVector* finalizeHashTable(

@@ -20,6 +20,7 @@
 
 #include "types/DecimalType.hpp"
 
+#include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <iomanip>
@@ -112,7 +113,7 @@ std::string DecimalType<scale>::printValueToString(const TypedValue &value) cons
   std::stringstream ss;
   ss << decimal.getIntegerPart() << "."
      << std::setfill('0') << std::setw(DecimalLit<scale>::kScaleWidth)
-     <<  decimal.getFractionalPart();
+     << decimal.getFractionalPart();
   return ss.str();
 }
 
@@ -123,12 +124,12 @@ void DecimalType<scale>::printValueToFile(const TypedValue &value,
   DCHECK(!value.isNull());
 
   DecimalLit<scale> decimal = value.getLiteral<DecimalLit<scale>>();
+  const std::int64_t integer_part = decimal.getIntegerPart();
+  const bool is_negative_zero = (integer_part == 0 && decimal.isNegative());
 
-  std::fprintf(file, "%*lld.%0*llu",
-               static_cast<int>(padding -
-                                (DecimalLit<scale>::kScaleWidth
-                                 + 1 /* Less one space for point. */)),
-               decimal.getIntegerPart(),
+  std::fprintf(file, "%*s.%0*" PRIu64,
+               static_cast<int>(padding - DecimalLit<scale>::kScaleWidth - 1),
+               ((is_negative_zero ? "-" : "") + std::to_string(integer_part)).c_str(),
                static_cast<int>(DecimalLit<scale>::kScaleWidth),
                decimal.getFractionalPart());
 }

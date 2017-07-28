@@ -74,7 +74,8 @@ target_link_libraries(quickstep_types_operations_comparisons_BasicComparison
                       quickstep_types_operations_comparisons_Comparison
                       quickstep_types_operations_comparisons_ComparisonID
                       quickstep_utility_EqualsAnyConstant
-                      quickstep_utility_Macros)
+                      quickstep_utility_Macros
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_comparisons_Comparison
                       glog
                       quickstep_catalog_CatalogTypedefs

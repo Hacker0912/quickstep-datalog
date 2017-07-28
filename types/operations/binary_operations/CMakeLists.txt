@@ -117,6 +117,7 @@ target_link_libraries(quickstep_types_operations_binaryoperations_DivideBinaryOp
                       glog
                       quickstep_types_DateOperatorOverloads
                       quickstep_types_DatetimeIntervalType
+                      quickstep_types_DecimalType
                       quickstep_types_DoubleType
                       quickstep_types_FloatType
                       quickstep_types_IntType
@@ -132,7 +133,8 @@ target_link_libraries(quickstep_types_operations_binaryoperations_DivideBinaryOp
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperators
                       quickstep_types_operations_binaryoperations_BinaryOperationID
                       quickstep_utility_EqualsAnyConstant
-                      quickstep_utility_Macros)
+                      quickstep_utility_Macros
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_binaryoperations_ModuloBinaryOperation
                       glog
                       quickstep_types_Type
@@ -149,6 +151,7 @@ target_link_libraries(quickstep_types_operations_binaryoperations_MultiplyBinary
                       glog
                       quickstep_types_DateOperatorOverloads
                       quickstep_types_DatetimeIntervalType
+                      quickstep_types_DecimalType
                       quickstep_types_DoubleType
                       quickstep_types_FloatType
                       quickstep_types_IntType
@@ -158,13 +161,16 @@ target_link_libraries(quickstep_types_operations_binaryoperations_MultiplyBinary
                       quickstep_types_TypeErrors
                       quickstep_types_TypeFactory
                       quickstep_types_TypeID
+                      quickstep_types_TypeTraits
                       quickstep_types_TypedValue
                       quickstep_types_YearMonthIntervalType
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperation
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperators
                       quickstep_types_operations_binaryoperations_BinaryOperationID
                       quickstep_utility_EqualsAnyConstant
-                      quickstep_utility_Macros)
+                      quickstep_utility_Macros
+                      quickstep_utility_meta_Common
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_binaryoperations_SubtractBinaryOperation
                       glog
                       quickstep_types_DateOperatorOverloads
@@ -172,6 +178,7 @@ target_link_libraries(quickstep_types_operations_binaryoperations_SubtractBinary
                       quickstep_types_DatetimeIntervalType
                       quickstep_types_DatetimeLit
                       quickstep_types_DatetimeType
+                      quickstep_types_DecimalType
                       quickstep_types_IntervalLit
                       quickstep_types_Type
                       quickstep_types_TypeErrors
@@ -183,7 +190,8 @@ target_link_libraries(quickstep_types_operations_binaryoperations_SubtractBinary
                       quickstep_types_operations_binaryoperations_ArithmeticBinaryOperators
                       quickstep_types_operations_binaryoperations_BinaryOperationID
                       quickstep_utility_EqualsAnyConstant
-                      quickstep_utility_Macros)
+                      quickstep_utility_Macros
+                      quickstep_utility_meta_Dispatchers)
 
 # Module all-in-one library:
 add_library(quickstep_types_operations_binaryoperations ../../../empty_src.cpp)

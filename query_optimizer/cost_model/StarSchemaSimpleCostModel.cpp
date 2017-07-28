@@ -673,10 +673,8 @@ bool StarSchemaSimpleCostModel::canUseCollisionFreeAggregation(
       return false;
     }
 
-    // TODO(jianqiao): Support AggregationID::AVG.
     if (!QUICKSTEP_EQUALS_ANY_CONSTANT(agg_func->getAggregate().getAggregationID(),
-                                       AggregationID::kCount,
-                                       AggregationID::kSum)) {
+                                       kCount, kSum, kAvg, kHasMultipleValues)) {
       return false;
     }
 
@@ -687,10 +685,8 @@ bool StarSchemaSimpleCostModel::canUseCollisionFreeAggregation(
 
     if (arguments.size() == 1u) {
       if (!QUICKSTEP_EQUALS_ANY_CONSTANT(arguments.front()->getValueType().getTypeID(),
-                                         TypeID::kInt,
-                                         TypeID::kLong,
-                                         TypeID::kFloat,
-                                         TypeID::kDouble)) {
+                                         kInt, kLong, kFloat, kDouble,
+                                         kDecimal2, kDecimal4, kDecimal6)) {
         return false;
       }
     }

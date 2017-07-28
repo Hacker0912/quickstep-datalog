@@ -20,6 +20,7 @@
 #ifndef QUICKSTEP_UTILITY_META_DISPATCHERS_HPP_
 #define QUICKSTEP_UTILITY_META_DISPATCHERS_HPP_
 
+#include "utility/meta/Common.hpp"
 #include "utility/meta/TypeList.hpp"
 
 #include "glog/logging.h"

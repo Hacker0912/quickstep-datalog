@@ -29,12 +29,13 @@ namespace quickstep {
 /**
  * @brief The possible types of aggregations.
  **/
-enum class AggregationID {
+enum AggregationID {
   kAvg = 0,
   kCount,
   kMax,
   kMin,
-  kSum
+  kSum,
+  kHasMultipleValues
 };
 
 /** @} */

@@ -32,6 +32,7 @@
 #include "types/operations/comparisons/Comparison.hpp"
 #include "types/operations/comparisons/ComparisonID.hpp"
 #include "utility/Macros.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -41,6 +42,9 @@ struct DateLit;
 struct DatetimeIntervalLit;
 struct DatetimeLit;
 struct YearMonthIntervalLit;
+
+template <std::int64_t>
+struct DecimalLit;
 
 /** \addtogroup Types
  *  @{
@@ -148,6 +152,7 @@ bool BasicComparison::compareTypedValuesCheckedHelper(const TypedValue &left,
   DCHECK_EQ(right.getTypeID(), right_type.getTypeID());
   DCHECK(canCompareTypes(left_type, right_type));
 
+  // NOTE(jianqiao): Decimal not implemented.
   switch (left_type.getTypeID()) {
     case kInt:
     case kLong:
@@ -286,6 +291,30 @@ UncheckedComparator* BasicComparison::makeUncheckedComparatorForTypesHelper(cons
                                                                             const Type &right) const {
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return makeNumericComparatorOuterHelper<LiteralComparator>(left, right);
+  } else if (left.getSuperTypeID() == Type::kDecimal) {
+    DCHECK(right.getTypeID() == left.getTypeID());
+    using DecimalTypeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+        meta::TypeList<DecimalLit<2>, DecimalLit<4>, DecimalLit<6>>>;
+
+    using BoolDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<bool, true, false>>;
+
+    return DecimalTypeDispatcher::set_next<BoolDispatcher>
+                                ::set_next<BoolDispatcher>
+                                ::InvokeOn(
+        left.getTypeID(),
+        left.isNullable(),
+        right.isNullable(),
+        [&](auto typelist) -> UncheckedComparator* {
+      using TL = decltype(typelist);
+      using DecimalLitT = typename TL::template at<0>;
+      constexpr bool left_nullable = TL::template at<1>::value;
+      constexpr bool right_nullable = TL::template at<2>::value;
+
+      return new LiteralComparator<DecimalLitT, left_nullable,
+                                   DecimalLitT, right_nullable>();
+    });
   } else if ((left.getTypeID() == kDate && right.getTypeID() == kDate)                         ||
              (left.getTypeID() == kDatetime && right.getTypeID() == kDatetime)                 ||
              (left.getTypeID() == kDatetimeInterval && right.getTypeID() == kDatetimeInterval) ||

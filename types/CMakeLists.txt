@@ -200,6 +200,7 @@ target_link_libraries(quickstep_types_TypeFactory
                       quickstep_types_YearMonthIntervalType
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_types_TypeTraits
+                      quickstep_types_DecimalLit
                       quickstep_types_TypeID)
 target_link_libraries(quickstep_types_TypedValue
                       farmhash

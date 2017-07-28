@@ -31,6 +31,7 @@
 #include "catalog/CatalogTypedefs.hpp"
 #include "storage/ValueAccessor.hpp"
 #include "storage/ValueAccessorUtil.hpp"
+#include "types/DecimalType.hpp"
 #include "types/DoubleType.hpp"
 #include "types/FloatType.hpp"
 #include "types/IntType.hpp"
@@ -44,6 +45,7 @@
 #include "types/operations/unary_operations/UnaryOperationID.hpp"
 #include "utility/Macros.hpp"
 #include "utility/PtrMap.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -248,58 +250,39 @@ class NumericCastOperation : public UnaryOperation {
   }
 
   UncheckedUnaryOperator* makeUncheckedUnaryOperatorForType(const Type &type) const override {
-    switch (type.getTypeID()) {
-      case kInt:
-        return makeUncheckedUnaryOperatorHelperForSourceNullability<IntType>(type);
-      case kLong:
-        return makeUncheckedUnaryOperatorHelperForSourceNullability<LongType>(type);
-      case kFloat:
-        return makeUncheckedUnaryOperatorHelperForSourceNullability<FloatType>(type);
-      case kDouble:
-        return makeUncheckedUnaryOperatorHelperForSourceNullability<DoubleType>(type);
-      default:
-        FATAL_ERROR("Unhandled type " << kTypeNames[type.getTypeID()]);
-    }
+    using TypeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<TypeID, kInt, kLong, kFloat, kDouble,
+                       kDecimal2, kDecimal4, kDecimal6>,
+        meta::TypeList<IntType, LongType, FloatType, DoubleType,
+                       DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+
+    using BoolDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<bool, true, false>>;
+
+    return TypeDispatcher::set_next<TypeDispatcher>
+                         ::set_next<BoolDispatcher>
+                         ::set_next<BoolDispatcher>
+                         ::InvokeOn(
+        type.getTypeID(),
+        target_type_.getTypeID(),
+        type.isNullable(),
+        target_type_.isNullable(),
+        [&](auto typelist) -> UncheckedUnaryOperator* {
+      using TL = decltype(typelist);
+      using SourceType = typename TL::template at<0>;
+      using TargetType = typename TL::template at<1>;
+      constexpr bool source_nullable = TL::template at<2>::value;
+      constexpr bool target_nullable = TL::template at<3>::value;
+
+      return new UncheckedNumericCastOperator<
+          SourceType, source_nullable, TargetType, target_nullable>();
+    });
   }
 
  private:
   explicit NumericCastOperation(const Type &target_type)
       : UnaryOperation(UnaryOperationID::kCast),
         target_type_(target_type) {}
-
-  template <class SourceType>
-  UncheckedUnaryOperator* makeUncheckedUnaryOperatorHelperForSourceNullability(const Type &type) const {
-    if (type.isNullable()) {
-      return makeUncheckedUnaryOperatorHelperForTargetType<SourceType, true>();
-    } else {
-      return makeUncheckedUnaryOperatorHelperForTargetType<SourceType, false>();
-    }
-  }
-
-  template <class SourceType, bool source_nullability>
-  UncheckedUnaryOperator* makeUncheckedUnaryOperatorHelperForTargetType() const {
-    switch (target_type_.getTypeID()) {
-      case kInt:
-        return makeUncheckedUnaryOperatorHelperForTargetNullability<SourceType, source_nullability, IntType>();
-      case kLong:
-        return makeUncheckedUnaryOperatorHelperForTargetNullability<SourceType, source_nullability, LongType>();
-      case kFloat:
-        return makeUncheckedUnaryOperatorHelperForTargetNullability<SourceType, source_nullability, FloatType>();
-      case kDouble:
-        return makeUncheckedUnaryOperatorHelperForTargetNullability<SourceType, source_nullability, DoubleType>();
-      default:
-        FATAL_ERROR("Unhandled type " << kTypeNames[target_type_.getTypeID()]);
-    }
-  }
-
-  template <class SourceType, bool source_nullability, class TargetType>
-  UncheckedUnaryOperator* makeUncheckedUnaryOperatorHelperForTargetNullability() const {
-    if (target_type_.isNullable()) {
-      return new UncheckedNumericCastOperator<SourceType, source_nullability, TargetType, true>();
-    } else {
-      return new UncheckedNumericCastOperator<SourceType, source_nullability, TargetType, false>();
-    }
-  }
 
   const Type& target_type_;
 

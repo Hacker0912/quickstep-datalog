@@ -37,6 +37,9 @@ serialization::AggregateFunction AggregateFunction::getProto() const {
     case AggregationID::kCount:
       proto.set_aggregation_id(serialization::AggregateFunction::COUNT);
       break;
+    case AggregationID::kHasMultipleValues:
+      proto.set_aggregation_id(serialization::AggregateFunction::HAS_MULTIPLE_VALUES);
+      break;
     case AggregationID::kMax:
       proto.set_aggregation_id(serialization::AggregateFunction::MAX);
       break;

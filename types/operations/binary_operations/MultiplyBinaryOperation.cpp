@@ -19,11 +19,14 @@
 
 #include "types/operations/binary_operations/MultiplyBinaryOperation.hpp"
 
+#include <cstdint>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "types/DateOperatorOverloads.hpp"
 #include "types/DatetimeIntervalType.hpp"
+#include "types/DecimalType.hpp"
 #include "types/DoubleType.hpp"
 #include "types/FloatType.hpp"
 #include "types/IntType.hpp"
@@ -33,9 +36,12 @@
 #include "types/TypeErrors.hpp"
 #include "types/TypeFactory.hpp"
 #include "types/TypeID.hpp"
+#include "types/TypeTraits.hpp"
 #include "types/YearMonthIntervalType.hpp"
 #include "types/operations/binary_operations/ArithmeticBinaryOperators.hpp"
 #include "utility/EqualsAnyConstant.hpp"
+#include "utility/meta/Common.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -44,7 +50,12 @@ namespace quickstep {
 bool MultiplyBinaryOperation::canApplyToTypes(const Type &left, const Type &right) const {
   switch (left.getTypeID()) {
     case kInt:
-    case kLong:
+    case kLong: {
+      if (right.getSuperTypeID() == Type::kDecimal) {
+        return true;
+      }
+      // Fall through
+    }
     case kFloat:
     case kDouble: {
       return (right.getSuperTypeID() == Type::kNumeric ||
@@ -74,15 +85,25 @@ bool MultiplyBinaryOperation::canApplyToTypes(const Type &left, const Type &righ
 const Type* MultiplyBinaryOperation::resultTypeForArgumentTypes(const Type &left, const Type &right) const {
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return TypeFactory::GetUnifyingType(left, right);
+  } else if (left.getSuperTypeID() == Type::kDecimal || right.getSuperTypeID() == Type::kDecimal) {
+    const std::int64_t result_scale =
+        GetDecimalScaleWidth(left.getTypeID()) + GetDecimalScaleWidth(right.getTypeID());
+    const bool nullable = left.isNullable() || right.isNullable();
+    switch (result_scale) {
+      case 2: return &DecimalType<2>::Instance(nullable);
+      case 4: return &DecimalType<4>::Instance(nullable);
+      case 6: return &DecimalType<6>::Instance(nullable);
+      default:
+        break;
+    }
   } else if ((left.getSuperTypeID() == Type::kNumeric && right.getTypeID() == kDatetimeInterval) ||
              (left.getTypeID() == kDatetimeInterval && right.getSuperTypeID() == Type::kNumeric)) {
     return &(DatetimeIntervalType::Instance(left.isNullable() || right.isNullable()));
   } else if ((left.getSuperTypeID() == Type::kNumeric && right.getTypeID() == kYearMonthInterval) ||
              (left.getTypeID() == kYearMonthInterval && right.getSuperTypeID() == Type::kNumeric)) {
     return &(YearMonthIntervalType::Instance(left.isNullable() || right.isNullable()));
-  } else {
-    return nullptr;
   }
+  return nullptr;
 }
 
 const Type* MultiplyBinaryOperation::resultTypeForPartialArgumentTypes(
@@ -224,6 +245,7 @@ TypedValue MultiplyBinaryOperation::applyToChecked(const TypedValue &left,
                                                    const Type &left_type,
                                                    const TypedValue &right,
                                                    const Type &right_type) const {
+  // NOTE(jianqiao): Decimal not implemented.
   switch (left_type.getTypeID()) {
     case kInt:
     case kLong:
@@ -263,8 +285,72 @@ TypedValue MultiplyBinaryOperation::applyToChecked(const TypedValue &left,
              << left_type.getName() << " and " << right_type.getName();
 }
 
+namespace {
+
+using IntTypes = meta::TypeList<IntType, LongType>;
+using DecimalTypes = meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>;
+
+struct DecimalCombinator {
+  template <typename TL, typename Enable = void>
+  struct apply {
+    using LT = typename TL::template at<0>;
+    using RT = typename TL::template at<1>;
+
+    static constexpr bool value =
+        (IntTypes::contains<LT>::value && DecimalTypes::contains<RT>::value) ||
+        (IntTypes::contains<RT>::value && DecimalTypes::contains<LT>::value);
+  };
+};
+
+template <typename TL>
+struct DecimalCombinator::apply<TL, std::enable_if_t<
+    DecimalTypes::contains<typename TL::template at<0>>::value &&
+    DecimalTypes::contains<typename TL::template at<1>>::value>> {
+  static constexpr bool value =
+      TL::template at<0>::cpptype::kScaleWidth +
+      TL::template at<1>::cpptype::kScaleWidth <= 6;
+};
+
+}  // namespace
+
 UncheckedBinaryOperator* MultiplyBinaryOperation::makeUncheckedBinaryOperatorForTypes(const Type &left,
                                                                                       const Type &right) const {
+  if (left.getSuperTypeID() == Type::kDecimal || right.getSuperTypeID() == Type::kDecimal) {
+    using TypeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<TypeID, kInt, kLong, kDecimal2, kDecimal4, kDecimal6>,
+        meta::TypeList<IntType, LongType,
+                       DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+
+    using BoolDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<bool, true, false>>;
+
+    return TypeDispatcher::set_next<TypeDispatcher>
+                         ::set_next<BoolDispatcher>
+                         ::set_next<BoolDispatcher>
+                         ::add_predicate<DecimalCombinator>
+                         ::InvokeOn(
+        left.getTypeID(),
+        right.getTypeID(),
+        left.isNullable(),
+        right.isNullable(),
+        [&](auto typelist) -> UncheckedBinaryOperator* {
+      using TL = decltype(typelist);
+      using LeftType = typename TL::template at<0>;
+      using RightType = typename TL::template at<1>;
+      constexpr bool left_nullable = TL::template at<2>::value;
+      constexpr bool right_nullable = TL::template at<3>::value;
+      constexpr std::int64_t result_scale =
+          DecimalScaleTrait<LeftType::kStaticTypeID>::kScaleWidth +
+          DecimalScaleTrait<RightType::kStaticTypeID>::kScaleWidth;
+
+      return new MultiplyArithmeticUncheckedBinaryOperator<
+          DecimalType<result_scale>,
+          typename LeftType::cpptype, left_nullable,
+          typename RightType::cpptype, right_nullable>();
+
+    });
+  }
+
   switch (left.getTypeID()) {
     case kInt: {
       if (right.getSuperTypeID() == Type::kNumeric) {

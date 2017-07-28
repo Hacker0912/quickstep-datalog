@@ -27,6 +27,7 @@
 #include "types/DatetimeIntervalType.hpp"
 #include "types/DatetimeLit.hpp"
 #include "types/DatetimeType.hpp"
+#include "types/DecimalType.hpp"
 #include "types/IntervalLit.hpp"
 #include "types/Type.hpp"
 #include "types/TypeErrors.hpp"
@@ -35,6 +36,7 @@
 #include "types/YearMonthIntervalType.hpp"
 #include "types/operations/binary_operations/ArithmeticBinaryOperators.hpp"
 #include "utility/EqualsAnyConstant.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -47,6 +49,11 @@ bool SubtractBinaryOperation::canApplyToTypes(const Type &left, const Type &righ
     case kFloat:
     case kDouble: {
       return (right.getSuperTypeID() == Type::kNumeric);
+    }
+    case kDecimal2:  // Fall through
+    case kDecimal4:
+    case kDecimal6: {
+      return (right.getTypeID() == left.getTypeID());
     }
     case kDate: {
       return (right.getTypeID() == kYearMonthInterval);
@@ -71,6 +78,8 @@ bool SubtractBinaryOperation::canApplyToTypes(const Type &left, const Type &righ
 const Type* SubtractBinaryOperation::resultTypeForArgumentTypes(const Type &left, const Type &right) const {
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return TypeFactory::GetUnifyingType(left, right);
+  } else if (QUICKSTEP_EQUALS_ANY_CONSTANT(left.getTypeID(), kDecimal2, kDecimal4, kDecimal6)) {
+    return &left;
   } else if ((left.getTypeID() == kDate && right.getTypeID() == kYearMonthInterval)) {
     // For DATE type, only one possibility: DATE - YEAR-MONTH-INTERVAL.
     return &(DateType::Instance(left.isNullable() || right.isNullable()));
@@ -298,6 +307,9 @@ std::pair<const Type*, const Type*> SubtractBinaryOperation::pushDownTypeHint(
     case kLong:
     case kFloat:
     case kDouble:
+    case kDecimal2:
+    case kDecimal4:
+    case kDecimal6:
     case kYearMonthInterval:
       return std::pair<const Type*, const Type*>(result_type_hint, result_type_hint);
     case kDate:
@@ -330,6 +342,24 @@ TypedValue SubtractBinaryOperation::applyToChecked(const TypedValue &left,
                                                             right, right_type);
       }
       break;
+    }
+    case kDecimal2: {
+      if (right_type.getTypeID() == kDecimal2) {
+        return TypedValue(
+            left.getLiteral<DecimalLit<2>>() - right.getLiteral<DecimalLit<2>>());
+      }
+    }
+    case kDecimal4: {
+      if (right_type.getTypeID() == kDecimal4) {
+        return TypedValue(
+            left.getLiteral<DecimalLit<4>>() - right.getLiteral<DecimalLit<4>>());
+      }
+    }
+    case kDecimal6: {
+      if (right_type.getTypeID() == kDecimal6) {
+        return TypedValue(
+            left.getLiteral<DecimalLit<6>>() - right.getLiteral<DecimalLit<6>>());
+      }
     }
     case kDate: {
       if (right_type.getTypeID() == kYearMonthInterval) {
@@ -404,6 +434,37 @@ UncheckedBinaryOperator* SubtractBinaryOperation::makeUncheckedBinaryOperatorFor
         return makeNumericBinaryOperatorOuterHelper<SubtractArithmeticUncheckedBinaryOperator>(left, right);
       }
       break;
+    }
+    case kDecimal2:
+    case kDecimal4:
+    case kDecimal6: {
+      if (right.getTypeID() == left.getTypeID()) {
+        using DecimalTypeDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+            meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+
+        using BoolDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<bool, true, false>>;
+
+        return DecimalTypeDispatcher::set_next<BoolDispatcher>
+                                    ::set_next<BoolDispatcher>
+                                    ::InvokeOn(
+            left.getTypeID(),
+            left.isNullable(),
+            right.isNullable(),
+            [&](auto typelist) -> UncheckedBinaryOperator* {
+          using TL = decltype(typelist);
+          using DecimalT = typename TL::template at<0>;
+          using DecimalLitT = typename DecimalT::cpptype;
+          constexpr bool left_nullable = TL::template at<1>::value;
+          constexpr bool right_nullable = TL::template at<2>::value;
+
+          return new SubtractArithmeticUncheckedBinaryOperator<
+              DecimalT,
+              DecimalLitT, left_nullable,
+              DecimalLitT, right_nullable>();
+        });
+      }
     }
     case kDate: {
       if (right.getTypeID() == kYearMonthInterval) {

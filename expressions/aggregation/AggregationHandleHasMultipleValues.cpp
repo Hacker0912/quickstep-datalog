@@ -17,24 +17,14 @@
  * under the License.
  **/
 
-#ifndef QUICKSTEP_UTILITY_META_MATH_HPP_
-#define QUICKSTEP_UTILITY_META_MATH_HPP_
+#include "expressions/aggregation/AggregationHandleHasMultipleValues.hpp"
+
+#include "expressions/aggregation/AggregationID.hpp"
 
 namespace quickstep {
-namespace meta {
 
-template <typename T>
-inline constexpr T Sqr(T arg) {
-  return arg * arg;
-}
+AggregationHandleHasMultipleValues::AggregationHandleHasMultipleValues(const Type &type)
+    : AggregationConcreteHandle(AggregationID::kHasMultipleValues),
+      argument_type_(type) {}
 
-template <typename T, typename U>
-inline constexpr auto Pow(T base, U exponent) -> decltype(base * exponent) {
-  return  exponent == 0 ?
-      1 : Sqr(Pow(base, exponent >> 1)) * ((exponent & 1) ? base : 1);
-}
-
-}  // namespace meta
 }  // namespace quickstep
-
-#endif  // QUICKSTEP_UTILITY_META_MATH_HPP_

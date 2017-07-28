@@ -27,13 +27,13 @@
 #include "types/DatetimeIntervalType.hpp"
 #include "types/DatetimeLit.hpp"
 #include "types/DatetimeType.hpp"
+#include "types/DecimalType.hpp"
 #include "types/IntervalLit.hpp"
 #include "types/Type.hpp"
 #include "types/TypeErrors.hpp"
 #include "types/TypeFactory.hpp"
 #include "types/TypeID.hpp"
 #include "types/TypeTraits.hpp"
-#include "types/DecimalType.hpp"
 #include "types/YearMonthIntervalType.hpp"
 #include "types/operations/binary_operations/ArithmeticBinaryOperators.hpp"
 #include "utility/EqualsAnyConstant.hpp"
@@ -80,6 +80,8 @@ bool AddBinaryOperation::canApplyToTypes(const Type &left, const Type &right) co
 const Type* AddBinaryOperation::resultTypeForArgumentTypes(const Type &left, const Type &right) const {
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return TypeFactory::GetUnifyingType(left, right);
+  } else if (QUICKSTEP_EQUALS_ANY_CONSTANT(left.getTypeID(), kDecimal2, kDecimal4, kDecimal6)) {
+    return &left;
   } else if ((left.getTypeID() == kDatetime && right.getTypeID() == kDatetimeInterval)  ||
              (left.getTypeID() == kDatetimeInterval && right.getTypeID() == kDatetime)  ||
              (left.getTypeID() == kDatetime && right.getTypeID() == kYearMonthInterval) ||
@@ -398,33 +400,31 @@ UncheckedBinaryOperator* AddBinaryOperation::makeUncheckedBinaryOperatorForTypes
     case kDecimal2:
     case kDecimal4:
     case kDecimal6: {
-      if (right.getTypeID() == left.getTypeID()) {
-        using DecimalTypeDispatcher = meta::SequenceDispatcher<
-            meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
-            meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+      using DecimalTypeDispatcher = meta::SequenceDispatcher<
+          meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+          meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
 
-        using BoolDispatcher = meta::SequenceDispatcher<
-            meta::Sequence<bool, true, false>>;
+      using BoolDispatcher = meta::SequenceDispatcher<
+          meta::Sequence<bool, true, false>>;
 
-        return DecimalTypeDispatcher::set_next<BoolDispatcher>
-                                    ::set_next<BoolDispatcher>
-                                    ::InvokeOn(
-            left.getTypeID(),
-            left.isNullable(),
-            right.isNullable(),
-            [&](auto typelist) -> UncheckedBinaryOperator* {
-          using TL = decltype(typelist);
-          using DecimalT = typename TL::template at<0>;
-          using DecimalLitT = typename DecimalT::cpptype;
-          constexpr bool left_nullable = TL::template at<1>::value;
-          constexpr bool right_nullable = TL::template at<2>::value;
+      return DecimalTypeDispatcher::set_next<BoolDispatcher>
+                                  ::set_next<BoolDispatcher>
+                                  ::InvokeOn(
+          left.getTypeID(),
+          left.isNullable(),
+          right.isNullable(),
+          [&](auto typelist) -> UncheckedBinaryOperator* {
+        using TL = decltype(typelist);
+        using DecimalT = typename TL::template at<0>;
+        using DecimalLitT = typename DecimalT::cpptype;
+        constexpr bool left_nullable = TL::template at<1>::value;
+        constexpr bool right_nullable = TL::template at<2>::value;
 
-          return new AddArithmeticUncheckedBinaryOperator<
-              DecimalT,
-              DecimalLitT, left_nullable,
-              DecimalLitT, right_nullable>();
-        });
-      }
+        return new AddArithmeticUncheckedBinaryOperator<
+            DecimalT,
+            DecimalLitT, left_nullable,
+            DecimalLitT, right_nullable>();
+      });
     }
     case kDatetime: {
       if (right.getTypeID() == kDatetimeInterval) {

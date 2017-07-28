@@ -29,6 +29,7 @@
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "types/DatetimeLit.hpp"
+#include "types/DecimalLit.hpp"
 #include "types/IntervalLit.hpp"
 #include "types/Type.hpp"
 #include "types/TypeID.hpp"
@@ -990,6 +991,12 @@ inline bool CheckUntypedValuesEqual(const Type &type, const void *left, const vo
       return STLLiteralEqual<float>()(left, right);
     case kDouble:
       return STLLiteralEqual<double>()(left, right);
+    case kDecimal2:
+      return STLLiteralEqual<DecimalLit<2>>()(left, right);
+    case kDecimal4:
+      return STLLiteralEqual<DecimalLit<4>>()(left, right);
+    case kDecimal6:
+      return STLLiteralEqual<DecimalLit<6>>()(left, right);
     case kChar:
       return STLCharEqual(static_cast<const AsciiStringSuperType&>(type).getStringLength())(left, right);
     case kVarChar:
@@ -1249,6 +1256,12 @@ inline TypedValue GetLastValueForType(const Type &type) {
       return TypedValue(std::numeric_limits<float>::max());
     case kDouble:
       return TypedValue(std::numeric_limits<double>::max());
+    case kDecimal2:
+      return TypedValue(DecimalLit<2>::FromData(std::numeric_limits<std::int64_t>::max()));
+    case kDecimal4:
+      return TypedValue(DecimalLit<4>::FromData(std::numeric_limits<std::int64_t>::max()));
+    case kDecimal6:
+      return TypedValue(DecimalLit<6>::FromData(std::numeric_limits<std::int64_t>::max()));
     case kChar:
       return TypedValue(kChar, kLastString, 2);
     case kVarChar:

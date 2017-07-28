@@ -23,9 +23,10 @@ message AggregateFunction {
   enum AggregationID {
     AVG = 0;
     COUNT = 1;
-    MAX = 2;
-    MIN = 3;
-    SUM = 4;
+    HAS_MULTIPLE_VALUES = 2;
+    MAX = 3;
+    MIN = 4;
+    SUM = 5;
   }
 
   required AggregationID aggregation_id = 1;

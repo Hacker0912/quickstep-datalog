@@ -40,11 +40,14 @@ bool AggregateFunctionAvg::canApplyToTypes(
     return false;
   }
 
+  const BinaryOperation &add_op =
+      BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kAdd);
+  const BinaryOperation &div_op =
+      BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kDivide);
+
   // Argument must be addable and divisible.
-  return BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kAdd)
-             .canApplyToTypes(*argument_types.front(), *argument_types.front())
-         && BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kDivide)
-             .canApplyToTypes(*argument_types.front(), TypeFactory::GetType(kDouble));
+  return add_op.canApplyToTypes(*argument_types.front(), *argument_types.front()) &&
+         div_op.canApplyToTypes(*argument_types.front(), TypeFactory::GetType(kLong));
 }
 
 const Type* AggregateFunctionAvg::resultTypeForArgumentTypes(

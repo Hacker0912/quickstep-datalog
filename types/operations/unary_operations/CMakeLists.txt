@@ -76,6 +76,7 @@ target_link_libraries(quickstep_types_operations_unaryoperations_NumericCastOper
                       quickstep_catalog_CatalogTypedefs
                       quickstep_storage_ValueAccessor
                       quickstep_storage_ValueAccessorUtil
+                      quickstep_types_DecimalType
                       quickstep_types_DoubleType
                       quickstep_types_FloatType
                       quickstep_types_IntType
@@ -88,7 +89,8 @@ target_link_libraries(quickstep_types_operations_unaryoperations_NumericCastOper
                       quickstep_types_operations_unaryoperations_UnaryOperation
                       quickstep_types_operations_unaryoperations_UnaryOperationID
                       quickstep_utility_Macros
-                      quickstep_utility_PtrMap)
+                      quickstep_utility_PtrMap
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_unaryoperations_SubstringOperation
                       quickstep_catalog_CatalogTypedefs
                       quickstep_storage_ValueAccessor

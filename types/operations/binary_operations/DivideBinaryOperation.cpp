@@ -24,6 +24,7 @@
 
 #include "types/DateOperatorOverloads.hpp"
 #include "types/DatetimeIntervalType.hpp"
+#include "types/DecimalType.hpp"
 #include "types/DoubleType.hpp"
 #include "types/FloatType.hpp"
 #include "types/IntType.hpp"
@@ -36,6 +37,7 @@
 #include "types/YearMonthIntervalType.hpp"
 #include "types/operations/binary_operations/ArithmeticBinaryOperators.hpp"
 #include "utility/EqualsAnyConstant.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -51,6 +53,11 @@ bool DivideBinaryOperation::canApplyToTypes(const Type &left, const Type &right)
     case kYearMonthInterval: {
       return (right.getSuperTypeID() == Type::kNumeric);
     }
+    case kDecimal2:  // Fall through
+    case kDecimal4:
+    case kDecimal6: {
+      return QUICKSTEP_EQUALS_ANY_CONSTANT(right.getTypeID(), kInt, kLong);
+    }
     default:
       return false;
   }
@@ -59,6 +66,8 @@ bool DivideBinaryOperation::canApplyToTypes(const Type &left, const Type &right)
 const Type* DivideBinaryOperation::resultTypeForArgumentTypes(const Type &left, const Type &right) const {
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return TypeFactory::GetUnifyingType(left, right);
+  } else if (left.getSuperTypeID() == Type::kDecimal) {
+    return &left;
   } else if (left.getTypeID() == kDatetimeInterval && right.getSuperTypeID() == Type::kNumeric) {
     return &(DatetimeIntervalType::Instance(left.isNullable() || right.isNullable()));
   } else if (left.getTypeID() == kYearMonthInterval && right.getSuperTypeID() == Type::kNumeric) {
@@ -234,6 +243,7 @@ TypedValue DivideBinaryOperation::applyToChecked(const TypedValue &left,
                                                  const Type &left_type,
                                                  const TypedValue &right,
                                                  const Type &right_type) const {
+  // NOTE(jianqiao): Decimal not implemented.
   switch (left_type.getTypeID()) {
     case kInt:
     case kLong:
@@ -326,6 +336,40 @@ UncheckedBinaryOperator* DivideBinaryOperation::makeUncheckedBinaryOperatorForTy
         return makeNumericBinaryOperatorOuterHelper<DivideArithmeticUncheckedBinaryOperator>(left, right);
       }
       break;
+    }
+    case kDecimal2:
+    case kDecimal4:
+    case kDecimal6: {
+      using DecimalTypeDispatcher = meta::SequenceDispatcher<
+          meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+          meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+
+      using IntegerTypeDispatcher = meta::SequenceDispatcher<
+          meta::Sequence<TypeID, kInt, kLong>, meta::TypeList<IntType, LongType>>;
+
+      using BoolDispatcher = meta::SequenceDispatcher<
+          meta::Sequence<bool, true, false>>;
+
+      return DecimalTypeDispatcher::set_next<IntegerTypeDispatcher>
+                                  ::set_next<BoolDispatcher>
+                                  ::set_next<BoolDispatcher>
+                                  ::InvokeOn(
+          left.getTypeID(),
+          right.getTypeID(),
+          left.isNullable(),
+          right.isNullable(),
+          [&](auto typelist) -> UncheckedBinaryOperator* {
+        using TL = decltype(typelist);
+        using LeftType = typename TL::template at<0>;
+        using RightType = typename TL::template at<1>;
+        constexpr bool left_nullable = TL::template at<2>::value;
+        constexpr bool right_nullable = TL::template at<3>::value;
+
+        return new DivideArithmeticUncheckedBinaryOperator<
+            LeftType,
+            typename LeftType::cpptype, left_nullable,
+            typename RightType::cpptype, right_nullable>();
+      });
     }
     case kDatetimeInterval: {
       switch (right.getTypeID()) {

@@ -38,7 +38,7 @@
 
 namespace quickstep {
 
-const TypeID LongType::kStaticTypeID = kLong;
+constexpr TypeID LongType::kStaticTypeID;
 
 bool LongType::isSafelyCoercibleFrom(const Type &original_type) const {
   QUICKSTEP_NULL_COERCIBILITY_CHECK();

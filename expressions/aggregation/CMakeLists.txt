@@ -34,6 +34,9 @@ add_library(quickstep_expressions_aggregation_AggregateFunctionCount
 add_library(quickstep_expressions_aggregation_AggregateFunctionFactory
             AggregateFunctionFactory.cpp
             AggregateFunctionFactory.hpp)
+add_library(quickstep_expressions_aggregation_AggregateFunctionHasMultipleValues
+            AggregateFunctionHasMultipleValues.cpp
+            AggregateFunctionHasMultipleValues.hpp)
 add_library(quickstep_expressions_aggregation_AggregateFunctionMax
             AggregateFunctionMax.cpp
             AggregateFunctionMax.hpp)
@@ -43,6 +46,9 @@ add_library(quickstep_expressions_aggregation_AggregateFunctionMin
 add_library(quickstep_expressions_aggregation_AggregateFunctionSum
             AggregateFunctionSum.cpp
             AggregateFunctionSum.hpp)
+add_library(quickstep_expressions_aggregation_AggregateFunctionTraits
+            ../../empty_src.cpp
+            AggregateFunctionTraits.hpp)
 add_library(quickstep_expressions_aggregation_AggregationConcreteHandle
             AggregationConcreteHandle.cpp
             AggregationConcreteHandle.hpp)
@@ -55,6 +61,9 @@ add_library(quickstep_expressions_aggregation_AggregationHandleAvg
 add_library(quickstep_expressions_aggregation_AggregationHandleCount
             AggregationHandleCount.cpp
             AggregationHandleCount.hpp)
+add_library(quickstep_expressions_aggregation_AggregationHandleHasMultipleValues
+            AggregationHandleHasMultipleValues.cpp
+            AggregationHandleHasMultipleValues.hpp)
 add_library(quickstep_expressions_aggregation_AggregationHandleMax
             AggregationHandleMax.cpp
             AggregationHandleMax.hpp)
@@ -102,10 +111,20 @@ target_link_libraries(quickstep_expressions_aggregation_AggregateFunctionFactory
                       quickstep_expressions_aggregation_AggregateFunction_proto
                       quickstep_expressions_aggregation_AggregateFunctionAvg
                       quickstep_expressions_aggregation_AggregateFunctionCount
+                      quickstep_expressions_aggregation_AggregateFunctionHasMultipleValues
                       quickstep_expressions_aggregation_AggregateFunctionMax
                       quickstep_expressions_aggregation_AggregateFunctionMin
                       quickstep_expressions_aggregation_AggregateFunctionSum
                       quickstep_expressions_aggregation_AggregationID
+                      quickstep_utility_Macros)
+target_link_libraries(quickstep_expressions_aggregation_AggregateFunctionHasMultipleValues
+                      quickstep_expressions_aggregation_AggregateFunction
+                      quickstep_expressions_aggregation_AggregationHandleHasMultipleValues
+                      quickstep_expressions_aggregation_AggregationID
+                      quickstep_types_IntType
+                      quickstep_types_Type
+                      quickstep_types_TypeID
+                      quickstep_utility_EqualsAnyConstant
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_expressions_aggregation_AggregateFunctionMax
                       glog
@@ -139,6 +158,12 @@ target_link_libraries(quickstep_expressions_aggregation_AggregateFunctionSum
                       quickstep_types_operations_binaryoperations_BinaryOperationFactory
                       quickstep_types_operations_binaryoperations_BinaryOperationID
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_expressions_aggregation_AggregateFunctionTraits
+                      quickstep_expressions_aggregation_AggregationID
+                      quickstep_types_TypeID
+                      quickstep_types_TypeTraits
+                      quickstep_utility_meta_Common
+                      quickstep_utility_meta_TypeList)
 target_link_libraries(quickstep_expressions_aggregation_AggregationConcreteHandle
                       glog
                       quickstep_expressions_aggregation_AggregationHandle
@@ -186,6 +211,15 @@ target_link_libraries(quickstep_expressions_aggregation_AggregationHandleCount
                       quickstep_types_LongType
                       quickstep_types_TypeFactory
                       quickstep_types_TypeID
+                      quickstep_types_TypedValue
+                      quickstep_utility_Macros)
+target_link_libraries(quickstep_expressions_aggregation_AggregationHandleHasMultipleValues
+                      glog
+                      quickstep_expressions_aggregation_AggregationConcreteHandle
+                      quickstep_expressions_aggregation_AggregationHandle
+                      quickstep_storage_ValueAccessorMultiplexer
+                      quickstep_types_IntType
+                      quickstep_types_Type
                       quickstep_types_TypedValue
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_expressions_aggregation_AggregationHandleMax
@@ -241,13 +275,16 @@ target_link_libraries(quickstep_expressions_aggregation
                       quickstep_expressions_aggregation_AggregateFunctionAvg
                       quickstep_expressions_aggregation_AggregateFunctionCount
                       quickstep_expressions_aggregation_AggregateFunctionFactory
+                      quickstep_expressions_aggregation_AggregateFunctionHasMultipleValues
                       quickstep_expressions_aggregation_AggregateFunctionMax
                       quickstep_expressions_aggregation_AggregateFunctionMin
                       quickstep_expressions_aggregation_AggregateFunctionSum
+                      quickstep_expressions_aggregation_AggregateFunctionTraits
                       quickstep_expressions_aggregation_AggregationConcreteHandle
                       quickstep_expressions_aggregation_AggregationHandle
                       quickstep_expressions_aggregation_AggregationHandleAvg
                       quickstep_expressions_aggregation_AggregationHandleCount
+                      quickstep_expressions_aggregation_AggregationHandleHasMultipleValues
                       quickstep_expressions_aggregation_AggregationHandleMax
                       quickstep_expressions_aggregation_AggregationHandleMin
                       quickstep_expressions_aggregation_AggregationHandleSum

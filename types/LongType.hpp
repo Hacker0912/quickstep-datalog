@@ -43,7 +43,7 @@ class Type;
  **/
 class LongType : public NumericSuperType<std::int64_t> {
  public:
-  static const TypeID kStaticTypeID;
+  static constexpr TypeID kStaticTypeID = kLong;
 
   /**
    * @brief Get a reference to the non-nullable singleton instance of this

@@ -100,6 +100,7 @@ class Type {
    **/
   enum SuperTypeID {
     kNumeric = 0,  // Fixed-length numeric types (Int, Long, Float, Double)
+    kDecimal,      // Decimal family
     kAsciiString,  // ASCII strings (Char, VarChar)
     kOther         // Others (Date, Datetime, DatetimeInterval, YearMonthInterval)
   };

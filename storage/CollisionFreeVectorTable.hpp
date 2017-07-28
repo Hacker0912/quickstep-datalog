@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
+#include "expressions/aggregation/AggregateFunctionTraits.hpp"
 #include "expressions/aggregation/AggregationID.hpp"
 #include "storage/HashTableBase.hpp"
 #include "storage/StorageBlob.hpp"
@@ -206,115 +207,34 @@ class CollisionFreeVectorTable : public AggregationStateHashTableBase {
                     num_entries_);
   }
 
-  template <bool use_two_accessors, typename ...ArgTypes>
-  inline void upsertValueAccessorDispatchHelper(
-      const bool is_key_nullable,
-      const bool is_argument_nullable,
-      ArgTypes &&...args);
+  template <bool is_key_nullable, typename KeyT, typename KeyAccessorT>
+  inline void upsertValueAccessorKeyOnly(const attribute_id key_attr_id,
+                                         KeyAccessorT *key_accessor);
 
-  template <bool ...bool_values, typename ...ArgTypes>
-  inline void upsertValueAccessorDispatchHelper(
-      const Type *key_type,
-      ArgTypes &&...args);
+  template <bool is_key_nullable, typename KeyT, typename KeyAccessorT>
+  inline void upsertValueAccessorCountNullary(const attribute_id key_attr_id,
+                                              void *vec_table,
+                                              KeyAccessorT *key_accessor);
 
-  template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-            typename KeyT, typename ...ArgTypes>
-  inline void upsertValueAccessorDispatchHelper(
-      const Type *argument_type,
-      const AggregationID agg_id,
-      ArgTypes &&...args);
-
-  template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-            typename KeyT, typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-  inline void upsertValueAccessorCountHelper(
-      const attribute_id key_attr_id,
-      const attribute_id argument_id,
-      void *vec_table,
-      KeyValueAccessorT *key_accessor,
-      ArgumentValueAccessorT *argument_accessor);
-
-  template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-            typename KeyT, typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-  inline void upsertValueAccessorSumHelper(
-      const Type *argument_type,
-      const attribute_id key_attr_id,
-      const attribute_id argument_id,
-      void *vec_table,
-      KeyValueAccessorT *key_accessor,
-      ArgumentValueAccessorT *argument_accessor);
-
-  template <typename ...ArgTypes>
-  inline void upsertValueAccessorKeyOnlyHelper(
-      const bool is_key_nullable,
-      const Type *key_type,
-      ArgTypes &&...args);
-
-  template <bool is_key_nullable, typename KeyT, typename KeyValueAccessorT>
-  inline void upsertValueAccessorKeyOnly(
-      const attribute_id key_attr_id,
-      KeyValueAccessorT *key_accessor);
-
-  template <bool is_key_nullable, typename KeyT, typename KeyValueAccessorT>
-  inline void upsertValueAccessorCountNullary(
-      const attribute_id key_attr_id,
-      std::atomic<std::size_t> *vec_table,
-      KeyValueAccessorT *key_accessor);
-
-  template <bool use_two_accessors, bool is_key_nullable, typename KeyT,
-            typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-  inline void upsertValueAccessorCountUnary(
-      const attribute_id key_attr_id,
-      const attribute_id argument_id,
-      std::atomic<std::size_t> *vec_table,
-      KeyValueAccessorT *key_accessor,
-      ArgumentValueAccessorT *argument_accessor);
-
-  template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-            typename KeyT, typename ArgumentT, typename StateT,
-            typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-  inline void upsertValueAccessorIntegerSum(
-      const attribute_id key_attr_id,
-      const attribute_id argument_id,
-      std::atomic<StateT> *vec_table,
-      KeyValueAccessorT *key_accessor,
-      ArgumentValueAccessorT *argument_accessor);
-
-  template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-            typename KeyT, typename ArgumentT, typename StateT,
-            typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-  inline void upsertValueAccessorGenericSum(
-      const attribute_id key_attr_id,
-      const attribute_id argument_id,
-      std::atomic<StateT> *vec_table,
-      KeyValueAccessorT *key_accessor,
-      ArgumentValueAccessorT *argument_accessor);
+  template <typename AggFunc, typename KeyT, bool is_key_nullable,
+            bool is_argument_nullable, bool use_two_accessors,
+            typename KeyAccessorT, typename ArgumentAccessorT>
+  inline void upsertValueAccessorInternal(const attribute_id key_attr_id,
+                                          const attribute_id argument_id,
+                                          void *vec_table,
+                                          KeyAccessorT *key_accessor,
+                                          ArgumentAccessorT *argument_accessor);
 
   template <typename KeyT>
   inline void finalizeKeyInternal(const std::size_t start_position,
                                   const std::size_t end_position,
                                   NativeColumnVector *output_cv) const;
 
-  template <typename ...ArgTypes>
-  inline void finalizeStateDispatchHelper(const AggregationID agg_id,
-                                          const Type *argument_type,
-                                          const void *vec_table,
-                                          ArgTypes &&...args) const;
-
-  template <typename ...ArgTypes>
-  inline void finalizeStateSumHelper(const Type *argument_type,
-                                     const void *vec_table,
-                                     ArgTypes &&...args) const;
-
-  inline void finalizeStateCount(const std::atomic<std::size_t> *vec_table,
-                                 const std::size_t start_position,
-                                 const std::size_t end_position,
-                                 NativeColumnVector *output_cv) const;
-
-  template <typename ResultT, typename StateT>
-  inline void finalizeStateSum(const std::atomic<StateT> *vec_table,
-                               const std::size_t start_position,
-                               const std::size_t end_position,
-                               NativeColumnVector *output_cv) const;
+  template <typename AggFunc>
+  inline void finalizeStateInternal(const void *vec_table,
+                                    const std::size_t start_position,
+                                    const std::size_t end_position,
+                                    NativeColumnVector *output_cv) const;
 
   const Type *key_type_;
   const std::size_t num_entries_;
@@ -338,101 +258,10 @@ class CollisionFreeVectorTable : public AggregationStateHashTableBase {
 // ----------------------------------------------------------------------------
 // Implementations of template methods follow.
 
-template <bool use_two_accessors, typename ...ArgTypes>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorDispatchHelper(const bool is_key_nullable,
-                                        const bool is_argument_nullable,
-                                        ArgTypes &&...args) {
-  if (is_key_nullable) {
-    if (is_argument_nullable) {
-      upsertValueAccessorDispatchHelper<use_two_accessors, true, true>(
-          std::forward<ArgTypes>(args)...);
-    } else {
-      upsertValueAccessorDispatchHelper<use_two_accessors, true, false>(
-          std::forward<ArgTypes>(args)...);
-    }
-  } else {
-    if (is_argument_nullable) {
-      upsertValueAccessorDispatchHelper<use_two_accessors, false, true>(
-          std::forward<ArgTypes>(args)...);
-    } else {
-      upsertValueAccessorDispatchHelper<use_two_accessors, false, false>(
-          std::forward<ArgTypes>(args)...);
-    }
-  }
-}
-
-template <bool ...bool_values, typename ...ArgTypes>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorDispatchHelper(const Type *key_type,
-                                        ArgTypes &&...args) {
-  switch (key_type->getTypeID()) {
-    case TypeID::kInt:
-      upsertValueAccessorDispatchHelper<bool_values..., int>(
-          std::forward<ArgTypes>(args)...);
-      return;
-    case TypeID::kLong:
-      upsertValueAccessorDispatchHelper<bool_values..., std::int64_t>(
-          std::forward<ArgTypes>(args)...);
-      return;
-    default:
-      LOG(FATAL) << "Not supported";
-  }
-}
-
-template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-          typename KeyT, typename ...ArgTypes>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorDispatchHelper(const Type *argument_type,
-                                        const AggregationID agg_id,
-                                        ArgTypes &&...args) {
-  switch (agg_id) {
-     case AggregationID::kCount:
-       upsertValueAccessorCountHelper<
-           use_two_accessors, is_key_nullable, is_argument_nullable, KeyT>(
-               std::forward<ArgTypes>(args)...);
-       return;
-     case AggregationID::kSum:
-       upsertValueAccessorSumHelper<
-           use_two_accessors, is_key_nullable, is_argument_nullable, KeyT>(
-               argument_type, std::forward<ArgTypes>(args)...);
-       return;
-     default:
-       LOG(FATAL) << "Not supported";
-  }
-}
-
-template <typename ...ArgTypes>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorKeyOnlyHelper(const bool is_key_nullable,
-                                       const Type *key_type,
-                                       ArgTypes &&...args) {
-  switch (key_type->getTypeID()) {
-    case TypeID::kInt: {
-      if (is_key_nullable) {
-        upsertValueAccessorKeyOnly<true, int>(std::forward<ArgTypes>(args)...);
-      } else {
-        upsertValueAccessorKeyOnly<false, int>(std::forward<ArgTypes>(args)...);
-      }
-      return;
-    }
-    case TypeID::kLong: {
-      if (is_key_nullable) {
-        upsertValueAccessorKeyOnly<true, std::int64_t>(std::forward<ArgTypes>(args)...);
-      } else {
-        upsertValueAccessorKeyOnly<false, std::int64_t>(std::forward<ArgTypes>(args)...);
-      }
-      return;
-    }
-    default:
-      LOG(FATAL) << "Not supported";
-  }
-}
-
-template <bool is_key_nullable, typename KeyT, typename ValueAccessorT>
+template <bool is_key_nullable, typename KeyT, typename KeyAccessorT>
 inline void CollisionFreeVectorTable
     ::upsertValueAccessorKeyOnly(const attribute_id key_attr_id,
-                                 ValueAccessorT *accessor) {
+                                 KeyAccessorT *accessor) {
   accessor->beginIteration();
   while (accessor->next()) {
     const KeyT *key = static_cast<const KeyT *>(
@@ -444,93 +273,13 @@ inline void CollisionFreeVectorTable
   }
 }
 
-template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-          typename KeyT, typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorCountHelper(const attribute_id key_attr_id,
-                                     const attribute_id argument_id,
-                                     void *vec_table,
-                                     KeyValueAccessorT *key_accessor,
-                                     ArgumentValueAccessorT *argument_accessor) {
-  DCHECK_GE(key_attr_id, 0);
-
-  if (is_argument_nullable && argument_id != kInvalidAttributeID) {
-    upsertValueAccessorCountUnary<use_two_accessors, is_key_nullable, KeyT>(
-        key_attr_id,
-        argument_id,
-        static_cast<std::atomic<std::size_t> *>(vec_table),
-        key_accessor,
-        argument_accessor);
-    return;
-  } else {
-    upsertValueAccessorCountNullary<is_key_nullable, KeyT>(
-        key_attr_id,
-        static_cast<std::atomic<std::size_t> *>(vec_table),
-        key_accessor);
-    return;
-  }
-}
-
-template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-          typename KeyT, typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorSumHelper(const Type *argument_type,
-                                   const attribute_id key_attr_id,
-                                   const attribute_id argument_id,
-                                   void *vec_table,
-                                   KeyValueAccessorT *key_accessor,
-                                   ArgumentValueAccessorT *argument_accessor) {
-  DCHECK_GE(key_attr_id, 0);
-  DCHECK_GE(argument_id, 0);
-  DCHECK(argument_type != nullptr);
-
-  switch (argument_type->getTypeID()) {
-    case TypeID::kInt:
-      upsertValueAccessorIntegerSum<
-          use_two_accessors, is_key_nullable, is_argument_nullable, KeyT, int>(
-              key_attr_id,
-              argument_id,
-              static_cast<std::atomic<std::int64_t> *>(vec_table),
-              key_accessor,
-              argument_accessor);
-      return;
-    case TypeID::kLong:
-      upsertValueAccessorIntegerSum<
-          use_two_accessors, is_key_nullable, is_argument_nullable, KeyT, std::int64_t>(
-              key_attr_id,
-              argument_id,
-              static_cast<std::atomic<std::int64_t> *>(vec_table),
-              key_accessor,
-              argument_accessor);
-      return;
-    case TypeID::kFloat:
-      upsertValueAccessorGenericSum<
-          use_two_accessors, is_key_nullable, is_argument_nullable, KeyT, float>(
-              key_attr_id,
-              argument_id,
-              static_cast<std::atomic<double> *>(vec_table),
-              key_accessor,
-              argument_accessor);
-      return;
-    case TypeID::kDouble:
-      upsertValueAccessorGenericSum<
-          use_two_accessors, is_key_nullable, is_argument_nullable, KeyT, double>(
-              key_attr_id,
-              argument_id,
-              static_cast<std::atomic<double> *>(vec_table),
-              key_accessor,
-              argument_accessor);
-      return;
-    default:
-      LOG(FATAL) << "Not supported";
-  }
-}
-
-template <bool is_key_nullable, typename KeyT, typename ValueAccessorT>
+template <bool is_key_nullable, typename KeyT, typename KeyAccessorT>
 inline void CollisionFreeVectorTable
     ::upsertValueAccessorCountNullary(const attribute_id key_attr_id,
-                                      std::atomic<std::size_t> *vec_table,
-                                      ValueAccessorT *accessor) {
+                                      void *vec_table,
+                                      KeyAccessorT *accessor) {
+  std::atomic<std::int64_t> *states =
+      static_cast<std::atomic<std::int64_t>*>(vec_table);
   accessor->beginIteration();
   while (accessor->next()) {
     const KeyT *key = static_cast<const KeyT *>(
@@ -539,19 +288,24 @@ inline void CollisionFreeVectorTable
       continue;
     }
     const std::size_t loc = *key;
-    vec_table[loc].fetch_add(1u, std::memory_order_relaxed);
+    states[loc].fetch_add(1, std::memory_order_relaxed);
     existence_map_->setBit(loc);
   }
 }
 
-template <bool use_two_accessors, bool is_key_nullable, typename KeyT,
-          typename KeyValueAccessorT, typename ArgumentValueAccessorT>
+template <typename AggFunc, typename KeyT, bool is_key_nullable,
+          bool is_argument_nullable, bool use_two_accessors,
+          typename KeyAccessorT, typename ArgumentAccessorT>
 inline void CollisionFreeVectorTable
-    ::upsertValueAccessorCountUnary(const attribute_id key_attr_id,
-                                    const attribute_id argument_id,
-                                    std::atomic<std::size_t> *vec_table,
-                                    KeyValueAccessorT *key_accessor,
-                                    ArgumentValueAccessorT *argument_accessor) {
+    ::upsertValueAccessorInternal(const attribute_id key_attr_id,
+                                  const attribute_id argument_id,
+                                  void *vec_table,
+                                  KeyAccessorT *key_accessor,
+                                  ArgumentAccessorT *argument_accessor) {
+  using ValueT = typename AggFunc::ValueType;
+  using StateT = typename AggFunc::StateType;
+
+  StateT *states = static_cast<StateT*>(vec_table);
   key_accessor->beginIteration();
   if (use_two_accessors) {
     argument_accessor->beginIteration();
@@ -565,81 +319,16 @@ inline void CollisionFreeVectorTable
     if (is_key_nullable && key == nullptr) {
       continue;
     }
-    const std::size_t loc = *key;
-    existence_map_->setBit(loc);
-    if (argument_accessor->getUntypedValue(argument_id) == nullptr) {
-      continue;
-    }
-    vec_table[loc].fetch_add(1u, std::memory_order_relaxed);
-  }
-}
 
-template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-          typename KeyT, typename ArgumentT, typename StateT,
-          typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorIntegerSum(const attribute_id key_attr_id,
-                                    const attribute_id argument_id,
-                                    std::atomic<StateT> *vec_table,
-                                    KeyValueAccessorT *key_accessor,
-                                    ArgumentValueAccessorT *argument_accessor) {
-  key_accessor->beginIteration();
-  if (use_two_accessors) {
-    argument_accessor->beginIteration();
-  }
-  while (key_accessor->next()) {
-    if (use_two_accessors) {
-      argument_accessor->next();
-    }
-    const KeyT *key = static_cast<const KeyT *>(
-        key_accessor->template getUntypedValue<is_key_nullable>(key_attr_id));
-    if (is_key_nullable && key == nullptr) {
-      continue;
-    }
     const std::size_t loc = *key;
     existence_map_->setBit(loc);
-    const ArgumentT *argument = static_cast<const ArgumentT *>(
+
+    const ValueT *argument = static_cast<const ValueT*>(
         argument_accessor->template getUntypedValue<is_argument_nullable>(argument_id));
     if (is_argument_nullable && argument == nullptr) {
       continue;
     }
-    vec_table[loc].fetch_add(*argument, std::memory_order_relaxed);
-  }
-}
-
-template <bool use_two_accessors, bool is_key_nullable, bool is_argument_nullable,
-          typename KeyT, typename ArgumentT, typename StateT,
-          typename KeyValueAccessorT, typename ArgumentValueAccessorT>
-inline void CollisionFreeVectorTable
-    ::upsertValueAccessorGenericSum(const attribute_id key_attr_id,
-                                    const attribute_id argument_id,
-                                    std::atomic<StateT> *vec_table,
-                                    KeyValueAccessorT *key_accessor,
-                                    ArgumentValueAccessorT *argument_accessor) {
-  key_accessor->beginIteration();
-  if (use_two_accessors) {
-    argument_accessor->beginIteration();
-  }
-  while (key_accessor->next()) {
-    if (use_two_accessors) {
-      argument_accessor->next();
-    }
-    const KeyT *key = static_cast<const KeyT *>(
-        key_accessor->template getUntypedValue<is_key_nullable>(key_attr_id));
-    if (is_key_nullable && key == nullptr) {
-      continue;
-    }
-    const std::size_t loc = *key;
-    existence_map_->setBit(loc);
-    const ArgumentT *argument = static_cast<const ArgumentT *>(
-        argument_accessor->template getUntypedValue<is_argument_nullable>(argument_id));
-    if (is_argument_nullable && argument == nullptr) {
-      continue;
-    }
-    const ArgumentT arg_val = *argument;
-    std::atomic<StateT> &state = vec_table[loc];
-    StateT state_val = state.load(std::memory_order_relaxed);
-    while (!state.compare_exchange_weak(state_val, state_val + arg_val)) {}
+    AggFunc::MergeValue(states + loc, *argument);
   }
 }
 
@@ -654,74 +343,21 @@ inline void CollisionFreeVectorTable
   }
 }
 
-template <typename ...ArgTypes>
+template <typename AggFunc>
 inline void CollisionFreeVectorTable
-    ::finalizeStateDispatchHelper(const AggregationID agg_id,
-                                  const Type *argument_type,
-                                  const void *vec_table,
-                                  ArgTypes &&...args) const {
-  switch (agg_id) {
-     case AggregationID::kCount:
-       finalizeStateCount(static_cast<const std::atomic<std::size_t> *>(vec_table),
-                          std::forward<ArgTypes>(args)...);
-       return;
-     case AggregationID::kSum:
-       finalizeStateSumHelper(argument_type,
-                              vec_table,
-                              std::forward<ArgTypes>(args)...);
-       return;
-     default:
-       LOG(FATAL) << "Not supported";
-  }
-}
+    ::finalizeStateInternal(const void *vec_table,
+                            const std::size_t start_position,
+                            const std::size_t end_position,
+                            NativeColumnVector *output_cv) const {
+  using StateT = typename AggFunc::StateType;
+  using ResultT = typename AggFunc::ResultType;
+  const StateT *states = static_cast<const StateT*>(vec_table);
 
-template <typename ...ArgTypes>
-inline void CollisionFreeVectorTable
-    ::finalizeStateSumHelper(const Type *argument_type,
-                             const void *vec_table,
-                             ArgTypes &&...args) const {
-  DCHECK(argument_type != nullptr);
-
-  switch (argument_type->getTypeID()) {
-    case TypeID::kInt:    // Fall through
-    case TypeID::kLong:
-      finalizeStateSum<std::int64_t>(
-          static_cast<const std::atomic<std::int64_t> *>(vec_table),
-          std::forward<ArgTypes>(args)...);
-      return;
-    case TypeID::kFloat:  // Fall through
-    case TypeID::kDouble:
-      finalizeStateSum<double>(
-          static_cast<const std::atomic<double> *>(vec_table),
-          std::forward<ArgTypes>(args)...);
-      return;
-    default:
-      LOG(FATAL) << "Not supported";
-  }
-}
-
-inline void CollisionFreeVectorTable
-    ::finalizeStateCount(const std::atomic<std::size_t> *vec_table,
-                         const std::size_t start_position,
-                         const std::size_t end_position,
-                         NativeColumnVector *output_cv) const {
   std::size_t loc = start_position - 1;
   while ((loc = existence_map_->nextOne(loc)) < end_position) {
-    *static_cast<std::int64_t *>(output_cv->getPtrForDirectWrite()) =
-        vec_table[loc].load(std::memory_order_relaxed);
-  }
-}
-
-template <typename ResultT, typename StateT>
-inline void CollisionFreeVectorTable
-    ::finalizeStateSum(const std::atomic<StateT> *vec_table,
-                       const std::size_t start_position,
-                       const std::size_t end_position,
-                       NativeColumnVector *output_cv) const {
-  std::size_t loc = start_position - 1;
-  while ((loc = existence_map_->nextOne(loc)) < end_position) {
-    *static_cast<ResultT *>(output_cv->getPtrForDirectWrite()) =
-        vec_table[loc].load(std::memory_order_relaxed);
+    AggFunc::FinalizeState(
+        static_cast<ResultT*>(output_cv->getPtrForDirectWrite()),
+        states[loc]);
   }
 }
 

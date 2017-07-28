@@ -25,6 +25,7 @@
 #include "expressions/aggregation/AggregateFunction.pb.h"
 #include "expressions/aggregation/AggregateFunctionAvg.hpp"
 #include "expressions/aggregation/AggregateFunctionCount.hpp"
+#include "expressions/aggregation/AggregateFunctionHasMultipleValues.hpp"
 #include "expressions/aggregation/AggregateFunctionMax.hpp"
 #include "expressions/aggregation/AggregateFunctionMin.hpp"
 #include "expressions/aggregation/AggregateFunctionSum.hpp"
@@ -41,6 +42,8 @@ const AggregateFunction& AggregateFunctionFactory::Get(
       return AggregateFunctionAvg::Instance();
     case AggregationID::kCount:
       return AggregateFunctionCount::Instance();
+    case AggregationID::kHasMultipleValues:
+      return AggregateFunctionHasMultipleValues::Instance();
     case AggregationID::kMax:
       return AggregateFunctionMax::Instance();
     case AggregationID::kMin:
@@ -59,6 +62,8 @@ const AggregateFunction* AggregateFunctionFactory::GetByName(const std::string &
     return &AggregateFunctionAvg::Instance();
   } else if (name == "count") {
     return &AggregateFunctionCount::Instance();
+  } else if (name == "multival") {
+    return &AggregateFunctionHasMultipleValues::Instance();
   } else if (name == "max") {
     return &AggregateFunctionMax::Instance();
   } else if (name == "min") {
@@ -87,6 +92,8 @@ const AggregateFunction& AggregateFunctionFactory::ReconstructFromProto(
       return AggregateFunctionAvg::Instance();
     case serialization::AggregateFunction::COUNT:
       return AggregateFunctionCount::Instance();
+    case serialization::AggregateFunction::HAS_MULTIPLE_VALUES:
+      return AggregateFunctionHasMultipleValues::Instance();
     case serialization::AggregateFunction::MAX:
       return AggregateFunctionMax::Instance();
     case serialization::AggregateFunction::MIN:

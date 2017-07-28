@@ -66,7 +66,7 @@ struct DecimalLit {
   }
 
   inline explicit operator std::int64_t() const {
-    return static_cast<std::int64_t>(getIntegerPart());
+    return getIntegerPart();
   }
 
   inline explicit operator float() const {
@@ -106,6 +106,10 @@ struct DecimalLit {
    *        It is always equal to pow(10, kScaleWidth).
    **/
   static constexpr std::int64_t kScaleBase = meta::Pow(10ll, kScaleWidth);
+
+  inline bool isNegative() const {
+    return data < 0;
+  }
 
   /**
    * @brief Get the fractional part of the Decimal literal.
@@ -232,6 +236,15 @@ struct DecimalLit {
           operator*(const T &other) const {
     DecimalLit result;
     result.data = data * other;
+    return result;
+  }
+
+  template <typename T>
+  inline typename std::enable_if<
+      meta::EqualsAny<T, int, int64_t>::value, DecimalLit>::type
+          operator/(const T &other) const {
+    DecimalLit result;
+    result.data = data / other;
     return result;
   }
 

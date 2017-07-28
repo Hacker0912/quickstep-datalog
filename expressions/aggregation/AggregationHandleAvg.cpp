@@ -79,13 +79,13 @@ AggregationHandleAvg::AggregationHandleAvg(const Type &type)
   divide_operator_.reset(
       BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kDivide)
           .makeUncheckedBinaryOperatorForTypes(sum_type,
-                                               TypeFactory::GetType(kDouble)));
+                                               TypeFactory::GetType(kLong)));
 
   // Result is nullable, because AVG() over 0 values (or all NULL values) is
   // NULL.
   result_type_ =
       &(BinaryOperationFactory::GetBinaryOperation(BinaryOperationID::kDivide)
-            .resultTypeForArgumentTypes(sum_type, TypeFactory::GetType(kDouble))
+            .resultTypeForArgumentTypes(sum_type, TypeFactory::GetType(kLong))
             ->getNullableVersion());
 }
 
@@ -150,7 +150,7 @@ TypedValue AggregationHandleAvg::finalize(const AggregationState &state) const {
   } else {
     // Divide sum by count to get final average.
     return divide_operator_->applyToTypedValues(
-        agg_state.sum_, TypedValue(static_cast<double>(agg_state.count_)));
+        agg_state.sum_, TypedValue(agg_state.count_));
   }
 }
 

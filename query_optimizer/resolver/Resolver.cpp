@@ -128,6 +128,7 @@
 #include "types/operations/unary_operations/SubstringOperation.hpp"
 #include "types/operations/unary_operations/UnaryOperation.hpp"
 #include "utility/BulkIoConfiguration.hpp"
+#include "utility/EqualsAnyConstant.hpp"
 #include "utility/PtrList.hpp"
 #include "utility/PtrVector.hpp"
 #include "utility/SqlError.hpp"
@@ -1041,8 +1042,14 @@ L::LogicalPtr Resolver::resolveInsertSelection(
       cast_expressions.emplace_back(selection_attributes[aid]);
     } else {
       // TODO(jianqiao): implement Cast operation for non-numeric types.
-      if (destination_type.getSuperTypeID() == Type::SuperTypeID::kNumeric &&
-          selection_type.getSuperTypeID() == Type::SuperTypeID::kNumeric &&
+      const bool src_numeric_or_decimal =
+          QUICKSTEP_EQUALS_ANY_CONSTANT(destination_type.getSuperTypeID(),
+                                        Type::kNumeric, Type::kDecimal);
+      const bool dst_numeric_or_decimal =
+          QUICKSTEP_EQUALS_ANY_CONSTANT(selection_type.getSuperTypeID(),
+                                        Type::kNumeric, Type::kDecimal);
+
+      if (src_numeric_or_decimal && dst_numeric_or_decimal &&
           destination_type.isSafelyCoercibleFrom(selection_type)) {
         // Add cast operation
         const E::AttributeReferencePtr attr = selection_attributes[aid];
@@ -2468,9 +2475,10 @@ E::ScalarPtr Resolver::resolveExpression(
     case ParseExpression::kBinaryExpression: {
       const ParseBinaryExpression &parse_binary_scalar =
           static_cast<const ParseBinaryExpression&>(parse_expression);
+      const BinaryOperation &op = parse_binary_scalar.op();
 
-      std::pair<const Type*, const Type*> argument_type_hints
-          = parse_binary_scalar.op().pushDownTypeHint(type_hint);
+      std::pair<const Type*, const Type*> argument_type_hints =
+          op.pushDownTypeHint(type_hint);
 
       ExpressionResolutionInfo left_resolution_info(
           *expression_resolution_info);
@@ -2526,8 +2534,8 @@ E::ScalarPtr Resolver::resolveExpression(
       // such restrictions could be violated if a parent node in the expression
       // tree converts a value of NullType to something that it shouldn't be.
       if (left_is_nulltype || right_is_nulltype) {
-        const Type *fixed_result_type
-            = parse_binary_scalar.op().resultTypeForPartialArgumentTypes(
+        const Type *fixed_result_type =
+            op.resultTypeForPartialArgumentTypes(
                 left_is_nulltype ? nullptr : &left_type,
                 right_is_nulltype ? nullptr : &right_type);
         if (fixed_result_type != nullptr) {
@@ -2537,7 +2545,7 @@ E::ScalarPtr Resolver::resolveExpression(
 
         if (type_hint != nullptr) {
           const Type &nullable_type_hint = type_hint->getNullableVersion();
-          if (parse_binary_scalar.op().partialTypeSignatureIsPlausible(
+          if (op.partialTypeSignatureIsPlausible(
                   &nullable_type_hint,
                   left_is_nulltype ? nullptr : &left_type,
                   right_is_nulltype ? nullptr : &right_type)) {
@@ -2546,7 +2554,7 @@ E::ScalarPtr Resolver::resolveExpression(
           }
         }
 
-        if (parse_binary_scalar.op().partialTypeSignatureIsPlausible(
+        if (op.partialTypeSignatureIsPlausible(
                 nullptr,
                 left_is_nulltype ? nullptr : &left_type,
                 right_is_nulltype ? nullptr : &right_type)) {
@@ -2559,11 +2567,14 @@ E::ScalarPtr Resolver::resolveExpression(
         // which should fail.
       }
 
-      if (!parse_binary_scalar.op().canApplyToTypes(left_type, right_type)) {
-        // Try coersion first.
-        if (left_type.isSafelyCoercibleFrom(right_type)) {
+      if (!op.canApplyToTypes(left_type, right_type)) {
+        // Try coercion first.
+        // TODO(jianqiao): Systematical coercion.
+        if (left_type.isSafelyCoercibleFrom(right_type) &&
+            op.canApplyToTypes(left_type, left_type)) {
           right_argument = SafelyCoerce(right_argument, left_type);
-        } else if (right_type.isSafelyCoercibleFrom(left_type)) {
+        } else if (right_type.isSafelyCoercibleFrom(left_type) &&
+                   op.canApplyToTypes(right_type, right_type)) {
           left_argument = SafelyCoerce(left_argument, right_type);
         } else {
           THROW_SQL_ERROR_AT(&parse_binary_scalar)

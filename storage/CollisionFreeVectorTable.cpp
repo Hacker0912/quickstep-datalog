@@ -28,17 +28,44 @@
 
 #include "expressions/aggregation/AggregationHandle.hpp"
 #include "expressions/aggregation/AggregationID.hpp"
+#include "expressions/aggregation/AggregateFunctionTraits.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "storage/StorageManager.hpp"
 #include "storage/ValueAccessor.hpp"
 #include "storage/ValueAccessorMultiplexer.hpp"
 #include "storage/ValueAccessorUtil.hpp"
+#include "types/TypeID.hpp"
+#include "types/TypeTraits.hpp"
 #include "types/containers/ColumnVectorsValueAccessor.hpp"
 #include "utility/BarrieredReadWriteConcurrentBitVector.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
 namespace quickstep {
+
+namespace {
+
+using KeyTypeIDDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<TypeID, kInt, kLong>>;
+
+using ArgumentTypeIDDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<TypeID, kInt, kLong, kFloat, kDouble,
+                   kDecimal2, kDecimal4, kDecimal6>>;
+
+using AggregationIDDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<AggregationID, kCount, kSum, kAvg, kHasMultipleValues>>;
+
+using AggregateFunctionDispatcher =
+    AggregationIDDispatcher
+        ::set_next<ArgumentTypeIDDispatcher>
+        ::set_transformer<AggregateFunctionTransformer<true>>;
+
+using BoolDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<bool, true, false>>;
+
+}  // namespace
+
 
 CollisionFreeVectorTable::CollisionFreeVectorTable(
     const Type *key_type,
@@ -60,6 +87,7 @@ CollisionFreeVectorTable::CollisionFreeVectorTable(
   DCHECK_GT(num_entries, 0u);
   DCHECK_GT(num_finalize_partitions_, 0u);
   DCHECK_EQ(num_handles_, state_offsets.size());
+  // std::cerr << "Use collision free!\n";
 
   const std::size_t num_storage_slots =
       storage_manager_->SlotsNeededForBytes(memory_size_);
@@ -94,15 +122,25 @@ bool CollisionFreeVectorTable::upsertValueAccessorCompositeKey(
     const std::vector<MultiSourceAttributeId> &key_ids,
     const ValueAccessorMultiplexer &accessor_mux) {
   DCHECK_EQ(1u, key_ids.size());
+  const ValueAccessorSource key_source = key_ids.front().source;
+  const attribute_id key_id = key_ids.front().attr_id;
 
   if (handles_.empty()) {
     InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
-        accessor_mux.getValueAccessorBySource(key_ids.front().source),
-        [&key_ids, this](auto *accessor) -> void {  // NOLINT(build/c++11)
-      this->upsertValueAccessorKeyOnlyHelper(key_type_->isNullable(),
-                                             key_type_,
-                                             key_ids.front().attr_id,
-                                             accessor);
+        accessor_mux.getValueAccessorBySource(key_source),
+        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
+      KeyTypeIDDispatcher::set_next<BoolDispatcher>
+                         ::InvokeOn(
+          key_type_->getTypeID(),
+          key_type_->isNullable(),
+          [&](auto typelist) -> void {
+        using TL = decltype(typelist);
+        using KeyT = typename TypeIDTrait<TL::template at<0>::value>::cpptype;
+        constexpr bool key_nullable = TL::template at<1>::value;
+
+        this->upsertValueAccessorKeyOnly<key_nullable, KeyT>(
+            key_ids.front().attr_id, accessor);
+      });
     });
     return true;
   }
@@ -113,96 +151,94 @@ bool CollisionFreeVectorTable::upsertValueAccessorCompositeKey(
 
   ValueAccessor *base_accessor = accessor_mux.getBaseAccessor();
   ColumnVectorsValueAccessor *derived_accesor =
-      static_cast<ColumnVectorsValueAccessor *>(accessor_mux.getDerivedAccessor());
+      static_cast<ColumnVectorsValueAccessor*>(accessor_mux.getDerivedAccessor());
 
-  // Dispatch to specialized implementations to achieve maximum performance.
-  InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
-      base_accessor,
-      [&argument_ids, &key_ids, &derived_accesor, this](auto *accessor) -> void {  // NOLINT(build/c++11)
-    const ValueAccessorSource key_source = key_ids.front().source;
-    const attribute_id key_id = key_ids.front().attr_id;
-    const bool is_key_nullable = key_type_->isNullable();
+  for (std::size_t i = 0; i < num_handles_; ++i) {
+    const AggregationHandle *handle = handles_[i];
+    const auto &argument_types = handle->getArgumentTypes();
+    DCHECK_EQ(argument_types.size(), argument_ids[i].size());
 
-    for (std::size_t i = 0; i < num_handles_; ++i) {
-      DCHECK_LE(argument_ids[i].size(), 1u);
+    if (argument_types.empty()) {
+      DCHECK(argument_ids[i].empty());
+      DCHECK(handle->getAggregationID() == kCount);
 
-      const AggregationHandle *handle = handles_[i];
-      const auto &argument_types = handle->getArgumentTypes();
-      const auto &argument_ids_i = argument_ids[i];
+      InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
+          accessor_mux.getValueAccessorBySource(key_source),
+          [&](auto *accessor) -> void {  // NOLINT(build/c++11)
+        KeyTypeIDDispatcher::set_next<BoolDispatcher>
+                           ::InvokeOn(
+            key_type_->getTypeID(),
+            key_type_->isNullable(),
+            [&](auto typelist) -> void {
+          using TL = decltype(typelist);
+          using KeyT = typename TypeIDTrait<TL::template at<0>::value>::cpptype;
+          constexpr bool key_nullable = TL::template at<1>::value;
 
-      ValueAccessorSource argument_source;
-      attribute_id argument_id;
-      const Type *argument_type;
-      bool is_argument_nullable;
-
-      if (argument_ids_i.empty()) {
-        argument_source = ValueAccessorSource::kInvalid;
-        argument_id = kInvalidAttributeID;
-
-        DCHECK(argument_types.empty());
-        argument_type = nullptr;
-        is_argument_nullable = false;
-      } else {
-        DCHECK_EQ(1u, argument_ids_i.size());
-        argument_source = argument_ids_i.front().source;
-        argument_id = argument_ids_i.front().attr_id;
-
-        DCHECK_EQ(1u, argument_types.size());
-        argument_type = argument_types.front();
-        is_argument_nullable = argument_type->isNullable();
-      }
-
-      if (key_source == ValueAccessorSource::kBase) {
-        if (argument_source == ValueAccessorSource::kBase) {
-          this->upsertValueAccessorDispatchHelper<false>(is_key_nullable,
-                                                         is_argument_nullable,
-                                                         key_type_,
-                                                         argument_type,
-                                                         handle->getAggregationID(),
-                                                         key_id,
-                                                         argument_id,
-                                                         vec_tables_[i],
-                                                         accessor,
-                                                         accessor);
-        } else {
-          this->upsertValueAccessorDispatchHelper<true>(is_key_nullable,
-                                                        is_argument_nullable,
-                                                        key_type_,
-                                                        argument_type,
-                                                        handle->getAggregationID(),
-                                                        key_id,
-                                                        argument_id,
-                                                        vec_tables_[i],
-                                                        accessor,
-                                                        derived_accesor);
-        }
-      } else {
-        if (argument_source == ValueAccessorSource::kBase) {
-          this->upsertValueAccessorDispatchHelper<true>(is_key_nullable,
-                                                        is_argument_nullable,
-                                                        key_type_,
-                                                        argument_type,
-                                                        handle->getAggregationID(),
-                                                        key_id,
-                                                        argument_id,
-                                                        vec_tables_[i],
-                                                        derived_accesor,
-                                                        accessor);
-        } else {
-          this->upsertValueAccessorDispatchHelper<false>(is_key_nullable,
-                                                         is_argument_nullable,
-                                                         key_type_,
-                                                         argument_type,
-                                                         handle->getAggregationID(),
-                                                         key_id,
-                                                         argument_id,
-                                                         vec_tables_[i],
-                                                         derived_accesor,
-                                                         derived_accesor);
-        }
-      }
+          this->upsertValueAccessorCountNullary<key_nullable, KeyT>(
+              key_ids.front().attr_id, vec_tables_[i], accessor);
+        });
+      });
+      continue;
     }
-  });
+
+    const auto &argument_ids_i = argument_ids[i];
+    DCHECK_EQ(argument_types.size(), argument_ids_i.size());
+
+    const ValueAccessorSource argument_source = argument_ids_i.front().source;
+    const attribute_id argument_id = argument_ids_i.front().attr_id;
+    const Type &argument_type = *argument_types.front();
+
+    // Dispatch to specialized implementations to achieve maximum performance.
+    InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
+        base_accessor,
+        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
+      AggregateFunctionDispatcher::InvokeOn(
+          handle->getAggregationID(),
+          argument_type.getTypeID(),
+          [&](auto typelist) -> void {
+        using AggFunc = typename decltype(typelist)::head;
+
+        KeyTypeIDDispatcher::set_next<BoolDispatcher>
+                           ::set_next<BoolDispatcher>
+                           ::InvokeOn(
+            key_type_->getTypeID(),
+            key_type_->isNullable(),
+            argument_type.isNullable(),
+            [&](auto typelist) -> void {
+          using TL = decltype(typelist);
+          using KeyT = typename TypeIDTrait<TL::template at<0>::value>::cpptype;
+          constexpr bool key_nullable = TL::template at<1>::value;
+          constexpr bool argument_nullable = TL::template at<2>::value;
+
+          if (key_source == ValueAccessorSource::kBase) {
+            if (argument_source == ValueAccessorSource::kBase) {
+              this->upsertValueAccessorInternal<
+                  AggFunc, KeyT, key_nullable, argument_nullable, false>(
+                      key_id, argument_id, vec_tables_[i],
+                      accessor, accessor);
+            } else {
+              this->upsertValueAccessorInternal<
+                  AggFunc, KeyT, key_nullable, argument_nullable, true>(
+                      key_id, argument_id, vec_tables_[i],
+                      accessor, derived_accesor);
+            }
+          } else {
+            if (argument_source == ValueAccessorSource::kBase) {
+              this->upsertValueAccessorInternal<
+                  AggFunc, KeyT, key_nullable, argument_nullable, true>(
+                      key_id, argument_id, vec_tables_[i],
+                      derived_accesor, accessor);
+            } else {
+              this->upsertValueAccessorInternal<
+                  AggFunc, KeyT, key_nullable, argument_nullable, false>(
+                      key_id, argument_id, vec_tables_[i],
+                      derived_accesor, derived_accesor);
+            }
+          }
+        });
+      });
+    });
+  }
   return true;
 }
 
@@ -235,15 +271,23 @@ void CollisionFreeVectorTable::finalizeState(const std::size_t partition_id,
 
   const AggregationHandle *handle = handles_[handle_id];
   const auto &argument_types = handle->getArgumentTypes();
-  const Type *argument_type =
-      argument_types.empty() ? nullptr : argument_types.front();
 
-  finalizeStateDispatchHelper(handle->getAggregationID(),
-                              argument_type,
-                              vec_tables_[handle_id],
-                              start_position,
-                              end_position,
-                              output_cv);
+  if (argument_types.empty()) {
+    DCHECK(handle->getAggregationID() == kCount);
+    finalizeStateInternal<AggregateFunctionTrait<kCount, kInt, true>>(
+        vec_tables_[handle_id], start_position, end_position, output_cv);
+    return;
+  }
+
+  DCHECK_EQ(1u, argument_types.size());
+
+  AggregateFunctionDispatcher::InvokeOn(
+      handle->getAggregationID(),
+      argument_types.front()->getTypeID(),
+      [&](auto typelist) -> void {
+    this->finalizeStateInternal<typename decltype(typelist)::head>(
+        vec_tables_[handle_id], start_position, end_position, output_cv);
+  });
 }
 
 }  // namespace quickstep

@@ -50,6 +50,11 @@ bool BasicComparison::canCompareTypes(const Type &left, const Type &right) const
           return false;
       }
     }
+    case kDecimal2:
+    case kDecimal4:
+    case kDecimal6: {
+      return right.getTypeID() == left.getTypeID();
+    }
     case kDate: {
       return right.getTypeID() == kDate;
     }
