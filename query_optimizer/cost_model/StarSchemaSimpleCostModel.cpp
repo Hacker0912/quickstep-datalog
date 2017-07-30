@@ -750,7 +750,8 @@ bool StarSchemaSimpleCostModel::canUseTwoPhaseCompactKeyAggregation(
       case AggregationID::kSum: {
         DCHECK_EQ(1u, arguments.size());
         if (!QUICKSTEP_EQUALS_ANY_CONSTANT(arguments.front()->getValueType().getTypeID(),
-                                           kInt, kLong, kFloat, kDouble)) {
+                                           kInt, kLong, kFloat, kDouble,
+                                           kDecimal2, kDecimal4, kDecimal6)) {
           return false;
         }
         break;

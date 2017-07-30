@@ -53,6 +53,8 @@
 namespace quickstep {
 namespace optimizer {
 
+DEFINE_bool(print_physical_plan, false, "Print optimized physical plan");
+
 DEFINE_bool(reorder_columns, true,
             "Adjust the ordering of intermediate relations' columns to improve "
             "copy performance.");
@@ -195,6 +197,10 @@ P::PhysicalPtr PhysicalGenerator::optimizePlan() {
   }
 
   DVLOG(4) << "Optimized physical plan:\n" << physical_plan_->toString();
+
+  if (FLAGS_print_physical_plan) {
+    std::cerr << "Optimized physical plan:\n" << physical_plan_->toString();
+  }
 
   if (FLAGS_visualize_plan) {
     quickstep::PlanVisualizer plan_visualizer;

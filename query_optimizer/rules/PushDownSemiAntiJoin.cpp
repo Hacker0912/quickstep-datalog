@@ -26,6 +26,7 @@
 #include "query_optimizer/logical/HashJoin.hpp"
 #include "query_optimizer/logical/Logical.hpp"
 #include "query_optimizer/logical/PatternMatcher.hpp"
+#include "utility/EqualsAnyConstant.hpp"
 
 namespace quickstep {
 namespace optimizer {
@@ -39,15 +40,15 @@ L::LogicalPtr PushDownSemiAntiJoin::applyToNode(const L::LogicalPtr &input) {
 
   for (const L::LogicalPtr &child : input->children()) {
     L::HashJoinPtr hash_join;
-    if (L::SomeHashJoin::MatchesWithConditionalCast(child, &hash_join)) {
-      if (hash_join->join_type() == L::HashJoin::JoinType::kLeftSemiJoin ||
-          hash_join->join_type() == L::HashJoin::JoinType::kLeftAntiJoin) {
-        L::LogicalPtr new_child = pushDownSemiAntiJoin(hash_join);
-        if (new_child != child) {
-          has_changes = true;
-        }
-        new_children.push_back(new_child);
+    if (L::SomeHashJoin::MatchesWithConditionalCast(child, &hash_join) &&
+        QUICKSTEP_EQUALS_ANY_CONSTANT(hash_join->join_type(),
+            L::HashJoin::JoinType::kLeftSemiJoin,
+            L::HashJoin::JoinType::kLeftAntiJoin)) {
+      L::LogicalPtr new_child = pushDownSemiAntiJoin(hash_join);
+      if (new_child != child) {
+        has_changes = true;
       }
+      new_children.push_back(new_child);
     } else {
       new_children.push_back(child);
     }

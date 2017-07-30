@@ -149,33 +149,46 @@ class ThreadPrivateCompactKeyHashTable : public AggregationStateHashTableBase {
     }
   }
 
-  template <typename ArgumentT, typename StateT>
-  inline void upsertValueAccessorSum(const std::vector<BucketIndex> &bucket_indices,
-                                     const attribute_id attr_id,
-                                     ValueAccessor *accessor,
-                                     void *state_vec) {
+  template <typename AggFunc>
+  inline void upsertValueAccessorGeneric(const std::vector<BucketIndex> &bucket_indices,
+                                         const attribute_id attr_id,
+                                         ValueAccessor *accessor,
+                                         void *state_vec) {
+    using ValueT = typename AggFunc::ValueType;
+    using StateT = typename AggFunc::StateType;
     InvokeOnAnyValueAccessor(
         accessor,
         [&](auto *accessor) -> void {  // NOLINT(build/c++11)
       accessor->beginIteration();
-
       StateT *states = static_cast<StateT*>(state_vec);
       for (const BucketIndex idx : bucket_indices) {
         accessor->next();
-        states[idx] += *static_cast<const ArgumentT*>(
+        const ValueT *value = static_cast<const ValueT*>(
             accessor->template getUntypedValue<false>(attr_id));
+        AggFunc::MergeValue(states + idx, *value);
       }
     });
   }
 
-  template <typename StateT>
-  inline void mergeStateSum(const std::vector<BucketIndex> &dst_bucket_indices,
-                            const void *src_state_vec,
-                            void *dst_state_vec) {
-    StateT *dst_states = static_cast<StateT*>(dst_state_vec);
-    const StateT* src_states = static_cast<const StateT*>(src_state_vec);
+  inline void mergeStateCount(const std::vector<BucketIndex> &dst_bucket_indices,
+                              const void *src_state_vec,
+                              void *dst_state_vec) {
+    std::int64_t *dst_states = static_cast<std::int64_t*>(dst_state_vec);
+    const std::int64_t *src_states = static_cast<const std::int64_t*>(src_state_vec);
     for (std::size_t i = 0; i < dst_bucket_indices.size(); ++i) {
       dst_states[dst_bucket_indices[i]] += src_states[i];
+    }
+  }
+
+  template <typename AggFunc>
+  inline void mergeStateGeneric(const std::vector<BucketIndex> &dst_bucket_indices,
+                                const void *src_state_vec,
+                                void *dst_state_vec) {
+    using StateT = typename AggFunc::StateType;
+    StateT *dst_states = static_cast<StateT*>(dst_state_vec);
+    const StateT *src_states = static_cast<const StateT*>(src_state_vec);
+    for (std::size_t i = 0; i < dst_bucket_indices.size(); ++i) {
+      AggFunc::MergeState(dst_states + dst_bucket_indices[i], src_states[i]);
     }
   }
 
@@ -191,12 +204,23 @@ class ThreadPrivateCompactKeyHashTable : public AggregationStateHashTableBase {
     }
   }
 
-  template <typename StateT, typename ResultT>
-  inline void finalizeStateSum(const void *state_vec,
-                               NativeColumnVector *output_cv) const {
+  inline void finalizeStateCount(const void *state_vec,
+                                 NativeColumnVector *output_cv) const {
+    const std::int64_t *states = static_cast<const std::int64_t*>(state_vec);
+    for (std::size_t i = 0; i < buckets_allocated_; ++i) {
+      *static_cast<std::int64_t*>(output_cv->getPtrForDirectWrite()) = states[i];
+    }
+  }
+
+  template <typename AggFunc>
+  inline void finalizeStateGeneric(const void *state_vec,
+                                   NativeColumnVector *output_cv) const {
+    using StateT = typename AggFunc::StateType;
+    using ResultT = typename AggFunc::ResultType;
     const StateT *states = static_cast<const StateT*>(state_vec);
     for (std::size_t i = 0; i < buckets_allocated_; ++i) {
-      *static_cast<ResultT*>(output_cv->getPtrForDirectWrite()) = states[i];
+      AggFunc::FinalizeState(
+          static_cast<ResultT*>(output_cv->getPtrForDirectWrite()), states[i]);
     }
   }
 

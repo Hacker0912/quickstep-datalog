@@ -247,6 +247,7 @@ TupleIdSequence* LiteralUncheckedComparator<ComparisonFunctor,
         const attribute_id left_id,
         const attribute_id right_id,
         const TupleIdSequence *filter) const {
+  std::cerr << "Compare single value accessor!\n";
   return InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
       accessor,
       [&](auto *accessor) -> TupleIdSequence* {  // NOLINT(build/c++11)

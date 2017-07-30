@@ -51,16 +51,14 @@ const Type* AggregateFunctionSum::resultTypeForArgumentTypes(
     return nullptr;
   }
 
-  // SUM may return NULL if there are no input rows, and we automatically widen
-  // int to long and float to double to have more headroom when adding up many
-  // values.
-  const Type *sum_type = &(argument_types.front()->getNullableVersion());
+  // TODO(jianqiao): check nullable conditions.
+  const Type *sum_type = argument_types.front();
   switch (sum_type->getTypeID()) {
     case kInt:
-      sum_type = &TypeFactory::GetType(kLong, true);
+      sum_type = &TypeFactory::GetType(kLong, sum_type->isNullable());
       break;
     case kFloat:
-      sum_type = &TypeFactory::GetType(kDouble, true);
+      sum_type = &TypeFactory::GetType(kDouble, sum_type->isNullable());
       break;
     default:
       break;

@@ -1054,6 +1054,7 @@ target_link_libraries(quickstep_storage_SubBlocksReference
 target_link_libraries(quickstep_storage_ThreadPrivateCompactKeyHashTable
                       glog
                       quickstep_catalog_CatalogTypedefs
+                      quickstep_expressions_aggregation_AggregateFunctionTraits
                       quickstep_expressions_aggregation_AggregationHandle
                       quickstep_expressions_aggregation_AggregationID
                       quickstep_storage_HashTableBase
@@ -1068,7 +1069,8 @@ target_link_libraries(quickstep_storage_ThreadPrivateCompactKeyHashTable
                       quickstep_types_containers_ColumnVector
                       quickstep_types_containers_ColumnVectorsValueAccessor
                       quickstep_utility_Macros
-                      quickstep_utility_ScopedBuffer)
+                      quickstep_utility_ScopedBuffer
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_storage_TupleIdSequence
                       glog
                       quickstep_storage_StorageBlockInfo

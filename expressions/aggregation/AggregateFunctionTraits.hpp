@@ -135,7 +135,7 @@ class AggregateFunctionTrait<agg_id, value_tid, false> {
   }
 
   static inline void MergeState(StateType *dst, const StateType &src) {
-    Op::MergeStateUnafe(dst, src);
+    Op::MergeStateUnsafe(dst, src);
   }
 
   static inline void FinalizeState(ResultType *result, const StateType &state) {
@@ -206,6 +206,22 @@ struct AggregationContext<kAvg, value_tid> {
 };
 
 template <TypeID value_tid>
+struct AggregationContext<kMin, value_tid> {
+  using StateT = struct { typename TypeIDTrait<value_tid>::cpptype value;
+                          bool valid; };
+  using AtomicStateT = std::atomic<StateT>;
+  static constexpr TypeID kResultTypeID = value_tid;
+};
+
+template <TypeID value_tid>
+struct AggregationContext<kMax, value_tid> {
+  using StateT = struct { typename TypeIDTrait<value_tid>::cpptype value;
+                          bool valid; };
+  using AtomicStateT = std::atomic<StateT>;
+  static constexpr TypeID kResultTypeID = value_tid;
+};
+
+template <TypeID value_tid>
 struct AggregationContext<kHasMultipleValues, value_tid> {
   using StateT = struct { typename TypeIDTrait<value_tid>::cpptype value;
                           char status; };
@@ -270,16 +286,16 @@ struct AggregationUnsafeDecimalSumOps {
 
   static constexpr bool kZeroInit = true;
 
-  static inline void InitStateAtomic(StateT *state) {
+  static inline void InitStateUnsafe(StateT *state) {
     std::memset(state, 0, sizeof(StateT));
   }
-  static inline void MergeValueAtomic(StateT *state, const ValueT &value) {
+  static inline void MergeValueUnsafe(StateT *state, const ValueT &value) {
     *state += value.data;
   }
-  static inline void MergeStateAtomic(StateT *dst, const StateT &src) {
+  static inline void MergeStateUnsafe(StateT *dst, const StateT &src) {
     *dst += src;
   }
-  static inline void FinalizeAtomic(ResultT *result, const StateT &state) {
+  static inline void FinalizeUnsafe(ResultT *result, const StateT &state) {
     result->data = state;
   }
 };
@@ -509,6 +525,61 @@ struct AggregationAtomicOps<kHasMultipleValues, value_tid> {
     *result = (state.load(std::memory_order_relaxed).status == 2);
   }
 };
+
+template <AggregationID agg_id>
+struct MinMaxFunctor;
+template <>
+struct MinMaxFunctor<kMin> {
+  template <typename T>
+  inline static const T& Apply(const T &a, const T &b) {
+    return std::min(a, b);
+  }
+};
+template <>
+struct MinMaxFunctor<kMax> {
+  template <typename T>
+  inline static const T& Apply(const T &a, const T &b) {
+    return std::max(a, b);
+  }
+};
+
+template <AggregationID agg_id, TypeID value_tid>
+struct AggregationAtomicMinMaxOps {
+  using ValueT = typename TypeIDTrait<value_tid>::cpptype;
+  using StateT = typename AggregationContext<agg_id, value_tid>::StateT;
+  using AtomicStateT = typename AggregationContext<agg_id, value_tid>::AtomicStateT;
+  using ResultT = typename TypeIDTrait<
+      AggregationContext<agg_id, value_tid>::kResultTypeID>::cpptype;
+
+  using Comparator = MinMaxFunctor<agg_id>;
+
+  static constexpr bool kZeroInit = true;
+
+  static inline void InitStateAtomic(AtomicStateT *state) {
+    std::memset(state, 0, sizeof(AtomicStateT));
+  }
+  static inline void MergeValueAtomic(AtomicStateT *state, const ValueT &value) {
+    StateT state_val = state->load(std::memory_order_relaxed);
+    StateT desired;
+    do {
+      desired.value = state_val.valid ? Comparator::Apply(state_val.value, value)
+                                      : value;
+      desired.valid = true;
+    } while (!state->compare_exchange_weak(state_val, desired,
+                                           std::memory_order_relaxed));
+  }
+  static inline void MergeStateAtomic(AtomicStateT *dst, const AtomicStateT &src) {
+    LOG(FATAL) << "TODO";
+  }
+  static inline void FinalizeAtomic(ResultT *result, const AtomicStateT &state) {
+    *result = state.load(std::memory_order_relaxed).value;
+  }
+};
+
+template <TypeID value_tid>
+struct AggregationAtomicOps<kMin, value_tid> : AggregationAtomicMinMaxOps<kMin, value_tid> {};
+template <TypeID value_tid>
+struct AggregationAtomicOps<kMax, value_tid> : AggregationAtomicMinMaxOps<kMax, value_tid> {};
 
 /** @} */
 

@@ -25,6 +25,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "expressions/aggregation/AggregateFunctionTraits.hpp"
 #include "expressions/aggregation/AggregationHandle.hpp"
 #include "expressions/aggregation/AggregationID.hpp"
 #include "storage/StorageBlob.hpp"
@@ -35,6 +36,7 @@
 #include "types/TypeID.hpp"
 #include "types/containers/ColumnVectorsValueAccessor.hpp"
 #include "utility/ScopedBuffer.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -42,27 +44,20 @@ namespace quickstep {
 
 namespace {
 
-#define CASE_KEY_SIZE(value) \
-  case value: return functor(std::integral_constant<std::size_t, value>())
+using KeySizeDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<std::size_t, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u>>;
 
-template <typename FunctorT>
-auto InvokeOnKeySize(const std::size_t key_size, const FunctorT &functor) {
-  switch (key_size) {
-    CASE_KEY_SIZE(1);
-    CASE_KEY_SIZE(2);
-    CASE_KEY_SIZE(3);
-    CASE_KEY_SIZE(4);
-    CASE_KEY_SIZE(5);
-    CASE_KEY_SIZE(6);
-    CASE_KEY_SIZE(7);
-    CASE_KEY_SIZE(8);
-    default:
-      break;
-  }
-  LOG(FATAL) << "Unexpected key size: " << key_size;
-}
+using ArgumentTypeIDDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<TypeID, kInt, kLong, kFloat, kDouble,
+                   kDecimal2, kDecimal4, kDecimal6>>;
 
-#undef CASE_KEY_SIZE
+using AggregationIDDispatcher = meta::SequenceDispatcher<
+    meta::Sequence<AggregationID, kSum>>;
+
+using AggregateFunctionDispatcher =
+    AggregationIDDispatcher
+        ::set_next<ArgumentTypeIDDispatcher>
+        ::set_transformer<AggregateFunctionTransformer<false>>;
 
 }  // namespace
 
@@ -93,30 +88,18 @@ ThreadPrivateCompactKeyHashTable::ThreadPrivateCompactKeyHashTable(
 
     // Figure out state size.
     std::size_t state_size = 0;
-    switch (handle->getAggregationID()) {
-      case AggregationID::kCount: {
-        state_size = sizeof(std::int64_t);
-        break;
-      }
-      case AggregationID::kSum: {
-        DCHECK_EQ(1u, arg_types.size());
-        switch (arg_types.front()->getTypeID()) {
-          case TypeID::kInt:  // Fall through
-          case TypeID::kLong:
-            state_size = sizeof(std::int64_t);
-            break;
-          case TypeID::kFloat:  // Fall through
-          case TypeID::kDouble:
-            state_size = sizeof(double);
-            break;
-          default:
-            LOG(FATAL) << "Unexpected argument type";
-        }
-        break;
-      }
-      default:
-        LOG(FATAL) << "Unexpected AggregationID";
+    if (handle->getAggregationID() == kCount) {
+      state_size = sizeof(std::atomic<std::int64_t>);
+    } else {
+      DCHECK(!arg_types.empty());
+      AggregateFunctionDispatcher::InvokeOn(
+          handle->getAggregationID(),
+          arg_types.front()->getTypeID(),
+          [&](auto typelist) -> void {
+        state_size = sizeof(typename decltype(typelist)::head::StateType);
+      });
     }
+    DCHECK_NE(state_size, 0);
     state_sizes_.emplace_back(state_size);
     total_state_size_ += state_size;
   }
@@ -220,10 +203,10 @@ bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
     DCHECK(accessor != nullptr);
 
     // Pack the key component into the 64-bit code (with proper offset).
-    InvokeOnKeySize(
+    KeySizeDispatcher::InvokeOn(
         key_sizes_[i],
-        [&](auto key_size) -> void {  // NOLINT(build/c++11)
-      ConstructKeyCode<decltype(key_size)::value>(
+        [&](auto typelist) -> void {  // NOLINT(build/c++11)
+      ConstructKeyCode<decltype(typelist)::head::value>(
           key_code_offset, key_attr_id.attr_id, accessor, key_codes);
     });
     key_code_offset += key_sizes_[i];
@@ -247,54 +230,26 @@ bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
   }
 
   // Dispatch on AggregationID and argument type.
-  // TODO(jianqiao): refactor type system and aggregation facilities to eliminate
-  // this type of ad-hoc switch statements.
   for (std::size_t i = 0; i < handles_.size(); ++i) {
     const AggregationHandle *handle = handles_[i];
-    switch (handle->getAggregationID()) {
-      case AggregationID::kCount: {
-        upsertValueAccessorCount(bucket_indices, state_vecs_[i]);
-        break;
-      }
-      case AggregationID::kSum: {
-        DCHECK_EQ(1u, argument_ids[i].size());
-        const auto &argument_id = argument_ids[i].front();
-        ValueAccessor *accessor =
-            argument_id.source == ValueAccessorSource::kBase
-                ? base_accessor
-                : derived_accessor;
-        DCHECK(accessor != nullptr);
-
-        DCHECK_EQ(1u, handle->getArgumentTypes().size());
-        const Type *argument_type = handle->getArgumentTypes().front();
-        switch (argument_type->getTypeID()) {
-          case kInt: {
-            upsertValueAccessorSum<int, std::int64_t>(
-                bucket_indices, argument_id.attr_id, accessor, state_vecs_[i]);
-            break;
-          }
-          case kLong: {
-            upsertValueAccessorSum<std::int64_t, std::int64_t>(
-                bucket_indices, argument_id.attr_id, accessor, state_vecs_[i]);
-            break;
-          }
-          case kFloat: {
-            upsertValueAccessorSum<float, double>(
-                bucket_indices, argument_id.attr_id, accessor, state_vecs_[i]);
-            break;
-          }
-          case kDouble: {
-            upsertValueAccessorSum<double, double>(
-                bucket_indices, argument_id.attr_id, accessor, state_vecs_[i]);
-            break;
-          }
-          default:
-            LOG(FATAL) << "Unexpected argument type";
-        }
-        break;
-      }
-      default:
-        LOG(FATAL) << "Unexpected AggregationID";
+    if (handle->getAggregationID() == kCount) {
+      upsertValueAccessorCount(bucket_indices, state_vecs_[i]);
+    } else {
+      DCHECK_EQ(1u, argument_ids[i].size());
+      const auto &argument_id = argument_ids[i].front();
+      ValueAccessor *accessor =
+          argument_id.source == ValueAccessorSource::kBase
+              ? base_accessor
+              : derived_accessor;
+      DCHECK(accessor != nullptr);
+      DCHECK_EQ(1u, handle->getArgumentTypes().size());
+      AggregateFunctionDispatcher::InvokeOn(
+          handle->getAggregationID(),
+          handle->getArgumentTypes().front()->getTypeID(),
+          [&](auto typelist) -> void {
+        this->upsertValueAccessorGeneric<typename decltype(typelist)::head>(
+            bucket_indices, argument_id.attr_id, accessor, state_vecs_[i]);
+      });
     }
   }
 
@@ -328,34 +283,18 @@ void ThreadPrivateCompactKeyHashTable::mergeFrom(
   // Then merge states in a column-wise way based on dst_bucket_indices.
   for (std::size_t i = 0; i < handles_.size(); ++i) {
     const AggregationHandle *handle = handles_[i];
-    switch (handle->getAggregationID()) {
-      case AggregationID::kCount: {
-        mergeStateSum<std::int64_t>(
+    if (handle->getAggregationID() == kCount) {
+      mergeStateCount(dst_bucket_indices, source.state_vecs_[i], state_vecs_[i]);
+    } else {
+      DCHECK_EQ(1u, handle->getArgumentTypes().size());
+      const Type *argument_type = handle->getArgumentTypes().front();
+      AggregateFunctionDispatcher::InvokeOn(
+          handle->getAggregationID(),
+          argument_type->getTypeID(),
+          [&](auto typelist) -> void {
+        this->mergeStateGeneric<typename decltype(typelist)::head>(
             dst_bucket_indices, source.state_vecs_[i], state_vecs_[i]);
-        break;
-      }
-      case AggregationID::kSum: {
-        const Type *argument_type = handle->getArgumentTypes().front();
-        switch (argument_type->getTypeID()) {
-          case kInt:  // Fall through
-          case kLong: {
-            mergeStateSum<std::int64_t>(
-                dst_bucket_indices, source.state_vecs_[i], state_vecs_[i]);
-            break;
-          }
-          case kFloat:  // Fall through
-          case kDouble: {
-            mergeStateSum<double>(
-                dst_bucket_indices, source.state_vecs_[i], state_vecs_[i]);
-            break;
-          }
-          default:
-            LOG(FATAL) << "Unexpected argument type";
-        }
-        break;
-      }
-      default:
-        LOG(FATAL) << "Unexpected AggregationID";
+      });
     }
   }
 }
@@ -369,10 +308,10 @@ void ThreadPrivateCompactKeyHashTable::finalize(
     std::unique_ptr<NativeColumnVector> native_cv(
         std::make_unique<NativeColumnVector>(key_type, buckets_allocated_));
 
-    InvokeOnKeySize(
+    KeySizeDispatcher::InvokeOn(
         key_sizes_[i],
-        [&](auto key_size) -> void {  // NOLINT(build/c++11)
-      this->finalizeKey<decltype(key_size)::value>(key_offset, native_cv.get());
+        [&](auto typelist) -> void {  // NOLINT(build/c++11)
+      this->finalizeKey<decltype(typelist)::head::value>(key_offset, native_cv.get());
     });
     output->addColumn(native_cv.release());
     key_offset += key_sizes_[i];
@@ -385,35 +324,19 @@ void ThreadPrivateCompactKeyHashTable::finalize(
     std::unique_ptr<NativeColumnVector> native_cv(
         std::make_unique<NativeColumnVector>(result_type, buckets_allocated_));
 
-    switch (handle->getAggregationID()) {
-      case AggregationID::kCount: {
-        finalizeStateSum<std::int64_t, std::int64_t>(
+    if (handle->getAggregationID() == kCount) {
+      finalizeStateCount(state_vecs_[i], native_cv.get());
+    } else {
+      DCHECK_EQ(1u, handle->getArgumentTypes().size());
+      AggregateFunctionDispatcher::InvokeOn(
+          handle->getAggregationID(),
+          handle->getArgumentTypes().front()->getTypeID(),
+          [&](auto typelist) -> void {
+        this->finalizeStateGeneric<typename decltype(typelist)::head>(
             state_vecs_[i], native_cv.get());
-        break;
-      }
-      case AggregationID::kSum: {
-        const Type *argument_type = handle->getArgumentTypes().front();
-        switch (argument_type->getTypeID()) {
-          case kInt:  // Fall through
-          case kLong: {
-            finalizeStateSum<std::int64_t, std::int64_t>(
-                state_vecs_[i], native_cv.get());
-            break;
-          }
-          case kFloat:  // Fall through
-          case kDouble: {
-            finalizeStateSum<double, double>(
-                state_vecs_[i], native_cv.get());
-            break;
-          }
-          default:
-            LOG(FATAL) << "Unexpected argument type";
-        }
-        break;
-      }
-      default:
-        LOG(FATAL) << "Unexpected AggregationID";
+      });
     }
+
     output->addColumn(native_cv.release());
   }
 }

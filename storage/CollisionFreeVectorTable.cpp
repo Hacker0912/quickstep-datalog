@@ -54,7 +54,7 @@ using ArgumentTypeIDDispatcher = meta::SequenceDispatcher<
                    kDecimal2, kDecimal4, kDecimal6>>;
 
 using AggregationIDDispatcher = meta::SequenceDispatcher<
-    meta::Sequence<AggregationID, kCount, kSum, kAvg, kHasMultipleValues>>;
+    meta::Sequence<AggregationID, kCount, kSum, kAvg, kMin, kMax, kHasMultipleValues>>;
 
 using AggregateFunctionDispatcher =
     AggregationIDDispatcher
@@ -64,8 +64,7 @@ using AggregateFunctionDispatcher =
 using BoolDispatcher = meta::SequenceDispatcher<
     meta::Sequence<bool, true, false>>;
 
-}  // namespace
-
+}  // namespaces
 
 CollisionFreeVectorTable::CollisionFreeVectorTable(
     const Type *key_type,

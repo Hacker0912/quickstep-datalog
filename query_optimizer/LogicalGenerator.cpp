@@ -57,8 +57,7 @@ L::LogicalPtr LogicalGenerator::generatePlan(
   DVLOG(4) << "Initial logical plan:\n" << logical_plan_->toString();
 
   optimizePlan();
-//  DVLOG(4) << "Optimized logical plan:\n" << logical_plan_->toString();
-  std::cerr << "Optimized logical plan:\n" << logical_plan_->toString();
+  DVLOG(4) << "Optimized logical plan:\n" << logical_plan_->toString();
 
   return logical_plan_;
 }
@@ -73,7 +72,7 @@ void LogicalGenerator::optimizePlan() {
   rules.emplace_back(new GenerateJoins());
   rules.emplace_back(new PushDownFilter());
   rules.emplace_back(new CollapseProject());
-  rules.emplace_back(new TransformMultiValueFilterJoin());
+  rules.emplace_back(new TransformMultiValueFilterJoin(optimizer_context_));
 
   for (std::unique_ptr<Rule<L::Logical>> &rule : rules) {
     logical_plan_ = rule->apply(logical_plan_);

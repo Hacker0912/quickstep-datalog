@@ -244,6 +244,7 @@ target_link_libraries(quickstep_queryoptimizer_rules_PushDownSemiAntiJoin
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_logical_PatternMatcher
                       quickstep_queryoptimizer_rules_BottomUpRule
+                      quickstep_utility_EqualsAnyConstant
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_rules_ReduceGroupByAttributes
                       ${GFLAGS_LIB_NAME}
@@ -347,12 +348,45 @@ target_link_libraries(quickstep_queryoptimizer_rules_TopDownRule
                       quickstep_queryoptimizer_rules_Rule
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_rules_TransformMultiValueFilterJoin
+                      quickstep_catalog_CatalogRelation
+                      quickstep_catalog_CatalogTypedefs
+                      quickstep_expressions_aggregation_AggregateFunctionHasMultipleValues
+                      quickstep_queryoptimizer_OptimizerContext
+                      quickstep_queryoptimizer_expressions_AggregateFunction
+                      quickstep_queryoptimizer_expressions_Alias
                       quickstep_queryoptimizer_expressions_AttributeReference
+                      quickstep_queryoptimizer_expressions_BinaryExpression
+                      quickstep_queryoptimizer_expressions_Cast
+                      quickstep_queryoptimizer_expressions_ComparisonExpression
+                      quickstep_queryoptimizer_expressions_ExprId
+                      quickstep_queryoptimizer_expressions_Expression
                       quickstep_queryoptimizer_expressions_ExpressionUtil
+                      quickstep_queryoptimizer_expressions_LogicalAnd
+                      quickstep_queryoptimizer_expressions_LogicalNot
+                      quickstep_queryoptimizer_expressions_LogicalOr
+                      quickstep_queryoptimizer_expressions_PatternMatcher
+                      quickstep_queryoptimizer_expressions_Predicate
+                      quickstep_queryoptimizer_expressions_PredicateLiteral
+                      quickstep_queryoptimizer_expressions_ScalarLiteral
+                      quickstep_queryoptimizer_expressions_UnaryExpression
+                      quickstep_queryoptimizer_logical_Aggregate
+                      quickstep_queryoptimizer_logical_Filter
                       quickstep_queryoptimizer_logical_HashJoin
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_logical_PatternMatcher
+                      quickstep_queryoptimizer_logical_Project
+                      quickstep_queryoptimizer_logical_SetOperation
+                      quickstep_queryoptimizer_logical_TableReference
                       quickstep_queryoptimizer_rules_BottomUpRule
+                      quickstep_queryoptimizer_rules_RuleHelper
+                      quickstep_types_IntType
+                      quickstep_types_Type
+                      quickstep_types_TypedValue
+                      quickstep_types_operations_binaryoperations_BinaryOperation
+                      quickstep_types_operations_comparisons_Comparison
+                      quickstep_types_operations_comparisons_ComparisonID
+                      quickstep_types_operations_comparisons_EqualComparison
+                      quickstep_types_operations_unaryoperations_UnaryOperation
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_rules_InjectJoinFilters
                       quickstep_queryoptimizer_costmodel_StarSchemaSimpleCostModel
