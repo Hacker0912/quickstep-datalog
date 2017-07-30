@@ -201,6 +201,8 @@ void ExecuteAnalyze(const PtrVector<ParseString> &arguments,
     CatalogRelationStatistics *mutable_stat =
         mutable_relation->getStatisticsMutable();
 
+    mutable_stat->clear();
+
     const std::string rel_name = EscapeQuotes(relation.getName(), '"');
 
     // Get the number of distinct values for each column.

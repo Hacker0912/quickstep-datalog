@@ -27,9 +27,11 @@
 #define QUICKSTEP_TYPES_OPERATIONS_COMPARISONS_LITERAL_COMPARATORS_INL_HPP_
 
 #include <cstddef>
+#include <memory>
 #include <type_traits>
 
 #include "catalog/CatalogTypedefs.hpp"
+#include "compression/CompressionDictionaryReference.hpp"
 #include "storage/TupleIdSequence.hpp"
 
 #ifdef QUICKSTEP_ENABLE_VECTOR_COPY_ELISION_SELECTION
@@ -40,10 +42,87 @@
 #include "types/TypedValue.hpp"
 #include "types/containers/ColumnVector.hpp"
 #include "types/operations/comparisons/LiteralComparators.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
 namespace quickstep {
+
+namespace {
+
+template <typename ValueAccessorT>
+struct CompareSingleValueAccessorFastPath {
+  template <typename LeftCppType, typename RightCppType,
+            typename ComparisonFunctor>
+  inline static bool Apply(ValueAccessorT *accessor,
+                           const attribute_id left_id,
+                           const attribute_id right_id,
+                           const ComparisonFunctor &functor,
+                           TupleIdSequence *result) {
+    return false;
+  }
+};
+
+template <>
+struct CompareSingleValueAccessorFastPath<CompressedColumnStoreValueAccessor> {
+  template <typename LeftCodeType, typename RightCodeType,
+            typename LeftCppType, typename RightCppType,
+            typename ComparisonFunctor>
+  inline static void ApplyInternal(const std::size_t num_tuples,
+                                   const LeftCodeType *left_codes,
+                                   const LeftCppType *left_values,
+                                   const RightCodeType *right_codes,
+                                   const RightCppType *right_values,
+                                   const ComparisonFunctor &comparison_functor,
+                                   TupleIdSequence *result) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      result->set(i, comparison_functor(left_values[left_codes[i]],
+                                        right_values[right_codes[i]]));
+    }
+  }
+
+  template <typename LeftCppType, typename RightCppType,
+            typename ComparisonFunctor>
+  inline static bool Apply(CompressedColumnStoreValueAccessor *accessor,
+                           const attribute_id left_id,
+                           const attribute_id right_id,
+                           const ComparisonFunctor &comparison_functor,
+                           TupleIdSequence *result) {
+    std::unique_ptr<CompressionDictionaryReference> left_dict(
+        accessor->getHelper().getDictionaryReference(left_id));
+    std::unique_ptr<CompressionDictionaryReference> right_dict(
+        accessor->getHelper().getDictionaryReference(right_id));
+
+    if (left_dict == nullptr || right_dict == nullptr) {
+      return false;
+    }
+
+    using CodeSizeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<std::size_t, 1u, 2u, 4u>,
+        meta::TypeList<std::uint8_t, std::uint16_t, std::uint32_t>>;
+
+    CodeSizeDispatcher::set_next<CodeSizeDispatcher>
+                      ::InvokeOn(
+        left_dict->getCodeSize(),
+        right_dict->getCodeSize(),
+        [&](auto typelist) -> void {
+      using TL = decltype(typelist);
+      using LeftCodeType = typename TL::template at<0>;
+      using RightCodeType = typename TL::template at<1>;
+
+      ApplyInternal(accessor->getNumTuples(),
+                    static_cast<const LeftCodeType*>(left_dict->getCodes()),
+                    static_cast<const LeftCppType*>(left_dict->getValues()),
+                    static_cast<const RightCodeType*>(right_dict->getCodes()),
+                    static_cast<const RightCppType*>(right_dict->getValues()),
+                    comparison_functor,
+                    result);
+    });
+    return true;
+  }
+};
+
+}  // namespace
 
 template <template <typename LeftArgument, typename RightArgument> class ComparisonFunctor,
           typename LeftCppType, bool left_nullable,
@@ -247,7 +326,6 @@ TupleIdSequence* LiteralUncheckedComparator<ComparisonFunctor,
         const attribute_id left_id,
         const attribute_id right_id,
         const TupleIdSequence *filter) const {
-  std::cerr << "Compare single value accessor!\n";
   return InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
       accessor,
       [&](auto *accessor) -> TupleIdSequence* {  // NOLINT(build/c++11)
@@ -292,13 +370,25 @@ TupleIdSequence* LiteralUncheckedComparator<ComparisonFunctor,
                           && this->compareDataPtrsHelper<true>(left_value, right_value));
         }
       } else {
-        while (accessor->next()) {
-          const void *left_value = accessor->template getUntypedValue<left_nullable>(left_id);
-          const void *right_value = accessor->template getUntypedValue<right_nullable>(right_id);
-          result->set(accessor->getCurrentPosition(),
-                      (!((left_nullable && (left_value == nullptr))
-                          || (right_nullable && (right_value == nullptr))))
-                          && this->compareDataPtrsHelper<true>(left_value, right_value));
+        // Try fast path.
+        // TODO(jiaqiao): General framework for doing this kind of specialization.
+        bool use_fast_path = false;
+        if (!left_nullable && !right_nullable) {
+          using ValueAccessorT = std::remove_pointer_t<decltype(accessor)>;
+          using FathPath = CompareSingleValueAccessorFastPath<ValueAccessorT>;
+          use_fast_path = FathPath::template Apply<LeftCppType, RightCppType>(
+              accessor, left_id, right_id, comparison_functor_, result);
+        }
+
+        if (!use_fast_path) {
+          while (accessor->next()) {
+            const void *left_value = accessor->template getUntypedValue<left_nullable>(left_id);
+            const void *right_value = accessor->template getUntypedValue<right_nullable>(right_id);
+            result->set(accessor->getCurrentPosition(),
+                        (!((left_nullable && (left_value == nullptr))
+                            || (right_nullable && (right_value == nullptr))))
+                            && this->compareDataPtrsHelper<true>(left_value, right_value));
+          }
         }
       }
       if (!short_circuit && (filter != nullptr)) {
@@ -575,7 +665,6 @@ TypedValue LiteralUncheckedComparator<ComparisonFunctor,
           current_literal = *static_cast<const LeftCppType*>(va_value);
         }
       }
-
       // Aggregate on the remaining values.
       if (!accessor->iterationFinished()) {
         DCHECK(!is_null);

@@ -674,7 +674,7 @@ bool StarSchemaSimpleCostModel::canUseCollisionFreeAggregation(
     }
 
     if (!QUICKSTEP_EQUALS_ANY_CONSTANT(agg_func->getAggregate().getAggregationID(),
-                                       kCount, kSum, kAvg, kHasMultipleValues)) {
+                                       kCount, kSum, kAvg, kMin, kMax, kHasMultipleValues)) {
       return false;
     }
 

@@ -978,6 +978,10 @@ class PackedTupleStorageSubBlockValueAccessor : public ValueAccessor {
     return getTupleIdSequence();
   }
 
+  const HelperT& getHelper() const {
+    return helper_;
+  }
+
  private:
   template <typename... HelperArgs>
   PackedTupleStorageSubBlockValueAccessor(

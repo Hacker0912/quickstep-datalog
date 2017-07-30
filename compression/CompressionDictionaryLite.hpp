@@ -112,6 +112,15 @@ class CompressionDictionaryLite {
     return *(static_cast<const std::uint32_t*>(dictionary_memory_) + 1);
   }
 
+  inline const Type& getValueType() const {
+    return type_;
+  }
+
+  inline const void* getFixedLengthData() const {
+    return static_cast<const char*>(dictionary_memory_)
+           + 2 * sizeof(std::uint32_t);  // Header.
+  }
+
   /**
    * @brief Get an untyped pointer to the value represented by the specified
    *        code.

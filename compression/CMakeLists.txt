@@ -25,6 +25,9 @@ add_library(quickstep_compression_CompressionDictionaryBuilder
 add_library(quickstep_compression_CompressionDictionaryLite
             CompressionDictionaryLite.cpp
             CompressionDictionaryLite.hpp)
+add_library(quickstep_compression_CompressionDictionaryReference
+            ../empty_src.cpp
+            CompressionDictionaryReference.hpp)
 
 # Link dependencies:
 target_link_libraries(quickstep_compression_CompressionDictionary

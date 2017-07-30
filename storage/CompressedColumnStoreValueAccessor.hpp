@@ -27,6 +27,7 @@
 #include "catalog/CatalogRelationSchema.hpp"
 #include "catalog/CatalogTypedefs.hpp"
 #include "compression/CompressionDictionaryLite.hpp"
+#include "compression/CompressionDictionaryReference.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "storage/StorageBlockLayout.pb.h"
 #include "storage/ValueAccessor.hpp"
@@ -98,6 +99,27 @@ class CompressedColumnStoreValueAccessorHelper {
                                                              const attribute_id attr_id) const {
     // Return nullptr because this value accessor does not support column accessor yet.
     return nullptr;
+  }
+
+  inline CompressionDictionaryReference* getDictionaryReference(
+      const attribute_id attr) const {
+    if (!dictionary_coded_attributes_[attr]) {
+      return nullptr;
+    }
+
+    const auto &dictionary = dictionaries_.atUnchecked(attr);
+    const Type &value_type = dictionary.getValueType();
+
+    if (value_type.isVariableLength()) {
+      return nullptr;
+    }
+
+    return new CompressionDictionaryReference(
+        value_type,
+        compression_info_.attribute_size(attr),
+        dictionary.getNullCode(),
+        column_stripes_[attr],
+        dictionary.getFixedLengthData());
   }
 
   template <bool check_null>
