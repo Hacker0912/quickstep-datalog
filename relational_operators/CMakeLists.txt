@@ -289,6 +289,7 @@ target_link_libraries(quickstep_relationaloperators_HashJoinOperator
                       quickstep_types_containers_ColumnVector
                       quickstep_types_containers_ColumnVectorsValueAccessor
                       quickstep_utility_ColumnVectorCache
+                      quickstep_utility_EventProfiler
                       quickstep_utility_Macros
                       quickstep_utility_lipfilter_LIPFilterAdaptiveProber
                       quickstep_utility_lipfilter_LIPFilterUtil

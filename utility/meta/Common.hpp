@@ -54,15 +54,16 @@ struct Sequence {
 template <std::size_t ...s>
 using IntegerSequence = Sequence<std::size_t, s...>;
 
-template <std::size_t n, std::size_t ...s>
-struct MakeSequence_0 : MakeSequence_0<n-1, n-1, s...> {};
-template <std::size_t ...s>
-struct MakeSequence_0<0, s...> {
+template <std::size_t l, std::size_t r, std::size_t ...s>
+struct MakeSequence_0 : MakeSequence_0<l, r-1, r-1, s...> {};
+template <std::size_t l, std::size_t ...s>
+struct MakeSequence_0<l, l, s...> {
   using type = IntegerSequence<s...>;
 };
 template <std::size_t n>
-struct MakeSequence : MakeSequence_0<n> {};
-
+struct MakeSequence : MakeSequence_0<0, n> {};
+template <std::size_t l, std::size_t r>
+struct MakeRange : MakeSequence_0<l, r> {};
 
 template <typename ...> struct Conjunction : std::true_type {};
 template <typename B> struct Conjunction<B> : B {};

@@ -63,6 +63,10 @@ class BasicColumnStoreValueAccessorHelper {
     return true;
   }
 
+  inline const void* getColumnData(const attribute_id attr_id) const {
+    return column_stripes_[attr_id];
+  }
+
   /**
    * @brief Get a pointer to a ColumnAccessor object that provides a fast strided memory
    *        access on the underlying storage block.

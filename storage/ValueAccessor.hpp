@@ -536,6 +536,10 @@ class TupleIdSequenceAdapterValueAccessor : public ValueAccessor {
     return getTupleIdSequence();
   }
 
+  InternalValueAccessorType *getInternalAccessor() const {
+    return accessor_;
+  }
+
  private:
   InternalValueAccessorType *accessor_;
   std::unique_ptr<InternalValueAccessorType> owned_accessor_;
@@ -745,6 +749,10 @@ class OrderedTupleIdSequenceAdapterValueAccessor : public ValueAccessor {
 
   const TupleIdSequence* getTupleIdSequenceVirtual() const override {
     return getTupleIdSequence();
+  }
+
+  InternalValueAccessorType *getInternalAccessor() const {
+    return accessor_;
   }
 
  private:
@@ -1058,6 +1066,10 @@ class ColumnAccessor {
       }
     }
     return static_cast<const char*>(base_address_) + current_tuple_position_ * stride_;
+  }
+
+  inline const void* getData() const {
+    return base_address_;
   }
 
  private:

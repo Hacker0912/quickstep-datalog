@@ -50,13 +50,16 @@ target_link_libraries(quickstep_compression_CompressionDictionaryLite
                       quickstep_types_Type
                       quickstep_types_TypedValue
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_compression_CompressionDictionaryReference
+                      quickstep_utility_Macros)
 
 # Module all-in-one library:
 add_library(quickstep_compression ../empty_src.cpp CompressionModule.hpp)
 target_link_libraries(quickstep_compression
                       quickstep_compression_CompressionDictionary
                       quickstep_compression_CompressionDictionaryBuilder
-                      quickstep_compression_CompressionDictionaryLite)
+                      quickstep_compression_CompressionDictionaryLite
+                      quickstep_compression_CompressionDictionaryReference)
 
 # Tests:
 add_executable(CompressionDictionary_unittest "${CMAKE_CURRENT_SOURCE_DIR}/tests/CompressionDictionary_unittest.cpp")

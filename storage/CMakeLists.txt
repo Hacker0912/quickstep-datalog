@@ -493,7 +493,6 @@ target_link_libraries(quickstep_storage_CompressedBlockBuilder
                       quickstep_types_operations_comparisons_ComparisonUtil
                       quickstep_utility_BitManipulation
                       quickstep_utility_BitVector
-                      quickstep_utility_EventProfiler
                       quickstep_utility_Macros
                       quickstep_utility_PtrMap
                       quickstep_utility_PtrVector)
@@ -524,6 +523,7 @@ target_link_libraries(quickstep_storage_CompressedColumnStoreValueAccessor
                       quickstep_catalog_CatalogRelationSchema
                       quickstep_catalog_CatalogTypedefs
                       quickstep_compression_CompressionDictionaryLite
+                      quickstep_compression_CompressionDictionaryReference
                       quickstep_storage_StorageBlockInfo
                       quickstep_storage_StorageBlockLayout_proto
                       quickstep_storage_ValueAccessor
@@ -1068,6 +1068,7 @@ target_link_libraries(quickstep_storage_ThreadPrivateCompactKeyHashTable
                       quickstep_types_TypeID
                       quickstep_types_containers_ColumnVector
                       quickstep_types_containers_ColumnVectorsValueAccessor
+                      quickstep_utility_EventProfiler
                       quickstep_utility_Macros
                       quickstep_utility_ScopedBuffer
                       quickstep_utility_meta_Dispatchers)
