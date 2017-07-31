@@ -34,6 +34,7 @@
 #include "expressions/scalar/ScalarAttribute.hpp"
 #include "storage/IndexSubBlock.hpp"
 #include "storage/SubBlocksReference.hpp"
+#include "storage/TupleIdSequence.hpp"
 #include "storage/TupleStorageSubBlock.hpp"
 #include "storage/ValueAccessor.hpp"
 #include "types/Type.hpp"
@@ -49,8 +50,6 @@
 #include "glog/logging.h"
 
 namespace quickstep {
-
-class TupleIdSequence;
 
 ComparisonPredicate::ComparisonPredicate(const Comparison &comparison,
                                          Scalar *left_operand,
@@ -115,6 +114,39 @@ bool ComparisonPredicate::matchesForJoinedTuples(
                                                 right_accessor,
                                                 right_relation_id,
                                                 right_tuple_id));
+  }
+}
+
+void ComparisonPredicate::matchesForAllJoinedTuples(
+    ValueAccessor &left_accessor,
+    const relation_id left_relation_id,
+    ValueAccessor &right_accessor,
+    const relation_id right_relation_id,
+    const std::vector<std::pair<tuple_id, tuple_id>> &joined_tuple_ids,
+    std::vector<std::pair<tuple_id, tuple_id>> *filtered_matches) const {
+  LOG_IF(FATAL, fast_comparator_.get() == nullptr) << "Impossible for TPC-H";
+  ColumnVectorPtr left_results =
+      left_operand_->getAllValuesForJoin(
+          left_relation_id,
+          &left_accessor,
+          right_relation_id,
+          &right_accessor,
+          joined_tuple_ids,
+          nullptr);
+  ColumnVectorPtr right_results =
+      right_operand_->getAllValuesForJoin(
+          left_relation_id,
+          &left_accessor,
+          right_relation_id,
+          &right_accessor,
+          joined_tuple_ids,
+          nullptr);
+  std::unique_ptr<TupleIdSequence> matches(
+  fast_comparator_->compareColumnVectors(
+      *left_results, *right_results, nullptr, nullptr));
+
+  for (const tuple_id pos : *matches) {
+    filtered_matches->emplace_back(joined_tuple_ids[pos]);
   }
 }
 

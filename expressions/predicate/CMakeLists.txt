@@ -53,6 +53,7 @@ target_link_libraries(quickstep_expressions_predicate_ComparisonPredicate
                       quickstep_storage_IndexSubBlock
                       quickstep_storage_StorageBlockInfo
                       quickstep_storage_SubBlocksReference
+                      quickstep_storage_TupleIdSequence
                       quickstep_storage_TupleStorageSubBlock
                       quickstep_storage_ValueAccessor
                       quickstep_types_Type
@@ -92,6 +93,7 @@ target_link_libraries(quickstep_expressions_predicate_NegationPredicate
                       quickstep_storage_TupleIdSequence
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_expressions_predicate_Predicate
+                      glog
                       quickstep_catalog_CatalogTypedefs
                       quickstep_expressions_Expression
                       quickstep_expressions_Expressions_proto

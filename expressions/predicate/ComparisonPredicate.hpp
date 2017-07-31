@@ -89,6 +89,14 @@ class ComparisonPredicate : public Predicate {
       const relation_id right_relation_id,
       const tuple_id right_tuple_id) const override;
 
+  void matchesForAllJoinedTuples(
+      ValueAccessor &left_accessor,
+      const relation_id left_relation_id,
+      ValueAccessor &right_accessor,
+      const relation_id right_relation_id,
+      const std::vector<std::pair<tuple_id, tuple_id>> &joined_tuple_ids,
+      std::vector<std::pair<tuple_id, tuple_id>> *filtered_matches) const override;
+
   TupleIdSequence* getAllMatches(ValueAccessor *accessor,
                                  const SubBlocksReference *sub_blocks_ref,
                                  const TupleIdSequence *filter,

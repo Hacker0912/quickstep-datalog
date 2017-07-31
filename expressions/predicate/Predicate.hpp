@@ -22,6 +22,7 @@
 
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
@@ -29,6 +30,8 @@
 #include "expressions/Expressions.pb.h"
 #include "storage/StorageBlockInfo.hpp"
 #include "utility/Macros.hpp"
+
+#include "glog/logging.h"
 
 namespace quickstep {
 
@@ -149,6 +152,16 @@ class Predicate : public Expression {
       const ValueAccessor &right_accessor,
       const relation_id right_relation_id,
       const tuple_id right_tuple_id) const = 0;
+
+  virtual void matchesForAllJoinedTuples(
+      ValueAccessor &left_accessor,
+      const relation_id left_relation_id,
+      ValueAccessor &right_accessor,
+      const relation_id right_relation_id,
+      const std::vector<std::pair<tuple_id, tuple_id>> &joined_tuple_ids,
+      std::vector<std::pair<tuple_id, tuple_id>> *filtered_matches) const {
+    LOG(FATAL) << "Unimplemented";
+  }
 
   /**
    * @brief Determine whether this predicate is true for all tuples accessible

@@ -528,18 +528,12 @@ void HashInnerJoinWorkOrder::executeWithoutCopyElision(ValueAccessor *probe_acce
     // temporary memory requirements to an unreasonable degree.
     if (residual_predicate_ != nullptr) {
       VectorOfTupleIdPair filtered_matches;
-
-      for (const std::pair<tuple_id, tuple_id> &hash_match
-           : build_block_entry.second) {
-        if (residual_predicate_->matchesForJoinedTuples(*build_accessor,
-                                                        build_relation_id,
-                                                        hash_match.first,
-                                                        *probe_accessor,
-                                                        probe_relation_id,
-                                                        hash_match.second)) {
-          filtered_matches.emplace_back(hash_match);
-        }
-      }
+      residual_predicate_->matchesForAllJoinedTuples(*build_accessor,
+                                                     build_relation_id,
+                                                     *probe_accessor,
+                                                     probe_relation_id,
+                                                     build_block_entry.second,
+                                                     &filtered_matches);
 
       build_block_entry.second = std::move(filtered_matches);
     }
