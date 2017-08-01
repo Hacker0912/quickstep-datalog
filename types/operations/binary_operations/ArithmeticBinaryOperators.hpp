@@ -234,9 +234,9 @@ struct CompressedColumnStoreSpecializedAccessor {
   }
 
   template <typename Functor>
-  static bool InvokeOn(ValueAccessor *accessor,
-                       const attribute_id attr_id,
-                       const Functor &functor) {
+  inline static bool InvokeOn(ValueAccessor *accessor,
+                              const attribute_id attr_id,
+                              const Functor &functor) {
     if (accessor->getImplementationType() !=
             ValueAccessor::Implementation::kCompressedColumnStore ||
         accessor->isOrderedTupleIdSequenceAdapter()) {
@@ -718,8 +718,8 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
     NativeColumnVector *result = new NativeColumnVector(
         ResultType::Instance(left_nullable || right_nullable),
         native_column_vector.size());
-    std::size_t cv_pos = 0;
 
+    std::size_t cv_pos = 0;
     using CppType = std::conditional_t<column_vector_on_left, RightCppType, LeftCppType>;
     const bool use_fast_path =
         !va_nullable && !cv_nullable &&
@@ -734,6 +734,7 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
     });
 
     if (!use_fast_path) {
+      std::size_t cv_pos = 0;
       InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
           value_accessor,
           [&](auto *value_accessor) -> void {  // NOLINT(build/c++11)
