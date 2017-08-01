@@ -586,6 +586,21 @@ class Resolver {
                                  const expressions::ScalarPtr &left_operand,
                                  const expressions::ScalarPtr &right_operand) const;
 
+  void checkComparisonWithCast(const ParseTreeNode *location,
+                               const Comparison &op,
+                               expressions::ScalarPtr *left_operand,
+                               const expressions::ScalarPtr &right_operand) const;
+
+  void checkComparisonWithCast(const ParseTreeNode *location,
+                               const Comparison &op,
+                               const expressions::ScalarPtr &left_operand,
+                               expressions::ScalarPtr *right_operand) const;
+
+  void checkComparisonWithCast(const ParseTreeNode *location,
+                               const Comparison &op,
+                               expressions::ScalarPtr *left_operand,
+                               expressions::ScalarPtr *right_operand) const;
+
   /**
    * @brief Collapse tree of homogenous set operations into a flat vector.
    */

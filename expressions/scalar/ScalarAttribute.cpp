@@ -39,6 +39,14 @@
 
 namespace quickstep {
 
+namespace {
+
+struct GetAllValuesFastPath {
+
+};
+
+}  // namespace
+
 ScalarAttribute::ScalarAttribute(const CatalogAttribute &attribute)
     : Scalar(attribute.getType()),
       attribute_(attribute) {

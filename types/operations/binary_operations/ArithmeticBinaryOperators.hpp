@@ -28,6 +28,8 @@
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
+#include "compression/CompressionDictionaryReference.hpp"
+#include "compression/CompressionTruncationReference.hpp"
 #include "storage/StorageBlockInfo.hpp"
 
 #ifdef QUICKSTEP_ENABLE_VECTOR_COPY_ELISION_SELECTION
@@ -39,6 +41,7 @@
 #include "types/containers/ColumnVector.hpp"
 #include "types/operations/binary_operations/BinaryOperation.hpp"
 #include "utility/Macros.hpp"
+#include "utility/meta/Dispatchers.hpp"
 
 #include "glog/logging.h"
 
@@ -161,6 +164,157 @@ template <typename LeftArgument, typename RightArgument> struct FloatModuloFunct
     return std::fmod(left, right);
   }
 };
+
+namespace {
+
+template <typename CppType>
+struct CompressedColumnStoreSpecializedAccessor {
+  template <typename CodeType, typename Functor>
+  static inline void InvokeOnDictionary(const std::size_t num_tuples,
+                                        const CodeType *codes,
+                                        const CppType *values,
+                                        const Functor &functor) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      functor(values + codes[i]);
+    }
+  }
+
+  template <typename CodeType, typename Functor>
+  static inline void InvokeOnDictionary(const TupleIdSequence &existence_map,
+                                        const CodeType *codes,
+                                        const CppType *values,
+                                        const Functor &functor) {
+    for (const tuple_id i : existence_map) {
+      functor(values + codes[i]);
+    }
+  }
+
+  template <typename CodeType, typename Functor>
+  static inline void InvokeOnTruncation(const std::size_t num_tuples,
+                                        const CodeType *codes,
+                                        const Functor &functor) {
+    CodeType value;
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      // TODO(jianqiao): fix this.
+      std::memset(&value, 0, sizeof(CodeType));
+      std::memcpy(&value, codes + i, sizeof(CodeType));
+      functor(reinterpret_cast<const CppType*>(&value));
+    }
+  }
+
+  template <typename CodeType, typename Functor>
+  static inline void InvokeOnTruncation(const TupleIdSequence &existence_map,
+                                        const CodeType *codes,
+                                        const Functor &functor) {
+    CodeType value;
+    for (const tuple_id i : existence_map) {
+      // TODO(jianqiao): fix this.
+      std::memset(&value, 0, sizeof(CodeType));
+      std::memcpy(&value, codes + i, sizeof(CodeType));
+      functor(reinterpret_cast<const CppType*>(&value));
+    }
+  }
+
+  template <typename Functor>
+  static inline void InvokeOnDirect(const std::size_t num_tuples,
+                                    const CppType *values,
+                                    const Functor &functor) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      functor(values + i);
+    }
+  }
+
+  template <typename Functor>
+  static inline void InvokeOnDirect(const TupleIdSequence &existence_map,
+                                    const CppType *values,
+                                    const Functor &functor) {
+    for (const tuple_id i : existence_map) {
+      functor(values + i);
+    }
+  }
+
+  template <typename Functor>
+  static bool InvokeOn(ValueAccessor *accessor,
+                       const attribute_id attr_id,
+                       const Functor &functor) {
+    if (accessor->getImplementationType() !=
+            ValueAccessor::Implementation::kCompressedColumnStore ||
+        accessor->isOrderedTupleIdSequenceAdapter()) {
+      return false;
+    }
+
+    const TupleIdSequence *existence_map = nullptr;
+    CompressedColumnStoreValueAccessor *cc_accessor;
+    if (accessor->isTupleIdSequenceAdapter()) {
+      auto *tisa_accessor = static_cast<TupleIdSequenceAdapterValueAccessor<
+          CompressedColumnStoreValueAccessor>*>(accessor);
+      cc_accessor = tisa_accessor->getInternalAccessor();
+      existence_map = tisa_accessor->getTupleIdSequence();
+    } else {
+      cc_accessor = static_cast<CompressedColumnStoreValueAccessor*>(accessor);
+    }
+
+    using CodeSizeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<std::size_t, 1u, 2u, 4u>,
+        meta::TypeList<std::uint8_t, std::uint16_t, std::uint32_t>>;
+
+    if (cc_accessor->getHelper().isDictionary(attr_id)) {
+      std::unique_ptr<CompressionDictionaryReference> dict(
+          cc_accessor->getHelper().getDictionaryReference(attr_id));
+
+      CodeSizeDispatcher::InvokeOn(
+          dict->getCodeSize(),
+          [&](auto typelist) -> void {
+        using TL = decltype(typelist);
+        using CodeType = typename TL::template at<0>;
+
+        if (existence_map == nullptr) {
+          InvokeOnDictionary(cc_accessor->getNumTuples(),
+                             static_cast<const CodeType*>(dict->getCodes()),
+                             static_cast<const CppType*>(dict->getValues()),
+                             functor);
+        } else {
+          InvokeOnDictionary(*existence_map,
+                             static_cast<const CodeType*>(dict->getCodes()),
+                             static_cast<const CppType*>(dict->getValues()),
+                             functor);
+        }
+      });
+    } else if (cc_accessor->getHelper().isTruncated(attr_id)) {
+      std::unique_ptr<CompressionTruncationReference> trunc(
+          cc_accessor->getHelper().getTruncationReference(attr_id));
+
+      CodeSizeDispatcher::InvokeOn(
+          trunc->getCodeSize(),
+          [&](auto typelist) -> void {
+        using TL = decltype(typelist);
+        using CodeType = typename TL::template at<0>;
+
+        if (existence_map == nullptr) {
+          InvokeOnTruncation(cc_accessor->getNumTuples(),
+                             static_cast<const CodeType*>(trunc->getCodes()),
+                             functor);
+        } else {
+          InvokeOnTruncation(*existence_map,
+                             static_cast<const CodeType*>(trunc->getCodes()),
+                             functor);
+        }
+      });
+    } else {
+      const CppType *values = static_cast<const CppType*>(
+          cc_accessor->getHelper().getColumnData(attr_id));
+
+      if (existence_map == nullptr) {
+        InvokeOnDirect(cc_accessor->getNumTuples(), values, functor);
+      } else {
+        InvokeOnDirect(*existence_map, values, functor);
+      }
+    }
+    return true;
+  }
+};
+
+}  // namespace
 
 template <template <typename LeftCppType, typename RightCppType> class OpFunctor,
           typename ResultType,
@@ -497,38 +651,52 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
     DCHECK(NativeColumnVector::UsableForType(
         ResultType::Instance(left_nullable || right_nullable)));
 
-    return InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
-        value_accessor,
-        [&](auto *value_accessor) -> ColumnVector* {  // NOLINT(build/c++11)
-      typedef typename std::conditional<value_accessor_on_left,
-                                        RightCppType,
-                                        LeftCppType>::type
-          StaticValueCppType;
+    typedef typename std::conditional<value_accessor_on_left,
+                                      RightCppType,
+                                      LeftCppType>::type
+        StaticValueCppType;
 
-      constexpr bool va_nullable = value_accessor_on_left ? left_nullable : right_nullable;
-      constexpr bool static_value_nullable = value_accessor_on_left ? right_nullable : left_nullable;
+    constexpr bool va_nullable = value_accessor_on_left ? left_nullable : right_nullable;
+    constexpr bool static_value_nullable = value_accessor_on_left ? right_nullable : left_nullable;
 
-      NativeColumnVector *result = new NativeColumnVector(
-          ResultType::Instance(left_nullable || right_nullable),
-          value_accessor->getNumTuples());
-      if (static_value_nullable && static_value.isNull()) {
-        result->fillWithNulls();
-        return result;
-      }
-      const StaticValueCppType literal = static_value.getLiteral<StaticValueCppType>();
-      value_accessor->beginIteration();
-      while (value_accessor->next()) {
-        const void* va_value
-            = value_accessor->template getUntypedValue<va_nullable>(value_accessor_attr_id);
-        if (va_nullable && (va_value == nullptr)) {
-          result->appendNullValue();
-        } else {
-          *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
-              = this->castAndApply<value_accessor_on_left>(va_value, &literal);
-        }
-      }
+    NativeColumnVector *result = new NativeColumnVector(
+        ResultType::Instance(left_nullable || right_nullable),
+        value_accessor->getNumTuplesVirtual());
+    if (static_value_nullable && static_value.isNull()) {
+      result->fillWithNulls();
       return result;
+    }
+    const StaticValueCppType literal = static_value.getLiteral<StaticValueCppType>();
+
+    using CppType = std::conditional_t<value_accessor_on_left, LeftCppType, RightCppType>;
+    const bool use_fast_path =
+        !va_nullable &&
+        CompressedColumnStoreSpecializedAccessor<CppType>::InvokeOn(
+            value_accessor,
+            value_accessor_attr_id,
+            [&](const CppType *va_value) -> void {
+      *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
+          = this->castAndApply<value_accessor_on_left>(va_value, &literal);
     });
+
+    if (!use_fast_path) {
+      InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
+          value_accessor,
+          [&](auto *value_accessor) -> void {  // NOLINT(build/c++11)
+        value_accessor->beginIteration();
+        while (value_accessor->next()) {
+          const void* va_value
+              = value_accessor->template getUntypedValue<va_nullable>(value_accessor_attr_id);
+          if (va_nullable && (va_value == nullptr)) {
+            result->appendNullValue();
+          } else {
+            *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
+                = this->castAndApply<value_accessor_on_left>(va_value, &literal);
+          }
+        }
+      });
+    }
+    return result;
   }
 
   template <bool column_vector_on_left>
@@ -541,39 +709,56 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
 
     DCHECK(NativeColumnVector::UsableForType(
         ResultType::Instance(left_nullable || right_nullable)));
-    return InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
-        value_accessor,
-        [&](auto *value_accessor) -> ColumnVector* {  // NOLINT(build/c++11)
-      constexpr bool cv_nullable = column_vector_on_left ? left_nullable : right_nullable;
-      constexpr bool va_nullable = column_vector_on_left ? right_nullable : left_nullable;
 
-      DCHECK_EQ(native_column_vector.size(),
-                static_cast<std::size_t>(value_accessor->getNumTuples()));
-      NativeColumnVector *result = new NativeColumnVector(
-          ResultType::Instance(left_nullable || right_nullable),
-          native_column_vector.size());
-      std::size_t cv_pos = 0;
-      value_accessor->beginIteration();
-      while (value_accessor->next()) {
-        const void *cv_value = native_column_vector.getUntypedValue<cv_nullable>(cv_pos);
-        if (cv_nullable && (cv_value == nullptr)) {
-          result->appendNullValue();
-          ++cv_pos;
-          continue;
-        }
-        const void *va_value
-            = value_accessor->template getUntypedValue<va_nullable>(value_accessor_attr_id);
-        if (va_nullable && (va_value == nullptr)) {
-          result->appendNullValue();
-          ++cv_pos;
-          continue;
-        }
-        *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
-            = this->castAndApply<column_vector_on_left>(cv_value, va_value);
-        ++cv_pos;
-      }
-      return result;
+    constexpr bool cv_nullable = column_vector_on_left ? left_nullable : right_nullable;
+    constexpr bool va_nullable = column_vector_on_left ? right_nullable : left_nullable;
+
+    DCHECK_EQ(native_column_vector.size(),
+              static_cast<std::size_t>(value_accessor->getNumTuplesVirtual()));
+    NativeColumnVector *result = new NativeColumnVector(
+        ResultType::Instance(left_nullable || right_nullable),
+        native_column_vector.size());
+    std::size_t cv_pos = 0;
+
+    using CppType = std::conditional_t<column_vector_on_left, RightCppType, LeftCppType>;
+    const bool use_fast_path =
+        !va_nullable && !cv_nullable &&
+        CompressedColumnStoreSpecializedAccessor<CppType>::InvokeOn(
+            value_accessor,
+            value_accessor_attr_id,
+            [&](const CppType *va_value) -> void {
+      const void *cv_value = native_column_vector.getUntypedValue<cv_nullable>(cv_pos);
+      *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
+          = this->castAndApply<column_vector_on_left>(cv_value, va_value);
+      ++cv_pos;
     });
+
+    if (!use_fast_path) {
+      InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
+          value_accessor,
+          [&](auto *value_accessor) -> void {  // NOLINT(build/c++11)
+        value_accessor->beginIteration();
+        while (value_accessor->next()) {
+          const void *cv_value = native_column_vector.getUntypedValue<cv_nullable>(cv_pos);
+          if (cv_nullable && (cv_value == nullptr)) {
+            result->appendNullValue();
+            ++cv_pos;
+            continue;
+          }
+          const void *va_value
+              = value_accessor->template getUntypedValue<va_nullable>(value_accessor_attr_id);
+          if (va_nullable && (va_value == nullptr)) {
+            result->appendNullValue();
+            ++cv_pos;
+            continue;
+          }
+          *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
+              = this->castAndApply<column_vector_on_left>(cv_value, va_value);
+          ++cv_pos;
+        }
+      });
+    }
+    return result;
   }
 #endif  // QUICKSTEP_ENABLE_VECTOR_COPY_ELISION_SELECTION
 
@@ -729,6 +914,7 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
     }
 
     LeftCppType accumulated = current.getLiteral<LeftCppType>();
+
     InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
         accessor,
         [&](auto *accessor) -> void {  // NOLINT(build/c++11)

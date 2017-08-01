@@ -25,16 +25,20 @@
 #include <type_traits>
 #include <vector>
 
+#include "compression/CompressionDictionaryReference.hpp"
+#include "compression/CompressionTruncationReference.hpp"
 #include "expressions/aggregation/AggregateFunctionTraits.hpp"
 #include "expressions/aggregation/AggregationHandle.hpp"
 #include "expressions/aggregation/AggregationID.hpp"
 #include "storage/StorageBlob.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "storage/StorageManager.hpp"
+#include "storage/TupleIdSequence.hpp"
 #include "storage/ValueAccessorMultiplexer.hpp"
 #include "types/Type.hpp"
 #include "types/TypeID.hpp"
 #include "types/containers/ColumnVectorsValueAccessor.hpp"
+#include "utility/EventProfiler.hpp"
 #include "utility/ScopedBuffer.hpp"
 #include "utility/meta/Dispatchers.hpp"
 
@@ -58,6 +62,218 @@ using AggregateFunctionDispatcher =
     AggregationIDDispatcher
         ::set_next<ArgumentTypeIDDispatcher>
         ::set_transformer<AggregateFunctionTransformer<false>>;
+
+template <std::size_t key_size>
+struct ConstructKeyCodeFastPath {
+  static inline bool Apply(ValueAccessor *accessor,
+                           const attribute_id attr_id,
+                           const std::size_t key_code_size,
+                           char *key_code_ptr) {
+    if (accessor->getImplementationType() !=
+            ValueAccessor::Implementation::kCompressedColumnStore ||
+        accessor->isOrderedTupleIdSequenceAdapter()) {
+      return false;
+    }
+
+    const TupleIdSequence *existence_map = nullptr;
+    CompressedColumnStoreValueAccessor *cc_accessor;
+    if (accessor->isTupleIdSequenceAdapter()) {
+      auto *tisa_accessor = static_cast<TupleIdSequenceAdapterValueAccessor<
+          CompressedColumnStoreValueAccessor>*>(accessor);
+      cc_accessor = tisa_accessor->getInternalAccessor();
+      existence_map = tisa_accessor->getTupleIdSequence();
+    } else {
+      cc_accessor = static_cast<CompressedColumnStoreValueAccessor*>(accessor);
+    }
+
+    if (!cc_accessor->getHelper().isDictionary(attr_id) &&
+        !cc_accessor->getHelper().isTruncated(attr_id)) {
+      const char *values = static_cast<const char*>(
+          cc_accessor->getHelper().getColumnData(attr_id));
+      if (existence_map == nullptr) {
+        for (std::size_t i = 0; i < cc_accessor->getNumTuples(); ++i) {
+          std::memcpy(key_code_ptr, values + i * key_size, key_size);
+          key_code_ptr += key_code_size;
+        }
+      } else {
+        for (const tuple_id i : *existence_map) {
+          std::memcpy(key_code_ptr, values + i * key_size, key_size);
+          key_code_ptr += key_code_size;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+};
+
+template <typename AggFunc>
+struct UpsertValueAccessorGenericFastPath {
+  template <typename ValueT, typename StateT, typename CodeType>
+  static inline void ApplyToDictionary(const std::size_t num_tuples,
+                                       const CodeType *codes,
+                                       const ValueT *values,
+                                       const std::vector<std::uint32_t> &bucket_indices,
+                                       StateT *states) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      AggFunc::MergeValue(states + bucket_indices[i], values[codes[i]]);
+    }
+  }
+
+  template <typename ValueT, typename StateT, typename CodeType>
+  static inline void ApplyToDictionary(const TupleIdSequence &existence_map,
+                                       const CodeType *codes,
+                                       const ValueT *values,
+                                       const std::vector<std::uint32_t> &bucket_indices,
+                                       StateT *states) {
+    for (const tuple_id i : existence_map) {
+      AggFunc::MergeValue(states + bucket_indices[i], values[codes[i]]);
+    }
+  }
+
+  template <typename ValueT, typename StateT, typename CodeType>
+  static inline void ApplyToTruncation(const std::size_t num_tuples,
+                                       const CodeType *codes,
+                                       const std::vector<std::uint32_t> &bucket_indices,
+                                       StateT *states) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      // TODO(jianqiao): fix this.
+      ValueT value;
+      std::memset(&value, 0, sizeof(CodeType));
+      std::memcpy(&value, codes + i, sizeof(CodeType));
+      AggFunc::MergeValue(states + bucket_indices[i], value);
+    }
+  }
+
+  template <typename ValueT, typename StateT, typename CodeType>
+  static inline void ApplyToTruncation(const TupleIdSequence &existence_map,
+                                       const CodeType *codes,
+                                       const std::vector<std::uint32_t> &bucket_indices,
+                                       StateT *states) {
+    for (const tuple_id i : existence_map) {
+      // TODO(jianqiao): fix this.
+      ValueT value;
+      std::memset(&value, 0, sizeof(CodeType));
+      std::memcpy(&value, codes + i, sizeof(CodeType));
+      AggFunc::MergeValue(states + bucket_indices[i], value);
+    }
+  }
+
+  template <typename ValueT, typename StateT>
+  static inline void ApplyToDirect(const std::size_t num_tuples,
+                                   const ValueT *values,
+                                   const std::vector<std::uint32_t> &bucket_indices,
+                                   StateT *states) {
+    for (std::size_t i = 0; i < num_tuples; ++i) {
+      AggFunc::MergeValue(states + bucket_indices[i], values[i]);
+    }
+  }
+
+  template <typename ValueT, typename StateT>
+  static inline void ApplyToDirect(const TupleIdSequence &existence_map,
+                                   const ValueT *values,
+                                   const std::vector<std::uint32_t> &bucket_indices,
+                                   StateT *states) {
+    for (const tuple_id i : existence_map) {
+      AggFunc::MergeValue(states + bucket_indices[i], values[i]);
+    }
+  }
+
+  static inline bool Apply(ValueAccessor *accessor,
+                           const attribute_id attr_id,
+                           const std::vector<std::uint32_t> &bucket_indices,
+                           void *state_vec) {
+    if (accessor->getImplementationType() !=
+            ValueAccessor::Implementation::kCompressedColumnStore ||
+        accessor->isOrderedTupleIdSequenceAdapter()) {
+      return false;
+    }
+
+    const TupleIdSequence *existence_map = nullptr;
+    CompressedColumnStoreValueAccessor *cc_accessor;
+    if (accessor->isTupleIdSequenceAdapter()) {
+      auto *tisa_accessor = static_cast<TupleIdSequenceAdapterValueAccessor<
+          CompressedColumnStoreValueAccessor>*>(accessor);
+      cc_accessor = tisa_accessor->getInternalAccessor();
+      existence_map = tisa_accessor->getTupleIdSequence();
+    } else {
+      cc_accessor = static_cast<CompressedColumnStoreValueAccessor*>(accessor);
+    }
+
+    using CodeSizeDispatcher = meta::SequenceDispatcher<
+        meta::Sequence<std::size_t, 1u, 2u, 4u>,
+        meta::TypeList<std::uint8_t, std::uint16_t, std::uint32_t>>;
+
+    using ValueT = typename AggFunc::ValueType;
+    using StateT = typename AggFunc::StateType;
+
+    StateT *states = static_cast<StateT*>(state_vec);
+
+    if (cc_accessor->getHelper().isDictionary(attr_id)) {
+      std::unique_ptr<CompressionDictionaryReference> dict(
+          cc_accessor->getHelper().getDictionaryReference(attr_id));
+
+      CodeSizeDispatcher::InvokeOn(
+          dict->getCodeSize(),
+          [&](auto typelist) -> void {
+        using TL = decltype(typelist);
+        using CodeType = typename TL::template at<0>;
+
+        if (existence_map == nullptr) {
+          ApplyToDictionary(cc_accessor->getNumTuples(),
+                            static_cast<const CodeType*>(dict->getCodes()),
+                            static_cast<const ValueT*>(dict->getValues()),
+                            bucket_indices,
+                            states);
+        } else {
+          ApplyToDictionary(*existence_map,
+                            static_cast<const CodeType*>(dict->getCodes()),
+                            static_cast<const ValueT*>(dict->getValues()),
+                            bucket_indices,
+                            states);
+        }
+      });
+    } else if (cc_accessor->getHelper().isTruncated(attr_id)) {
+      std::unique_ptr<CompressionTruncationReference> trunc(
+          cc_accessor->getHelper().getTruncationReference(attr_id));
+
+      CodeSizeDispatcher::InvokeOn(
+          trunc->getCodeSize(),
+          [&](auto typelist) -> void {
+        using TL = decltype(typelist);
+        using CodeType = typename TL::template at<0>;
+
+        if (existence_map == nullptr) {
+          ApplyToTruncation<ValueT>(cc_accessor->getNumTuples(),
+                                    static_cast<const CodeType*>(trunc->getCodes()),
+                                    bucket_indices,
+                                    states);
+        } else {
+          ApplyToTruncation<ValueT>(*existence_map,
+                                    static_cast<const CodeType*>(trunc->getCodes()),
+                                    bucket_indices,
+                                    states);
+        }
+      });
+    } else {
+      const ValueT *values = static_cast<const ValueT*>(
+          cc_accessor->getHelper().getColumnData(attr_id));
+
+      if (existence_map == nullptr) {
+        ApplyToDirect(cc_accessor->getNumTuples(),
+                      values,
+                      bucket_indices,
+                      states);
+      } else {
+        ApplyToDirect(*existence_map,
+                      values,
+                      bucket_indices,
+                      states);
+      }
+    }
+    return true;
+  }
+};
 
 }  // namespace
 
@@ -181,15 +397,71 @@ void ThreadPrivateCompactKeyHashTable::resize() {
   storage_manager_->deleteBlockOrBlobFile(blob_id_to_delete);
 }
 
+template <std::size_t key_size>
+inline void ThreadPrivateCompactKeyHashTable::ConstructKeyCode(
+    const std::size_t offset,
+    const attribute_id attr_id,
+    ValueAccessor *accessor,
+    void *key_code_start) {
+  char *key_code_ptr = static_cast<char*>(key_code_start) + offset;
+  const bool use_fast_path =
+      ConstructKeyCodeFastPath<key_size>::Apply(
+          accessor, attr_id, kKeyCodeSize, key_code_ptr);
+  if (!use_fast_path) {
+    InvokeOnAnyValueAccessor(
+        accessor,
+        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
+      accessor->beginIteration();
+      while (accessor->next()) {
+        std::memcpy(key_code_ptr,
+                    accessor->template getUntypedValue<false>(attr_id),
+                    key_size);
+        key_code_ptr += kKeyCodeSize;
+      }
+    });
+  }
+}
+
+template <typename AggFunc>
+inline void ThreadPrivateCompactKeyHashTable::upsertValueAccessorGeneric(
+    const std::vector<BucketIndex> &bucket_indices,
+    const attribute_id attr_id,
+    ValueAccessor *accessor,
+    void *state_vec) {
+  const bool use_fast_path =
+      UpsertValueAccessorGenericFastPath<AggFunc>::Apply(
+          accessor, attr_id, bucket_indices, state_vec);
+  if (!use_fast_path) {
+    using ValueT = typename AggFunc::ValueType;
+    using StateT = typename AggFunc::StateType;
+    InvokeOnAnyValueAccessor(
+        accessor,
+        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
+      accessor->beginIteration();
+      StateT *states = static_cast<StateT*>(state_vec);
+      for (const BucketIndex idx : bucket_indices) {
+        accessor->next();
+        const ValueT *value = static_cast<const ValueT*>(
+            accessor->template getUntypedValue<false>(attr_id));
+        AggFunc::MergeValue(states + idx, *value);
+      }
+    });
+  }
+}
+
 bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
     const std::vector<std::vector<MultiSourceAttributeId>> &argument_ids,
     const std::vector<MultiSourceAttributeId> &key_attr_ids,
     const ValueAccessorMultiplexer &accessor_mux) {
+  auto *container = simple_profiler.getContainer();
+
   ValueAccessor *base_accessor = accessor_mux.getBaseAccessor();
   ValueAccessor *derived_accessor = accessor_mux.getDerivedAccessor();
 
   DCHECK(base_accessor != nullptr);
   const std::size_t num_tuples = base_accessor->getNumTuplesVirtual();
+
+  container->startEvent("ht_keycode");
 
   ScopedBuffer buffer(num_tuples * kKeyCodeSize);
   KeyCode *key_codes = static_cast<KeyCode*>(buffer.get());
@@ -212,6 +484,10 @@ bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
     key_code_offset += key_sizes_[i];
   }
 
+  container->endEvent("ht_keycode");
+
+  container->startEvent("ht_locate");
+
   std::vector<BucketIndex> bucket_indices(num_tuples);
   for (std::size_t i = 0; i < num_tuples; ++i) {
     const std::size_t code = key_codes[i];
@@ -228,6 +504,10 @@ bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
       bucket_indices[i] = index_it->second;
     }
   }
+
+  container->endEvent("ht_locate");
+
+  container->startEvent("ht_upsert");
 
   // Dispatch on AggregationID and argument type.
   for (std::size_t i = 0; i < handles_.size(); ++i) {
@@ -252,6 +532,8 @@ bool ThreadPrivateCompactKeyHashTable::upsertValueAccessorCompositeKey(
       });
     }
   }
+
+  container->endEvent("ht_upsert");
 
   return true;
 }

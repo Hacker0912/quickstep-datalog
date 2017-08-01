@@ -3235,6 +3235,75 @@ void Resolver::checkComparisonCanApplyTo(
   }
 }
 
+void Resolver::checkComparisonWithCast(
+    const ParseTreeNode *location,
+    const Comparison &op,
+    E::ScalarPtr *left_operand,
+    const E::ScalarPtr &right_operand) const {
+  if (!op.canCompareTypes((*left_operand)->getValueType(), right_operand->getValueType())) {
+    const Type &left_type = (*left_operand)->getValueType();
+    const Type &right_type = right_operand->getValueType();
+
+    if (right_type.isSafelyCoercibleFrom(left_type) &&
+        op.canCompareTypes(right_type, right_type)) {
+      *left_operand = SafelyCoerce(*left_operand, right_type);
+    } else {
+      THROW_SQL_ERROR_AT(location)
+          << "Comparison operation " << op.getName()
+          << " cannot be applied between "
+          << (*left_operand)->getValueType().getName() << " and "
+          << right_operand->getValueType().getName();
+    }
+  }
+}
+
+void Resolver::checkComparisonWithCast(
+    const ParseTreeNode *location,
+    const Comparison &op,
+    const E::ScalarPtr &left_operand,
+    E::ScalarPtr *right_operand) const {
+  if (!op.canCompareTypes(left_operand->getValueType(), (*right_operand)->getValueType())) {
+    const Type &left_type = left_operand->getValueType();
+    const Type &right_type = (*right_operand)->getValueType();
+
+    if (left_type.isSafelyCoercibleFrom(right_type) &&
+        op.canCompareTypes(left_type, left_type)) {
+      *right_operand = SafelyCoerce(*right_operand, left_type);
+    } else {
+      THROW_SQL_ERROR_AT(location)
+          << "Comparison operation " << op.getName()
+          << " cannot be applied between "
+          << left_operand->getValueType().getName() << " and "
+          << (*right_operand)->getValueType().getName();
+    }
+  }
+}
+
+void Resolver::checkComparisonWithCast(
+    const ParseTreeNode *location,
+    const Comparison &op,
+    E::ScalarPtr *left_operand,
+    E::ScalarPtr *right_operand) const {
+  if (!op.canCompareTypes((*left_operand)->getValueType(), (*right_operand)->getValueType())) {
+    const Type &left_type = (*left_operand)->getValueType();
+    const Type &right_type = (*right_operand)->getValueType();
+
+    if (left_type.isSafelyCoercibleFrom(right_type) &&
+        op.canCompareTypes(left_type, left_type)) {
+      *right_operand = SafelyCoerce(*right_operand, left_type);
+    } else if (right_type.isSafelyCoercibleFrom(left_type) &&
+               op.canCompareTypes(right_type, right_type)) {
+      *left_operand = SafelyCoerce(*left_operand, right_type);
+    } else {
+      THROW_SQL_ERROR_AT(location)
+          << "Comparison operation " << op.getName()
+          << " cannot be applied between "
+          << (*left_operand)->getValueType().getName() << " and "
+          << (*right_operand)->getValueType().getName();
+    }
+  }
+}
+
 E::PredicatePtr Resolver::resolvePredicate(
     const ParsePredicate &parse_predicate,
     ExpressionResolutionInfo *expression_resolution_info) {
@@ -3293,10 +3362,10 @@ E::PredicatePtr Resolver::resolvePredicate(
         }
       }
       if (!lower_bound_compare) {
-        checkComparisonCanApplyTo(between_predicate.lower_bound_operand(),
-                                  less_or_equal,
-                                  lower_bound_operand,
-                                  check_operand);
+        checkComparisonWithCast(between_predicate.lower_bound_operand(),
+                                less_or_equal,
+                                &lower_bound_operand,
+                                check_operand);
         lower_bound_compare = E::ComparisonExpression::Create(less_or_equal,
                                                               lower_bound_operand,
                                                               check_operand);
@@ -3311,10 +3380,10 @@ E::PredicatePtr Resolver::resolvePredicate(
         }
       }
       if (!upper_bound_compare) {
-        checkComparisonCanApplyTo(between_predicate.upper_bound_operand(),
-                                  less_or_equal,
-                                  check_operand,
-                                  upper_bound_operand);
+        checkComparisonWithCast(between_predicate.upper_bound_operand(),
+                                less_or_equal,
+                                check_operand,
+                                &upper_bound_operand);
         upper_bound_compare = E::ComparisonExpression::Create(less_or_equal,
                                                               check_operand,
                                                               upper_bound_operand);
@@ -3369,10 +3438,10 @@ E::PredicatePtr Resolver::resolvePredicate(
         }
       }
 
-      checkComparisonCanApplyTo(&comparison_predicate,
-                                comparison_predicate.op(),
-                                left_operand,
-                                right_operand);
+      checkComparisonWithCast(&comparison_predicate,
+                              comparison_predicate.op(),
+                              &left_operand,
+                              &right_operand);
 
       return E::ComparisonExpression::Create(comparison_predicate.op(),
                                              left_operand,

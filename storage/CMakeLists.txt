@@ -524,6 +524,7 @@ target_link_libraries(quickstep_storage_CompressedColumnStoreValueAccessor
                       quickstep_catalog_CatalogTypedefs
                       quickstep_compression_CompressionDictionaryLite
                       quickstep_compression_CompressionDictionaryReference
+                      quickstep_compression_CompressionTruncationReference
                       quickstep_storage_StorageBlockInfo
                       quickstep_storage_StorageBlockLayout_proto
                       quickstep_storage_ValueAccessor
@@ -1054,6 +1055,8 @@ target_link_libraries(quickstep_storage_SubBlocksReference
 target_link_libraries(quickstep_storage_ThreadPrivateCompactKeyHashTable
                       glog
                       quickstep_catalog_CatalogTypedefs
+                      quickstep_compression_CompressionDictionaryReference
+                      quickstep_compression_CompressionTruncationReference
                       quickstep_expressions_aggregation_AggregateFunctionTraits
                       quickstep_expressions_aggregation_AggregationHandle
                       quickstep_expressions_aggregation_AggregationID

@@ -151,12 +151,14 @@ target_link_libraries(quickstep_types_operations_comparisons_LessOrEqualComparis
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_types_operations_comparisons_LiteralComparators
                       quickstep_catalog_CatalogTypedefs
+                      quickstep_compression_CompressionDictionaryReference
                       quickstep_storage_TupleIdSequence
                       quickstep_storage_ValueAccessor
                       quickstep_storage_ValueAccessorUtil
                       quickstep_types_TypedValue
                       quickstep_types_containers_ColumnVector
-                      quickstep_types_operations_comparisons_Comparison)
+                      quickstep_types_operations_comparisons_Comparison
+                      quickstep_utility_meta_Dispatchers)
 target_link_libraries(quickstep_types_operations_comparisons_NotEqualComparison
                       quickstep_types_operations_comparisons_AsciiStringComparators
                       quickstep_types_operations_comparisons_BasicComparison

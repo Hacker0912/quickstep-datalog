@@ -28,6 +28,7 @@
 #include "catalog/CatalogTypedefs.hpp"
 #include "compression/CompressionDictionaryLite.hpp"
 #include "compression/CompressionDictionaryReference.hpp"
+#include "compression/CompressionTruncationReference.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "storage/StorageBlockLayout.pb.h"
 #include "storage/ValueAccessor.hpp"
@@ -101,6 +102,14 @@ class CompressedColumnStoreValueAccessorHelper {
     return nullptr;
   }
 
+  inline bool isDictionary(const attribute_id attr) const {
+    return dictionary_coded_attributes_[attr];
+  }
+
+  inline bool isTruncated(const attribute_id attr) const {
+    return truncated_attributes_[attr];
+  }
+
   inline CompressionDictionaryReference* getDictionaryReference(
       const attribute_id attr) const {
     if (!dictionary_coded_attributes_[attr]) {
@@ -120,6 +129,21 @@ class CompressedColumnStoreValueAccessorHelper {
         dictionary.getNullCode(),
         column_stripes_[attr],
         dictionary.getFixedLengthData());
+  }
+
+  inline CompressionTruncationReference* getTruncationReference(
+      const attribute_id attr) const {
+    if (!truncated_attributes_[attr]) {
+      return nullptr;
+    }
+
+    return new CompressionTruncationReference(
+        compression_info_.attribute_size(attr),
+        column_stripes_[attr]);
+  }
+
+  inline const void* getColumnData(const attribute_id attr) const {
+    return column_stripes_[attr];
   }
 
   template <bool check_null>

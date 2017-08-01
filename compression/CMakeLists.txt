@@ -28,6 +28,9 @@ add_library(quickstep_compression_CompressionDictionaryLite
 add_library(quickstep_compression_CompressionDictionaryReference
             ../empty_src.cpp
             CompressionDictionaryReference.hpp)
+add_library(quickstep_compression_CompressionTruncationReference
+            ../empty_src.cpp
+            CompressionTruncationReference.hpp)
 
 # Link dependencies:
 target_link_libraries(quickstep_compression_CompressionDictionary
@@ -52,6 +55,8 @@ target_link_libraries(quickstep_compression_CompressionDictionaryLite
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_compression_CompressionDictionaryReference
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_compression_CompressionTruncationReference
+                      quickstep_utility_Macros)
 
 # Module all-in-one library:
 add_library(quickstep_compression ../empty_src.cpp CompressionModule.hpp)
@@ -59,7 +64,8 @@ target_link_libraries(quickstep_compression
                       quickstep_compression_CompressionDictionary
                       quickstep_compression_CompressionDictionaryBuilder
                       quickstep_compression_CompressionDictionaryLite
-                      quickstep_compression_CompressionDictionaryReference)
+                      quickstep_compression_CompressionDictionaryReference
+                      quickstep_compression_CompressionTruncationReference)
 
 # Tests:
 add_executable(CompressionDictionary_unittest "${CMAKE_CURRENT_SOURCE_DIR}/tests/CompressionDictionary_unittest.cpp")

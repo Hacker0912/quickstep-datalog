@@ -56,7 +56,8 @@ bool DivideBinaryOperation::canApplyToTypes(const Type &left, const Type &right)
     case kDecimal2:  // Fall through
     case kDecimal4:
     case kDecimal6: {
-      return QUICKSTEP_EQUALS_ANY_CONSTANT(right.getTypeID(), kInt, kLong);
+      return QUICKSTEP_EQUALS_ANY_CONSTANT(right.getTypeID(), kInt, kLong) ||
+             right.getTypeID() == left.getTypeID();
     }
     default:
       return false;
@@ -340,36 +341,63 @@ UncheckedBinaryOperator* DivideBinaryOperation::makeUncheckedBinaryOperatorForTy
     case kDecimal2:
     case kDecimal4:
     case kDecimal6: {
-      using DecimalTypeDispatcher = meta::SequenceDispatcher<
-          meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
-          meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
+      if (right.getTypeID() == left.getTypeID()) {
+        using DecimalTypeDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+            meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
 
-      using IntegerTypeDispatcher = meta::SequenceDispatcher<
-          meta::Sequence<TypeID, kInt, kLong>, meta::TypeList<IntType, LongType>>;
+        using BoolDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<bool, true, false>>;
 
-      using BoolDispatcher = meta::SequenceDispatcher<
-          meta::Sequence<bool, true, false>>;
+        return DecimalTypeDispatcher::set_next<BoolDispatcher>
+                                    ::set_next<BoolDispatcher>
+                                    ::InvokeOn(
+            left.getTypeID(),
+            left.isNullable(),
+            right.isNullable(),
+            [&](auto typelist) -> UncheckedBinaryOperator* {
+          using TL = decltype(typelist);
+          using DecimalT = typename TL::template at<0>;
+          constexpr bool left_nullable = TL::template at<1>::value;
+          constexpr bool right_nullable = TL::template at<2>::value;
 
-      return DecimalTypeDispatcher::set_next<IntegerTypeDispatcher>
-                                  ::set_next<BoolDispatcher>
-                                  ::set_next<BoolDispatcher>
-                                  ::InvokeOn(
-          left.getTypeID(),
-          right.getTypeID(),
-          left.isNullable(),
-          right.isNullable(),
-          [&](auto typelist) -> UncheckedBinaryOperator* {
-        using TL = decltype(typelist);
-        using LeftType = typename TL::template at<0>;
-        using RightType = typename TL::template at<1>;
-        constexpr bool left_nullable = TL::template at<2>::value;
-        constexpr bool right_nullable = TL::template at<3>::value;
+          return new DivideArithmeticUncheckedBinaryOperator<
+              DecimalT,
+              typename DecimalT::cpptype, left_nullable,
+              typename DecimalT::cpptype, right_nullable>();
+        });
+      } else {
+        using DecimalTypeDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<TypeID, kDecimal2, kDecimal4, kDecimal6>,
+            meta::TypeList<DecimalType<2>, DecimalType<4>, DecimalType<6>>>;
 
-        return new DivideArithmeticUncheckedBinaryOperator<
-            LeftType,
-            typename LeftType::cpptype, left_nullable,
-            typename RightType::cpptype, right_nullable>();
-      });
+        using IntegerTypeDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<TypeID, kInt, kLong>, meta::TypeList<IntType, LongType>>;
+
+        using BoolDispatcher = meta::SequenceDispatcher<
+            meta::Sequence<bool, true, false>>;
+
+        return DecimalTypeDispatcher::set_next<IntegerTypeDispatcher>
+                                    ::set_next<BoolDispatcher>
+                                    ::set_next<BoolDispatcher>
+                                    ::InvokeOn(
+            left.getTypeID(),
+            right.getTypeID(),
+            left.isNullable(),
+            right.isNullable(),
+            [&](auto typelist) -> UncheckedBinaryOperator* {
+          using TL = decltype(typelist);
+          using LeftType = typename TL::template at<0>;
+          using RightType = typename TL::template at<1>;
+          constexpr bool left_nullable = TL::template at<2>::value;
+          constexpr bool right_nullable = TL::template at<3>::value;
+
+          return new DivideArithmeticUncheckedBinaryOperator<
+              LeftType,
+              typename LeftType::cpptype, left_nullable,
+              typename RightType::cpptype, right_nullable>();
+        });
+      }
     }
     case kDatetimeInterval: {
       switch (right.getTypeID()) {

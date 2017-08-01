@@ -248,6 +248,12 @@ struct DecimalLit {
     return result;
   }
 
+  inline DecimalLit operator/(const DecimalLit &other) const {
+    DecimalLit result;
+    result.data = data * kScaleBase / other.data;
+    return result;
+  }
+
   /**
    * @brief Operator overloading for "multiply".
    *

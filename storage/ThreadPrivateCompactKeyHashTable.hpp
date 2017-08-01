@@ -126,20 +126,7 @@ class ThreadPrivateCompactKeyHashTable : public AggregationStateHashTableBase {
   inline static void ConstructKeyCode(const std::size_t offset,
                                       const attribute_id attr_id,
                                       ValueAccessor *accessor,
-                                      void *key_code_start) {
-    InvokeOnAnyValueAccessor(
-        accessor,
-        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
-      char *key_code_ptr = static_cast<char*>(key_code_start) + offset;
-      accessor->beginIteration();
-      while (accessor->next()) {
-        std::memcpy(key_code_ptr,
-                    accessor->template getUntypedValue<false>(attr_id),
-                    key_size);
-        key_code_ptr += kKeyCodeSize;
-      }
-    });
-  }
+                                      void *key_code_start);
 
   inline void upsertValueAccessorCount(const std::vector<BucketIndex> &bucket_indices,
                                        void *state_vec) {
@@ -153,22 +140,7 @@ class ThreadPrivateCompactKeyHashTable : public AggregationStateHashTableBase {
   inline void upsertValueAccessorGeneric(const std::vector<BucketIndex> &bucket_indices,
                                          const attribute_id attr_id,
                                          ValueAccessor *accessor,
-                                         void *state_vec) {
-    using ValueT = typename AggFunc::ValueType;
-    using StateT = typename AggFunc::StateType;
-    InvokeOnAnyValueAccessor(
-        accessor,
-        [&](auto *accessor) -> void {  // NOLINT(build/c++11)
-      accessor->beginIteration();
-      StateT *states = static_cast<StateT*>(state_vec);
-      for (const BucketIndex idx : bucket_indices) {
-        accessor->next();
-        const ValueT *value = static_cast<const ValueT*>(
-            accessor->template getUntypedValue<false>(attr_id));
-        AggFunc::MergeValue(states + idx, *value);
-      }
-    });
-  }
+                                         void *state_vec);
 
   inline void mergeStateCount(const std::vector<BucketIndex> &dst_bucket_indices,
                               const void *src_state_vec,
