@@ -126,8 +126,9 @@ struct UpsertValueAccessorGenericFastPath {
                                        const ValueT *values,
                                        const std::vector<std::uint32_t> &bucket_indices,
                                        StateT *states) {
+    std::size_t loc = 0;
     for (const tuple_id i : existence_map) {
-      AggFunc::MergeValue(states + bucket_indices[i], values[codes[i]]);
+      AggFunc::MergeValue(states + bucket_indices[loc++], values[codes[i]]);
     }
   }
 
@@ -139,7 +140,7 @@ struct UpsertValueAccessorGenericFastPath {
     for (std::size_t i = 0; i < num_tuples; ++i) {
       // TODO(jianqiao): fix this.
       ValueT value;
-      std::memset(&value, 0, sizeof(CodeType));
+      std::memset(&value, 0, sizeof(ValueT));
       std::memcpy(&value, codes + i, sizeof(CodeType));
       AggFunc::MergeValue(states + bucket_indices[i], value);
     }
@@ -150,12 +151,13 @@ struct UpsertValueAccessorGenericFastPath {
                                        const CodeType *codes,
                                        const std::vector<std::uint32_t> &bucket_indices,
                                        StateT *states) {
+    std::size_t loc = 0;
     for (const tuple_id i : existence_map) {
       // TODO(jianqiao): fix this.
       ValueT value;
-      std::memset(&value, 0, sizeof(CodeType));
+      std::memset(&value, 0, sizeof(ValueT));
       std::memcpy(&value, codes + i, sizeof(CodeType));
-      AggFunc::MergeValue(states + bucket_indices[i], value);
+      AggFunc::MergeValue(states + bucket_indices[loc++], value);
     }
   }
 
@@ -174,8 +176,9 @@ struct UpsertValueAccessorGenericFastPath {
                                    const ValueT *values,
                                    const std::vector<std::uint32_t> &bucket_indices,
                                    StateT *states) {
+    std::size_t loc = 0;
     for (const tuple_id i : existence_map) {
-      AggFunc::MergeValue(states + bucket_indices[i], values[i]);
+      AggFunc::MergeValue(states + bucket_indices[loc++], values[i]);
     }
   }
 

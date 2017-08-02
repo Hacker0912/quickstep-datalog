@@ -289,7 +289,6 @@ template <template <typename LeftCppType, bool left_type_nullable,
                     bool right_nullable, bool right_null_terminated, bool right_longer> class StringComparator>
 UncheckedComparator* BasicComparison::makeUncheckedComparatorForTypesHelper(const Type &left,
                                                                             const Type &right) const {
-/*
   if (left.getSuperTypeID() == Type::kNumeric && right.getSuperTypeID() == Type::kNumeric) {
     return makeNumericComparatorOuterHelper<LiteralComparator>(left, right);
   } else if (left.getSuperTypeID() == Type::kDecimal) {
@@ -326,8 +325,6 @@ UncheckedComparator* BasicComparison::makeUncheckedComparatorForTypesHelper(cons
   } else {
     throw OperationInapplicableToType(getName(), 2, kTypeNames[left.getTypeID()], kTypeNames[right.getTypeID()]);
   }
-*/
-  return nullptr;
 }
 
 template <template <typename LeftCppType, bool left_type_nullable,

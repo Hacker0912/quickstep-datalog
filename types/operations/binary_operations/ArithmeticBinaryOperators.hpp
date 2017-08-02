@@ -167,76 +167,96 @@ template <typename LeftArgument, typename RightArgument> struct FloatModuloFunct
 
 namespace {
 
-template <typename CppType>
-struct CompressedColumnStoreSpecializedAccessor {
+template <typename ValueCppType, typename LiteralCppType, typename ResultCppType>
+struct ApplyToValueAccessorAndStaticValueFastPath {
   template <typename CodeType, typename Functor>
   static inline void InvokeOnDictionary(const std::size_t num_tuples,
                                         const CodeType *codes,
-                                        const CppType *values,
-                                        const Functor &functor) {
+                                        const ValueCppType *values,
+                                        const LiteralCppType &literal,
+                                        const Functor &functor,
+                                        NativeColumnVector *result) {
     for (std::size_t i = 0; i < num_tuples; ++i) {
-      functor(values + codes[i]);
+      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+          = functor(values[codes[i]], literal);
     }
   }
 
   template <typename CodeType, typename Functor>
   static inline void InvokeOnDictionary(const TupleIdSequence &existence_map,
                                         const CodeType *codes,
-                                        const CppType *values,
-                                        const Functor &functor) {
-    for (const tuple_id i : existence_map) {
-      functor(values + codes[i]);
-    }
+                                        const ValueCppType *values,
+                                        const LiteralCppType &literal,
+                                        const Functor &functor,
+                                        NativeColumnVector *result) {
+//    for (const tuple_id i : existence_map) {
+//      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+//          = functor(values[codes[i]], literal);
+//    }
   }
 
   template <typename CodeType, typename Functor>
   static inline void InvokeOnTruncation(const std::size_t num_tuples,
                                         const CodeType *codes,
-                                        const Functor &functor) {
-    CodeType value;
+                                        const LiteralCppType &literal,
+                                        const Functor &functor,
+                                        NativeColumnVector *result) {
+    ValueCppType value;
     for (std::size_t i = 0; i < num_tuples; ++i) {
       // TODO(jianqiao): fix this.
-      std::memset(&value, 0, sizeof(CodeType));
+      std::memset(&value, 0, sizeof(ValueCppType));
       std::memcpy(&value, codes + i, sizeof(CodeType));
-      functor(reinterpret_cast<const CppType*>(&value));
+      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+          = functor(value, literal);
     }
   }
 
   template <typename CodeType, typename Functor>
   static inline void InvokeOnTruncation(const TupleIdSequence &existence_map,
                                         const CodeType *codes,
-                                        const Functor &functor) {
-    CodeType value;
+                                        const LiteralCppType &literal,
+                                        const Functor &functor,
+                                        NativeColumnVector *result) {
+    ValueCppType value;
     for (const tuple_id i : existence_map) {
       // TODO(jianqiao): fix this.
-      std::memset(&value, 0, sizeof(CodeType));
+      std::memset(&value, 0, sizeof(ValueCppType));
       std::memcpy(&value, codes + i, sizeof(CodeType));
-      functor(reinterpret_cast<const CppType*>(&value));
+      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+          = functor(value, literal);
     }
   }
 
   template <typename Functor>
   static inline void InvokeOnDirect(const std::size_t num_tuples,
-                                    const CppType *values,
-                                    const Functor &functor) {
+                                    const ValueCppType *values,
+                                    const LiteralCppType &literal,
+                                    const Functor &functor,
+                                    NativeColumnVector *result) {
     for (std::size_t i = 0; i < num_tuples; ++i) {
-      functor(values + i);
+      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+          = functor(values[i], literal);
     }
   }
 
   template <typename Functor>
   static inline void InvokeOnDirect(const TupleIdSequence &existence_map,
-                                    const CppType *values,
-                                    const Functor &functor) {
+                                    const ValueCppType *values,
+                                    const LiteralCppType &literal,
+                                    const Functor &functor,
+                                    NativeColumnVector *result) {
     for (const tuple_id i : existence_map) {
-      functor(values + i);
+      *static_cast<ResultCppType*>(result->getPtrForDirectWrite())
+          = functor(values[i], literal);
     }
   }
 
   template <typename Functor>
   inline static bool InvokeOn(ValueAccessor *accessor,
                               const attribute_id attr_id,
-                              const Functor &functor) {
+                              const LiteralCppType &literal,
+                              const Functor &functor,
+                              NativeColumnVector *result) {
     if (accessor->getImplementationType() !=
             ValueAccessor::Implementation::kCompressedColumnStore ||
         accessor->isOrderedTupleIdSequenceAdapter()) {
@@ -271,13 +291,17 @@ struct CompressedColumnStoreSpecializedAccessor {
         if (existence_map == nullptr) {
           InvokeOnDictionary(cc_accessor->getNumTuples(),
                              static_cast<const CodeType*>(dict->getCodes()),
-                             static_cast<const CppType*>(dict->getValues()),
-                             functor);
+                             static_cast<const ValueCppType*>(dict->getValues()),
+                             literal,
+                             functor,
+                             result);
         } else {
           InvokeOnDictionary(*existence_map,
                              static_cast<const CodeType*>(dict->getCodes()),
-                             static_cast<const CppType*>(dict->getValues()),
-                             functor);
+                             static_cast<const ValueCppType*>(dict->getValues()),
+                             literal,
+                             functor,
+                             result);
         }
       });
     } else if (cc_accessor->getHelper().isTruncated(attr_id)) {
@@ -293,25 +317,59 @@ struct CompressedColumnStoreSpecializedAccessor {
         if (existence_map == nullptr) {
           InvokeOnTruncation(cc_accessor->getNumTuples(),
                              static_cast<const CodeType*>(trunc->getCodes()),
-                             functor);
+                             literal,
+                             functor,
+                             result);
         } else {
           InvokeOnTruncation(*existence_map,
                              static_cast<const CodeType*>(trunc->getCodes()),
-                             functor);
+                             literal,
+                             functor,
+                             result);
         }
       });
     } else {
-      const CppType *values = static_cast<const CppType*>(
+      const ValueCppType *values = static_cast<const ValueCppType*>(
           cc_accessor->getHelper().getColumnData(attr_id));
 
       if (existence_map == nullptr) {
-        InvokeOnDirect(cc_accessor->getNumTuples(), values, functor);
+        InvokeOnDirect(cc_accessor->getNumTuples(), values, literal, functor, result);
       } else {
-        InvokeOnDirect(*existence_map, values, functor);
+        InvokeOnDirect(*existence_map, values, literal, functor, result);
       }
     }
     return true;
   }
+};
+
+template <typename LeftCppType, typename RightCppType, typename ResultCppType,
+          typename Impl, bool va_on_left>
+struct OpFunctorHelper;
+
+template <typename LeftCppType, typename RightCppType,
+          typename ResultCppType, typename Impl>
+struct OpFunctorHelper<LeftCppType, RightCppType, ResultCppType, Impl, true> {
+  OpFunctorHelper(const Impl &impl_in)
+      : impl(impl_in) {}
+
+  inline ResultCppType operator()(const LeftCppType &lhs, const RightCppType &rhs) const {
+    return impl(lhs, rhs);
+  }
+
+  const Impl &impl;
+};
+
+template <typename LeftCppType, typename RightCppType,
+          typename ResultCppType, typename Impl>
+struct OpFunctorHelper<LeftCppType, RightCppType, ResultCppType, Impl, false> {
+  OpFunctorHelper(const Impl &impl_in)
+      : impl(impl_in) {}
+
+  inline ResultCppType operator()(const RightCppType &rhs, const LeftCppType &lhs) const {
+    return impl(lhs, rhs);
+  }
+
+  const Impl &impl;
 };
 
 }  // namespace
@@ -668,16 +726,22 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
     }
     const StaticValueCppType literal = static_value.getLiteral<StaticValueCppType>();
 
-    using CppType = std::conditional_t<value_accessor_on_left, LeftCppType, RightCppType>;
+    using ValueCppType = std::conditional_t<value_accessor_on_left, LeftCppType, RightCppType>;
+    OpFunctorHelper<LeftCppType,
+                    RightCppType,
+                    typename ResultType::cpptype,
+                    decltype(op_functor_),
+                    value_accessor_on_left> functor_helper(op_functor_);
+
     const bool use_fast_path =
         !va_nullable &&
-        CompressedColumnStoreSpecializedAccessor<CppType>::InvokeOn(
-            value_accessor,
-            value_accessor_attr_id,
-            [&](const CppType *va_value) -> void {
-      *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
-          = this->castAndApply<value_accessor_on_left>(va_value, &literal);
-    });
+        ApplyToValueAccessorAndStaticValueFastPath<
+            ValueCppType, StaticValueCppType, typename ResultType::cpptype>::InvokeOn(
+                value_accessor,
+                value_accessor_attr_id,
+                literal,
+                functor_helper,
+                result);
 
     if (!use_fast_path) {
       InvokeOnValueAccessorMaybeTupleIdSequenceAdapter(
@@ -719,19 +783,19 @@ class ArithmeticUncheckedBinaryOperator : public UncheckedBinaryOperator {
         ResultType::Instance(left_nullable || right_nullable),
         native_column_vector.size());
 
-    std::size_t cv_pos = 0;
-    using CppType = std::conditional_t<column_vector_on_left, RightCppType, LeftCppType>;
-    const bool use_fast_path =
-        !va_nullable && !cv_nullable &&
-        CompressedColumnStoreSpecializedAccessor<CppType>::InvokeOn(
-            value_accessor,
-            value_accessor_attr_id,
-            [&](const CppType *va_value) -> void {
-      const void *cv_value = native_column_vector.getUntypedValue<cv_nullable>(cv_pos);
-      *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
-          = this->castAndApply<column_vector_on_left>(cv_value, va_value);
-      ++cv_pos;
-    });
+//    std::size_t cv_pos = 0;
+//    using CppType = std::conditional_t<column_vector_on_left, RightCppType, LeftCppType>;
+    const bool use_fast_path = false;
+//        !va_nullable && !cv_nullable &&
+//        CompressedColumnStoreSpecializedAccessor<CppType>::InvokeOn(
+//            value_accessor,
+//            value_accessor_attr_id,
+//            [&](const CppType *va_value) -> void {
+//      const void *cv_value = native_column_vector.getUntypedValue<cv_nullable>(cv_pos);
+//      *static_cast<typename ResultType::cpptype*>(result->getPtrForDirectWrite())
+//          = this->castAndApply<column_vector_on_left>(cv_value, va_value);
+//      ++cv_pos;
+//    });
 
     if (!use_fast_path) {
       std::size_t cv_pos = 0;
