@@ -58,6 +58,15 @@ class QueryPlan {
     return node_index;
   }
 
+  inline DAGNodeIndex preserveRelationalOperator() {
+    return dag_operators_.createNode(nullptr);
+  }
+
+  inline void setRelationalOperator(const DAGNodeIndex pos, RelationalOperator *relational_operator) {
+    dag_operators_.setNode(pos, relational_operator);
+    relational_operator->setOperatorIndex(pos);
+  }
+
   /**
    * @brief Creates a link from \p producer_operator_index to \p consumer_operator_index
    *        in the DAG.

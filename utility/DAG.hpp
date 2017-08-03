@@ -122,6 +122,10 @@ class DAG {
     return nodes_.size() - 1;
   }
 
+  void setNode(const size_type_nodes pos, T *payload) {
+    nodes_[pos].reset(payload);
+  }
+
   /**
    * @brief Connects a dependent to dependancy and vice versa.
    *
@@ -272,6 +276,10 @@ class DAG {
      * @brief Default move constructor.
      **/
     DAGNode(DAGNode &&other) = default;
+
+    void reset(T *payload) {
+      payload_.reset(payload);
+    }
 
     /**
      * @brief Returns the set of dependencies on the node.

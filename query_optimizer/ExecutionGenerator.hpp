@@ -433,6 +433,8 @@ class ExecutionGenerator {
    */
   std::unordered_map<physical::PhysicalPtr, CatalogRelationInfo> physical_to_output_relation_map_;
 
+  std::unordered_map<physical::PhysicalPtr, QueryPlan::DAGNodeIndex> build_hash_operator_indexes_;
+
   /**
    * @brief All temporary relations created during query processing.
    */

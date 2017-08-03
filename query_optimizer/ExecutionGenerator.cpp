@@ -390,8 +390,23 @@ void ExecutionGenerator::generatePlan(const P::PhysicalPtr &physical_plan) {
 void ExecutionGenerator::generatePlanInternal(
     const P::PhysicalPtr &physical_plan) {
   // Generate the execution plan in bottom-up.
-  for (const P::PhysicalPtr &child : physical_plan->children()) {
-    generatePlanInternal(child);
+  const vector<P::PhysicalPtr> &children = physical_plan->children();
+  switch (physical_plan->getPhysicalType()) {
+    case P::PhysicalType::kHashJoin: {
+      DCHECK_EQ(2, children.size());
+
+      // For the hash join, first generate the build side, then the probe.
+      generatePlanInternal(children[1]);
+      build_hash_operator_indexes_.emplace(physical_plan,
+                                           execution_plan_->preserveRelationalOperator());
+
+      generatePlanInternal(children[0]);
+      break;
+    }
+    default:
+      for (const P::PhysicalPtr &child : children) {
+        generatePlanInternal(child);
+      }
   }
 
   // If enabled, collect attribute substitution map for LIPFilterGenerator.
@@ -1006,15 +1021,17 @@ void ExecutionGenerator::convertHashJoin(const P::HashJoinPtr &physical_plan) {
 
   // Create three operators.
   const QueryPlan::DAGNodeIndex build_operator_index =
-      execution_plan_->addRelationalOperator(
-          new BuildHashOperator(
-              query_handle_->query_id(),
-              *build_relation,
-              build_relation_info->isStoredRelation(),
-              build_attribute_ids,
-              any_build_attributes_nullable,
-              probe_num_partitions,
-              join_hash_table_index));
+      build_hash_operator_indexes_[physical_plan];
+  execution_plan_->setRelationalOperator(
+      build_operator_index,
+      new BuildHashOperator(
+          query_handle_->query_id(),
+          *build_relation,
+          build_relation_info->isStoredRelation(),
+          build_attribute_ids,
+          any_build_attributes_nullable,
+          probe_num_partitions,
+          join_hash_table_index));
 
   // Create InsertDestination proto.
   const CatalogRelation *output_relation = nullptr;
