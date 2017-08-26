@@ -150,6 +150,7 @@ target_link_libraries(quickstep_queryoptimizer_tests_ExecutionGeneratorTest
                       quickstep_queryoptimizer_QueryHandle
                       quickstep_queryoptimizer_tests_TestDatabaseLoader
                       quickstep_threading_ThreadIDBasedMap
+                      quickstep_utility_ExecutionDAGVisualizer
                       quickstep_utility_Macros
                       quickstep_utility_MemStream
                       quickstep_utility_SqlError

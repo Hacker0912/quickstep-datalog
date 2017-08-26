@@ -32,6 +32,7 @@
 #include "query_optimizer/Optimizer.hpp"
 #include "query_optimizer/OptimizerContext.hpp"
 #include "query_optimizer/QueryHandle.hpp"
+#include "utility/ExecutionDAGVisualizer.hpp"
 #include "utility/MemStream.hpp"
 #include "utility/SqlError.hpp"
 
@@ -86,6 +87,8 @@ void ExecutionGeneratorTestRunner::runTestCase(
                                        &optimizer_context,
                                        query_handle.get());
         query_result_relation = query_handle->getQueryResultRelation();
+        auto dag_visualizer = std::make_unique<ExecutionDAGVisualizer>(query_handle->getQueryPlan());
+        std::cerr << "\n" << dag_visualizer->toDOT() << "\n";
 
         QueryExecutionUtil::ConstructAndSendAdmitRequestMessage(
             main_thread_client_id_,

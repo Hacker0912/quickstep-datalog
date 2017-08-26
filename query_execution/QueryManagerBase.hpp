@@ -22,6 +22,9 @@
 
 #include <cstddef>
 #include <memory>
+#include <set>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
@@ -291,6 +294,9 @@ class QueryManagerBase {
   DAG<RelationalOperator, bool> *query_dag_;  // Owned by 'query_handle_'.
   const dag_node_index num_operators_in_dag_;
 
+  std::vector<std::size_t> num_partitions_, output_num_partitions_;
+  std::vector<bool> has_repartitions_;
+
   // For all nodes, store their receiving dependents.
   std::vector<std::vector<dag_node_index>> output_consumers_;
 
@@ -337,6 +343,30 @@ class QueryManagerBase {
    * @return True if the rebuild operation is over, false otherwise.
    **/
   virtual bool checkRebuildOver(const dag_node_index index) const = 0;
+
+  void computePartitionGroups();
+  void computePartitionGroupsHelper(const dag_node_index index, const std::size_t partition_group_id);
+  bool areSamePartitionGroup(const dag_node_index dependency_index,
+                             const dag_node_index dependent_index) {
+    if (cleanup_ops_.count(dependent_index)) {
+      return true;
+    }
+    return !has_repartitions_[dependency_index] &&
+           num_partitions_[dependency_index] == num_partitions_[dependent_index];
+  }
+  void printOperatorInfo(const dag_node_index index);
+
+  static const int kInvalidPartitionGroup;
+
+  std::unordered_set<dag_node_index> cleanup_ops_;
+  std::vector<int> op_partition_groups_;
+  std::vector<std::set<dag_node_index>> partition_groups_;
+  // Group index -> #Partitions.
+  std::vector<std::size_t> partition_groups_info_;
+
+  // If A -> B, then A is the dependency of B, and B is dependent on A.
+  // dependency -> dependent.
+  std::vector<std::pair<std::size_t, std::size_t>> partition_groups_dependencies_;
 
   DISALLOW_COPY_AND_ASSIGN(QueryManagerBase);
 };

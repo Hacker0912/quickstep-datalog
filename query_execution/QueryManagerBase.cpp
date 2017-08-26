@@ -20,6 +20,8 @@
 #include "query_execution/QueryManagerBase.hpp"
 
 #include <memory>
+#include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -27,8 +29,10 @@
 #include "query_execution/QueryContext.hpp"
 #include "query_optimizer/QueryHandle.hpp"
 #include "query_optimizer/QueryPlan.hpp"
+#include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
 #include "storage/StorageBlockInfo.hpp"
+#include "utility/EqualsAnyConstant.hpp"
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -42,25 +46,49 @@ DEFINE_bool(visualize_execution_dag, false,
             "format (DOT is a plain text graph description language) which is "
             "then printed via stderr.");
 
+const int QueryManagerBase::kInvalidPartitionGroup = -1;
+
 QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
     : query_handle_(DCHECK_NOTNULL(query_handle)),
       query_id_(query_handle->query_id()),
       query_dag_(DCHECK_NOTNULL(
           DCHECK_NOTNULL(query_handle->getQueryPlanMutable())->getQueryPlanDAGMutable())),
       num_operators_in_dag_(query_dag_->size()),
+      num_partitions_(num_operators_in_dag_),
+      output_num_partitions_(num_operators_in_dag_),
+      has_repartitions_(num_operators_in_dag_),
       output_consumers_(num_operators_in_dag_),
       blocking_dependencies_(num_operators_in_dag_),
-      query_exec_state_(new QueryExecutionState(num_operators_in_dag_)) {
+      query_exec_state_(new QueryExecutionState(num_operators_in_dag_)),
+      op_partition_groups_(num_operators_in_dag_, kInvalidPartitionGroup) {
   if (FLAGS_visualize_execution_dag) {
     dag_visualizer_ =
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
   }
 
+  bool has_repartition = false;
   for (dag_node_index node_index = 0;
        node_index < num_operators_in_dag_;
        ++node_index) {
+    const RelationalOperator &op =
+        query_dag_->getNodePayload(node_index);
+    num_partitions_[node_index] = op.getNumPartitions();
+    output_num_partitions_[node_index] = op.getOutputNumPartitions();
+    has_repartitions_[node_index] = op.hasRepartition();
+    if (has_repartitions_[node_index]) {
+      has_repartition = true;
+    }
+
+    if (QUICKSTEP_EQUALS_ANY_CONSTANT(op.getOperatorType(),
+                                      RelationalOperator::kDropTable,
+                                      RelationalOperator::kDestroyAggregationState,
+                                      RelationalOperator::kDestroyHash,
+                                      RelationalOperator::kSaveBlocks)) {
+      cleanup_ops_.insert(node_index);
+    }
+
     const QueryContext::insert_destination_id insert_destination_index =
-        query_dag_->getNodePayload(node_index).getInsertDestinationID();
+        op.getInsertDestinationID();
     if (insert_destination_index != QueryContext::kInvalidInsertDestinationId) {
       // Rebuild is necessary whenever InsertDestination is present.
       query_exec_state_->setRebuildRequired(node_index);
@@ -78,6 +106,24 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
         // between these two operators.
         output_consumers_[node_index].push_back(dependent_op_index);
       }
+    }
+  }
+
+  if (has_repartition) {
+    computePartitionGroups();
+
+    for (size_t i = 0; i < partition_groups_.size(); ++i) {
+      std::cerr << "Partition Group " << std::to_string(i) << " ("
+                << std::to_string(partition_groups_info_[i]) << " partitions): ";
+      const auto &partition_group = partition_groups_[i];
+      auto cit = partition_group.begin();
+      printOperatorInfo(*cit);
+
+      for (++cit; cit != partition_group.end(); ++cit) {
+        std::cerr << ", ";
+        printOperatorInfo(*cit);
+      }
+      std::cerr << std::endl;
     }
   }
 }
@@ -233,6 +279,60 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
       dependent_op->doneFeedingInputBlocks(output_rel);
     }
   }
+}
+
+void QueryManagerBase::computePartitionGroups() {
+  computePartitionGroupsHelper(0, partition_groups_.size());
+
+  for (const std::size_t partition_group : op_partition_groups_) {
+    DCHECK_NE(partition_group, kInvalidPartitionGroup);
+  }
+}
+
+void QueryManagerBase::computePartitionGroupsHelper(const dag_node_index index,
+                                                    const std::size_t partition_group_id) {
+  if (op_partition_groups_[index] == kInvalidPartitionGroup) {
+    op_partition_groups_[index] = partition_group_id;
+
+    if (partition_group_id == partition_groups_.size()) {
+      partition_groups_.push_back(std::set<dag_node_index>{ index });
+      partition_groups_info_.push_back(num_partitions_[index]);
+    } else {
+      partition_groups_[partition_group_id].insert(index);
+    }
+  }
+
+  for (const auto &dependent_link : query_dag_->getDependents(index)) {
+    const dag_node_index dependent_op_index = dependent_link.first;
+    if (op_partition_groups_[dependent_op_index] != kInvalidPartitionGroup) {
+      continue;
+    }
+
+    if (areSamePartitionGroup(index, dependent_op_index)) {
+      computePartitionGroupsHelper(dependent_op_index, partition_group_id);
+    } else {
+      computePartitionGroupsHelper(dependent_op_index, partition_groups_.size());
+      partition_groups_dependencies_.emplace_back(partition_group_id, partition_groups_.size());
+    }
+  }
+
+  for (const dag_node_index dependency_op_index : query_dag_->getDependencies(index)) {
+    if (op_partition_groups_[dependency_op_index] != kInvalidPartitionGroup) {
+      continue;
+    }
+
+    if (areSamePartitionGroup(dependency_op_index, index)) {
+      computePartitionGroupsHelper(dependency_op_index, partition_group_id);
+    } else {
+      computePartitionGroupsHelper(dependency_op_index, partition_groups_.size());
+      partition_groups_dependencies_.emplace_back(partition_groups_.size(), partition_group_id);
+    }
+  }
+}
+
+void QueryManagerBase::printOperatorInfo(const dag_node_index index) {
+  std::cerr << query_dag_->getNodePayload(index).getName() << " ("
+            << std::to_string(index) << ")";
 }
 
 }  // namespace quickstep

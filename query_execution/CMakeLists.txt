@@ -262,6 +262,7 @@ target_link_libraries(quickstep_queryexecution_QueryManagerBase
                       quickstep_relationaloperators_WorkOrder
                       quickstep_storage_StorageBlockInfo
                       quickstep_utility_DAG
+                      quickstep_utility_EqualsAnyConstant
                       quickstep_utility_ExecutionDAGVisualizer
                       quickstep_utility_Macros
                       ${GFLAGS_LIB_NAME})
