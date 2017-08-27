@@ -80,6 +80,7 @@ namespace {
 
 constexpr std::size_t kQueryId = 0;
 constexpr int kOpIndex = 0;
+constexpr const partition_id kPartitionId = 0;
 
 // Helper struct for test tuple that will that will be inserted and sorted.
 class TestTuple {
@@ -297,7 +298,8 @@ class SortRunGenerationOperatorTest : public ::testing::Test {
 
   void executeOperator(RelationalOperator *op) {
     WorkOrdersContainer container(kOpIndex + 1, 0);
-    op->getAllWorkOrders(&container,
+    op->getAllWorkOrders(kPartitionId,
+                         &container,
                          query_context_.get(),
                          storage_manager_.get(),
                          foreman_client_id_,

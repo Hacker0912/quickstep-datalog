@@ -81,8 +81,7 @@ class AggregationOperator : public RelationalOperator {
         input_relation_is_stored_(input_relation_is_stored),
         aggr_state_index_(aggr_state_index),
         input_relation_block_ids_(num_partitions),
-        num_workorders_generated_(num_partitions),
-        started_(false) {
+        num_workorders_generated_(num_partitions) {
     if (input_relation_is_stored) {
       if (input_relation.hasPartitionScheme()) {
         const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
@@ -110,7 +109,8 @@ class AggregationOperator : public RelationalOperator {
     return input_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -139,7 +139,6 @@ class AggregationOperator : public RelationalOperator {
   // The index is the partition id.
   std::vector<BlocksInPartition> input_relation_block_ids_;
   std::vector<std::size_t> num_workorders_generated_;
-  bool started_;
 
   DISALLOW_COPY_AND_ASSIGN(AggregationOperator);
 };

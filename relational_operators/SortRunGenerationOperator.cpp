@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "catalog/CatalogRelation.hpp"
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
 #include "query_execution/WorkOrdersContainer.hpp"
@@ -39,6 +40,7 @@
 namespace quickstep {
 
 bool SortRunGenerationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -52,20 +54,20 @@ bool SortRunGenerationOperator::getAllWorkOrders(
 
   if (input_relation_is_stored_) {
     // Input blocks are from a base relation.
-    if (!started_) {
-      for (const block_id input_block_id : input_relation_block_ids_) {
-        container->addNormalWorkOrder(
-            new SortRunGenerationWorkOrder(query_id_,
-                                           input_relation_,
-                                           input_block_id,
-                                           sort_config,
-                                           output_destination,
-                                           storage_manager),
-            op_index_);
-      }
-      started_ = true;
+    DCHECK(!started_);
+    for (const block_id input_block_id : input_relation_block_ids_) {
+      container->addNormalWorkOrder(
+          new SortRunGenerationWorkOrder(query_id_,
+                                         input_relation_,
+                                         input_block_id,
+                                         sort_config,
+                                         output_destination,
+                                         storage_manager),
+          op_index_);
     }
-    return started_;
+
+    started_ = true;
+    return true;
   } else {
     // Input blocks are pipelined.
     while (num_workorders_generated_ < input_relation_block_ids_.size()) {

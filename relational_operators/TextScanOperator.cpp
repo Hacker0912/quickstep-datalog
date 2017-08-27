@@ -38,6 +38,7 @@
 #include <vector>
 
 #include "catalog/CatalogAttribute.hpp"
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
 #include "query_execution/WorkOrdersContainer.hpp"
@@ -104,6 +105,7 @@ std::size_t GetFileSize(const std::string &file_name) {
 }  // namespace
 
 bool TextScanOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,

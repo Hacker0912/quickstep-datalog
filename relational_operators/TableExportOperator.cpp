@@ -53,6 +53,7 @@ TableExportOperator::~TableExportOperator() {
 }
 
 bool TableExportOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -77,7 +78,7 @@ bool TableExportOperator::getAllWorkOrders(
                                          scheduler_client_id,
                                          storage_manager,
                                          bus),
-        op_index_);
+        op_index_, part_id);
 
     SpinMutexLock lock(output_buffers_mutex_);
     output_buffers_.emplace(input_block_id, BlockBuffer(output_buffer.release()));
@@ -98,7 +99,7 @@ bool TableExportOperator::getAllWorkOrders(
                      num_workorders_generated_ == 0);
       ++num_workorders_generated_;
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[part_id];
   }
 }
 

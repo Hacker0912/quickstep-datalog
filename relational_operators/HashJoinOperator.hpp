@@ -215,7 +215,8 @@ class HashJoinOperator : public RelationalOperator {
     return probe_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -248,11 +249,13 @@ class HashJoinOperator : public RelationalOperator {
 
  private:
   template <class JoinWorkOrderClass>
-  bool getAllNonOuterJoinWorkOrders(WorkOrdersContainer *container,
+  bool getAllNonOuterJoinWorkOrders(const partition_id part_id,
+                                    WorkOrdersContainer *container,
                                     QueryContext *query_context,
                                     StorageManager *storage_manager);
 
-  bool getAllOuterJoinWorkOrders(WorkOrdersContainer *container,
+  bool getAllOuterJoinWorkOrders(const partition_id part_id,
+                                 WorkOrdersContainer *container,
                                  QueryContext *query_context,
                                  StorageManager *storage_manager);
 

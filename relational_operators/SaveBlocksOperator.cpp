@@ -34,23 +34,22 @@
 namespace quickstep {
 
 bool SaveBlocksOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-    while (num_workorders_generated_[part_id] < destination_block_ids_[part_id].size()) {
-      container->addNormalWorkOrder(
-          new SaveBlocksWorkOrder(
-              query_id_,
-              part_id,
-              destination_block_ids_[part_id][num_workorders_generated_[part_id]],
-              force_,
-              storage_manager),
-          op_index_);
-      ++num_workorders_generated_[part_id];
-    }
+  while (num_workorders_generated_[part_id] < destination_block_ids_[part_id].size()) {
+    container->addNormalWorkOrder(
+        new SaveBlocksWorkOrder(
+            query_id_,
+            part_id,
+            destination_block_ids_[part_id][num_workorders_generated_[part_id]],
+            force_,
+            storage_manager),
+        op_index_);
+    ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;
 }

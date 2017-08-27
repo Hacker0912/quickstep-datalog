@@ -118,6 +118,7 @@ class RelationalOperator {
    *       only one WorkOrder consisting of all the work for this
    *       RelationalOperator should be generated.
    *
+   * @param part_id The partition Id.
    * @param container A pointer to a WorkOrdersContainer to be used to store the
    *        generated WorkOrders.
    * @param query_context The QueryContext that stores query execution states.
@@ -129,7 +130,8 @@ class RelationalOperator {
    *         false, the execution engine will invoke this method after at least
    *         one pending work order has finished executing.
    **/
-  virtual bool getAllWorkOrders(WorkOrdersContainer *container,
+  virtual bool getAllWorkOrders(const partition_id part_id,
+                                WorkOrdersContainer *container,
                                 QueryContext *query_context,
                                 StorageManager *storage_manager,
                                 const tmb::client_id scheduler_client_id,
@@ -318,6 +320,11 @@ class RelationalOperator {
         has_repartition_(has_repartition),
         done_feeding_input_relation_(false),
         lip_deployment_index_(QueryContext::kInvalidLIPDeploymentId) {}
+
+  bool isLastPartition(const partition_id part_id) const {
+    DCHECK_LT(part_id, num_partitions_);
+    return part_id == num_partitions_ - 1;
+  }
 
   const std::size_t query_id_;
   const std::size_t num_partitions_, output_num_partitions_;

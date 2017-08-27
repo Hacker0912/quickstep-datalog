@@ -35,36 +35,30 @@
 namespace quickstep {
 
 bool FinalizeAggregationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (started_) {
-    return true;
-  }
-
   DCHECK(query_context != nullptr);
-  for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-    AggregationOperationState *agg_state =
-        query_context->getAggregationState(aggr_state_index_, part_id);
-    DCHECK(agg_state != nullptr);
-    for (std::size_t state_part_id = 0;
-         state_part_id < aggr_state_num_partitions_;
-         ++state_part_id) {
-      container->addNormalWorkOrder(
-          new FinalizeAggregationWorkOrder(
-              query_id_,
-              part_id,
-              state_part_id,
-              agg_state,
-              query_context->getInsertDestination(output_destination_index_)),
-          op_index_);
-    }
+  AggregationOperationState *agg_state =
+      query_context->getAggregationState(aggr_state_index_, part_id);
+  DCHECK(agg_state != nullptr);
+  for (std::size_t state_part_id = 0;
+       state_part_id < aggr_state_num_partitions_;
+       ++state_part_id) {
+    container->addNormalWorkOrder(
+        new FinalizeAggregationWorkOrder(
+            query_id_,
+            part_id,
+            state_part_id,
+            agg_state,
+            query_context->getInsertDestination(output_destination_index_)),
+        op_index_);
   }
 
-  started_ = true;
-  return true;
+  return isLastPartition(part_id);
 }
 
 // TODO(quickstep-team) : Think about how the number of partitions could be

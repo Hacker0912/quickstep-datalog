@@ -37,14 +37,13 @@
 namespace quickstep {
 
 bool DropTableOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (work_generated_) {
-    return true;
-  }
+  DCHECK(isLastPartition(part_id));
 
   std::vector<block_id> relation_blocks(relation_.getBlocksSnapshot());
 
@@ -55,8 +54,6 @@ bool DropTableOperator::getAllWorkOrders(
       op_index_);
 
   database_->setStatus(CatalogDatabase::Status::kPendingBlockDeletions);
-
-  work_generated_ = true;
   return true;
 }
 

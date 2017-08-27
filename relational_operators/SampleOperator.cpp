@@ -23,6 +23,7 @@
 #include <random>
 #include <vector>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
 #include "query_execution/WorkOrdersContainer.hpp"
@@ -39,6 +40,7 @@
 namespace quickstep {
 
 bool SampleOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -53,10 +55,6 @@ bool SampleOperator::getAllWorkOrders(
   std::uniform_real_distribution<> distribution(0, 1);
   const double probability = static_cast<double>(percentage_) / 100;
   if (input_relation_is_stored_) {
-    if (started_) {
-      return true;
-    }
-
     // If the sampling is by block choose blocks randomly
     if (is_block_sample_) {
       for (const block_id input_block_id : input_relation_block_ids_) {
@@ -87,27 +85,12 @@ bool SampleOperator::getAllWorkOrders(
       }
     }
 
-    started_ = true;
     return true;
-  } else {
-    if (is_block_sample_) {
-      while (num_workorders_generated_ < input_relation_block_ids_.size()) {
-        if (distribution(generator) <= probability) {
-          container->addNormalWorkOrder(
-              new SampleWorkOrder(
-                  query_id_,
-                  input_relation_,
-                  input_relation_block_ids_[num_workorders_generated_],
-                  is_block_sample_,
-                  percentage_,
-                  output_destination,
-                  storage_manager),
-              op_index_);
-          ++num_workorders_generated_;
-        }
-      }
-    } else {
-      while (num_workorders_generated_ < input_relation_block_ids_.size()) {
+  }
+
+  if (is_block_sample_) {
+    while (num_workorders_generated_ < input_relation_block_ids_.size()) {
+      if (distribution(generator) <= probability) {
         container->addNormalWorkOrder(
             new SampleWorkOrder(
                 query_id_,
@@ -121,8 +104,22 @@ bool SampleOperator::getAllWorkOrders(
         ++num_workorders_generated_;
       }
     }
-    return done_feeding_input_relation_;
+  } else {
+    while (num_workorders_generated_ < input_relation_block_ids_.size()) {
+      container->addNormalWorkOrder(
+          new SampleWorkOrder(
+              query_id_,
+              input_relation_,
+              input_relation_block_ids_[num_workorders_generated_],
+              is_block_sample_,
+              percentage_,
+              output_destination,
+              storage_manager),
+          op_index_);
+      ++num_workorders_generated_;
+    }
   }
+  return done_feeding_input_relation_;
 }
 
 bool SampleOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {

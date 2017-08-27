@@ -36,60 +36,47 @@
 namespace quickstep {
 
 bool AggregationOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
   if (input_relation_is_stored_) {
-    if (started_) {
-      return true;
+    for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
+      container->addNormalWorkOrder(
+          new AggregationWorkOrder(
+              query_id_,
+              part_id,
+              input_block_id,
+              query_context->getAggregationState(aggr_state_index_, part_id),
+              CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
+          op_index_);
     }
-
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
-        container->addNormalWorkOrder(
-            new AggregationWorkOrder(
-                query_id_,
-                part_id,
-                input_block_id,
-                query_context->getAggregationState(aggr_state_index_, part_id),
-                CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-            op_index_);
-      }
-    }
-    started_ = true;
-    return true;
-  } else {
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
-        container->addNormalWorkOrder(
-            new AggregationWorkOrder(
-                query_id_,
-                part_id,
-                input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                query_context->getAggregationState(aggr_state_index_, part_id),
-                CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-            op_index_);
-        ++num_workorders_generated_[part_id];
-      }
-    }
-    return done_feeding_input_relation_;
+    return isLastPartition(part_id);
   }
+
+  while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
+    container->addNormalWorkOrder(
+        new AggregationWorkOrder(
+            query_id_,
+            part_id,
+            input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+            query_context->getAggregationState(aggr_state_index_, part_id),
+            CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
+        op_index_);
+    ++num_workorders_generated_[part_id];
+  }
+  return done_feeding_input_relation_;
 }
 
 bool AggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (input_relation_is_stored_) {
-    if (started_) {
-      return true;
-    }
-
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
         container->addWorkOrderProto(createWorkOrderProto(input_block_id, part_id), op_index_);
       }
     }
-    started_ = true;
     return true;
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {

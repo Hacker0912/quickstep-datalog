@@ -30,22 +30,16 @@
 namespace quickstep {
 
 bool DestroyAggregationStateOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (work_generated_) {
-    return true;
-  }
-
-  for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-    container->addNormalWorkOrder(
-        new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
-        op_index_);
-  }
-  work_generated_ = true;
-  return true;
+  container->addNormalWorkOrder(
+      new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
+      op_index_);
+  return isLastPartition(part_id);
 }
 
 bool DestroyAggregationStateOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {

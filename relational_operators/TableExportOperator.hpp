@@ -85,7 +85,7 @@ class TableExportOperator : public RelationalOperator {
                       const bool input_relation_is_stored,
                       const std::string &file_name,
                       const BulkIoConfigurationPtr &options)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, input_relation.getNumPartitions()),
         input_relation_(input_relation),
         input_relation_is_stored_(input_relation_is_stored),
         file_name_(file_name),
@@ -115,7 +115,8 @@ class TableExportOperator : public RelationalOperator {
     return input_relation_;
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,

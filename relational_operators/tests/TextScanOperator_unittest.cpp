@@ -61,6 +61,7 @@ namespace quickstep {
 namespace {
 constexpr std::size_t kQueryId = 0;
 constexpr int kOpIndex = 0;
+constexpr partition_id kPartitionId = 0;
 }  // namespace
 
 class TextScanOperatorTest : public ::testing::Test {
@@ -111,7 +112,8 @@ class TextScanOperatorTest : public ::testing::Test {
     op->setOperatorIndex(kOpIndex);
     WorkOrdersContainer container(1, 0);
     const std::size_t op_index = 0;
-    op->getAllWorkOrders(&container,
+    op->getAllWorkOrders(kPartitionId,
+                         &container,
                          query_context_.get(),
                          storage_manager_.get(),
                          foreman_client_id_,
