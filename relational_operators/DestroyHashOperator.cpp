@@ -19,6 +19,7 @@
 
 #include "relational_operators/DestroyHashOperator.hpp"
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
 #include "query_execution/WorkOrdersContainer.hpp"
@@ -29,22 +30,16 @@
 namespace quickstep {
 
 bool DestroyHashOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (work_generated_) {
-    return true;
-  }
-
-  for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
-    container->addNormalWorkOrder(
-        new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
-        op_index_);
-  }
-  work_generated_ = true;
-  return true;
+  container->addNormalWorkOrder(
+      new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
+      op_index_);
+  return isLastPartition(part_id);
 }
 
 bool DestroyHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {

@@ -21,6 +21,7 @@
 
 #include <memory>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
 #include "query_execution/WorkOrdersContainer.hpp"
@@ -34,15 +35,13 @@
 namespace quickstep {
 
 bool InsertOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (work_generated_) {
-    return true;
-  }
-
+  DCHECK(isLastPartition(part_id));
   DCHECK(query_context != nullptr);
   container->addNormalWorkOrder(
       new InsertWorkOrder(
@@ -51,7 +50,6 @@ bool InsertOperator::getAllWorkOrders(
           query_context->releaseTuple(tuple_index_)),
       op_index_);
 
-  work_generated_ = true;
   return true;
 }
 

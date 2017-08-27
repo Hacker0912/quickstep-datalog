@@ -46,6 +46,7 @@
 namespace quickstep {
 
 bool DeleteOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
@@ -55,44 +56,35 @@ bool DeleteOperator::getAllWorkOrders(
 
   if (relation_is_stored_) {
     // If relation_ is stored, iterate over the list of blocks in relation_.
-    if (started_) {
-      return true;
-    }
-
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id input_block_id : relation_block_ids_[part_id]) {
-        container->addNormalWorkOrder(
-            new DeleteWorkOrder(query_id_,
-                                relation_,
-                                part_id,
-                                input_block_id,
-                                predicate,
-                                storage_manager,
-                                op_index_,
-                                scheduler_client_id,
-                                bus),
-            op_index_);
-      }
-    }
-    started_ = true;
-    return true;
-  }
-
-  for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-    while (num_workorders_generated_[part_id] < relation_block_ids_[part_id].size()) {
+    for (const block_id input_block_id : relation_block_ids_[part_id]) {
       container->addNormalWorkOrder(
           new DeleteWorkOrder(query_id_,
                               relation_,
                               part_id,
-                              relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+                              input_block_id,
                               predicate,
                               storage_manager,
                               op_index_,
                               scheduler_client_id,
                               bus),
           op_index_);
-      ++num_workorders_generated_[part_id];
     }
+    return isLastPartition(part_id);
+  }
+
+  while (num_workorders_generated_[part_id] < relation_block_ids_[part_id].size()) {
+    container->addNormalWorkOrder(
+        new DeleteWorkOrder(query_id_,
+                            relation_,
+                            part_id,
+                            relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+                            predicate,
+                            storage_manager,
+                            op_index_,
+                            scheduler_client_id,
+                            bus),
+        op_index_);
+    ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;
 }

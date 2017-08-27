@@ -82,65 +82,52 @@ void ExecuteHelper(const attribute_id attr_id,
 }  // namespace
 
 bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
   if (input_relation_is_stored_) {
-    if (started_) {
-      return true;
+    for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
+      container->addNormalWorkOrder(
+          new BuildAggregationExistenceMapWorkOrder(
+              query_id_,
+              input_relation_,
+              part_id,
+              input_block_id,
+              build_attribute_,
+              query_context->getAggregationState(aggr_state_index_, part_id),
+              storage_manager),
+          op_index_);
     }
-
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      for (const block_id input_block_id : input_relation_block_ids_[part_id]) {
-        container->addNormalWorkOrder(
-            new BuildAggregationExistenceMapWorkOrder(
-                query_id_,
-                input_relation_,
-                part_id,
-                input_block_id,
-                build_attribute_,
-                query_context->getAggregationState(aggr_state_index_, part_id),
-                storage_manager),
-            op_index_);
-      }
-    }
-    started_ = true;
-    return true;
-  } else {
-    for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
-      while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
-        container->addNormalWorkOrder(
-            new BuildAggregationExistenceMapWorkOrder(
-                  query_id_,
-                  input_relation_,
-                  part_id,
-                  input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                  build_attribute_,
-                  query_context->getAggregationState(aggr_state_index_, part_id),
-                  storage_manager),
-            op_index_);
-        ++num_workorders_generated_[part_id];
-      }
-    }
-    return done_feeding_input_relation_;
+    return isLastPartition(part_id);
   }
+
+  while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
+    container->addNormalWorkOrder(
+        new BuildAggregationExistenceMapWorkOrder(
+              query_id_,
+              input_relation_,
+              part_id,
+              input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+              build_attribute_,
+              query_context->getAggregationState(aggr_state_index_, part_id),
+              storage_manager),
+        op_index_);
+    ++num_workorders_generated_[part_id];
+  }
+  return done_feeding_input_relation_;
 }
 
 bool BuildAggregationExistenceMapOperator
     ::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
   if (input_relation_is_stored_) {
-    if (started_) {
-      return true;
-    }
-
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       for (const block_id block : input_relation_block_ids_[part_id]) {
         container->addWorkOrderProto(createWorkOrderProto(block, part_id), op_index_);
       }
     }
-    started_ = true;
     return true;
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {

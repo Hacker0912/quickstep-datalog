@@ -22,6 +22,7 @@
 
 #include <string>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
@@ -80,7 +81,8 @@ class InitializeAggregationOperator : public RelationalOperator {
     return "InitializeAggregationOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,

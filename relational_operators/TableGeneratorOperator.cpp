@@ -19,6 +19,7 @@
 
 #include "relational_operators/TableGeneratorOperator.hpp"
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "expressions/table_generator/GeneratorFunctionHandle.hpp"
 #include "query_execution/QueryContext.hpp"
 #include "query_execution/WorkOrderProtosContainer.hpp"
@@ -34,6 +35,7 @@
 namespace quickstep {
 
 bool TableGeneratorOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,

@@ -92,6 +92,7 @@ void UnionAllOperator::addWorkOrdersSingleRelation(
 }
 
 bool UnionAllOperator::getAllWorkOrders(
+    const partition_id part_id,
     WorkOrdersContainer *container,
     QueryContext *query_context,
     StorageManager *storage_manager,

@@ -152,6 +152,7 @@ class MockOperator: public RelationalOperator {
 
   // Override methods from the base class.
   bool getAllWorkOrders(
+      const partition_id part_id,
       WorkOrdersContainer *container,
       QueryContext *query_context,
       StorageManager *storage_manager,

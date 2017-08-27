@@ -173,6 +173,7 @@ target_link_libraries(quickstep_relationaloperators_BuildLIPFilterOperator
 target_link_libraries(quickstep_relationaloperators_CreateIndexOperator
                       glog
                       quickstep_catalog_CatalogRelation
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_relationaloperators_RelationalOperator
                       quickstep_storage_StorageBlockLayout_proto
                       quickstep_utility_Macros
@@ -181,6 +182,7 @@ target_link_libraries(quickstep_relationaloperators_CreateTableOperator
                       glog
                       quickstep_catalog_CatalogDatabase
                       quickstep_catalog_CatalogRelation
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_relationaloperators_RelationalOperator
                       quickstep_utility_Macros
                       tmb)
@@ -294,6 +296,7 @@ target_link_libraries(quickstep_relationaloperators_HashJoinOperator
                       tmb)
 target_link_libraries(quickstep_relationaloperators_InitializeAggregationOperator
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_QueryContext
                       quickstep_queryexecution_WorkOrderProtosContainer
                       quickstep_queryexecution_WorkOrdersContainer
@@ -554,6 +557,7 @@ target_link_libraries(quickstep_relationaloperators_UpdateOperator
 target_link_libraries(quickstep_relationaloperators_WindowAggregationOperator
                       glog
                       quickstep_catalog_CatalogRelation
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_QueryContext
                       quickstep_queryexecution_WorkOrderProtosContainer
                       quickstep_queryexecution_WorkOrdersContainer

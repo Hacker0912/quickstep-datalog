@@ -96,12 +96,14 @@ bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {
 
   const size_t num_pending_workorders_before =
       workorders_container_->getNumNormalWorkOrders(index);
-  const bool done_generation =
-      query_dag_->getNodePayloadMutable(index)->getAllWorkOrders(workorders_container_.get(),
-                                                                 query_context_.get(),
-                                                                 storage_manager_,
-                                                                 foreman_client_id_,
-                                                                 bus_);
+  bool done_generation = false;
+  RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
+  for (partition_id part_id = 0; part_id < op->getNumPartitions(); ++part_id) {
+    done_generation =
+        op->getAllWorkOrders(part_id, workorders_container_.get(), query_context_.get(), storage_manager_,
+                             foreman_client_id_, bus_);
+  }
+
   if (done_generation) {
     query_exec_state_->setDoneGenerationWorkOrders(index);
   }

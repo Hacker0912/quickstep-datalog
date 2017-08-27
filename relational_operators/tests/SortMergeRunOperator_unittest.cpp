@@ -87,6 +87,7 @@ namespace {
 
 constexpr std::size_t kQueryId = 0;
 constexpr const std::size_t kOpIndex = 0;
+constexpr const partition_id kPartitionId = 0;
 
 // Helper struct for test tuple that will that will be inserted and sorted.
 class TestTuple {
@@ -1496,7 +1497,8 @@ class SortMergeRunOperatorTest : public ::testing::Test {
     bool done;
     WorkOrdersContainer container(kOpIndex + 1, 0);
     do {
-      done = merge_op_->getAllWorkOrders(&container,
+      done = merge_op_->getAllWorkOrders(kPartitionId,
+                                         &container,
                                          query_context_.get(),
                                          storage_manager_.get(),
                                          foreman_client_id_,
@@ -1516,7 +1518,8 @@ class SortMergeRunOperatorTest : public ::testing::Test {
     do {
       if (!done) {
         // Find work orders to execute, if not done already.
-        done = merge_op_->getAllWorkOrders(&container,
+        done = merge_op_->getAllWorkOrders(kPartitionId,
+                                           &container,
                                            query_context_.get(),
                                            storage_manager_.get(),
                                            foreman_client_id_,

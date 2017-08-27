@@ -345,11 +345,14 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
     op->setOperatorIndex(kOpIndex);
     WorkOrdersContainer container(1, 0);
     const std::size_t op_index = 0;
-    op->getAllWorkOrders(&container,
-                         query_context_.get(),
-                         storage_manager_.get(),
-                         foreman_client_id_,
-                         &bus_);
+    for (partition_id part_id = 0; part_id < op->getNumPartitions(); ++part_id) {
+      op->getAllWorkOrders(part_id,
+                           &container,
+                           query_context_.get(),
+                           storage_manager_.get(),
+                           foreman_client_id_,
+                           &bus_);
+    }
 
     while (container.hasNormalWorkOrder(op_index)) {
       WorkOrder *work_order = container.getNormalWorkOrder(op_index);

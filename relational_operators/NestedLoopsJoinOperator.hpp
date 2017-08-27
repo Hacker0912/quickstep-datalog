@@ -160,7 +160,8 @@ class NestedLoopsJoinOperator : public RelationalOperator {
     return "NestedLoopsJoinOperator";
   }
 
-  bool getAllWorkOrders(WorkOrdersContainer *container,
+  bool getAllWorkOrders(const partition_id part_id,
+                        WorkOrdersContainer *container,
                         QueryContext *query_context,
                         StorageManager *storage_manager,
                         const tmb::client_id scheduler_client_id,
@@ -215,11 +216,11 @@ class NestedLoopsJoinOperator : public RelationalOperator {
    *        NestedLoopsJoinWorkOrders and pushes them to the WorkOrdersContainer
    *        when both relations are not stored relations.
    *
+   * @param part_id The partition ID.
    * @param container A pointer to the WorkOrdersContainer to store the
    *                  resulting WorkOrders.
    * @param query_context The QueryContext that stores query execution states.
    * @param storage_manager The StorageManager to use.
-   * @param part_id The partition ID.
    * @param left_min The starting index in left_relation_block_ids_ from where
    *                 we begin generating NestedLoopsJoinWorkOrders.
    * @param left_max The index in left_relation_block_ids_ until which we
@@ -232,10 +233,10 @@ class NestedLoopsJoinOperator : public RelationalOperator {
    * @return The number of workorders generated during the execution of this
    *         function.
    **/
-  std::size_t getAllWorkOrdersHelperBothNotStored(WorkOrdersContainer *container,
+  std::size_t getAllWorkOrdersHelperBothNotStored(const partition_id part_id,
+                                                  WorkOrdersContainer *container,
                                                   QueryContext *query_context,
                                                   StorageManager *storage_manager,
-                                                  const partition_id part_id,
                                                   std::vector<block_id>::size_type left_min,
                                                   std::vector<block_id>::size_type left_max,
                                                   std::vector<block_id>::size_type right_min,
@@ -253,7 +254,8 @@ class NestedLoopsJoinOperator : public RelationalOperator {
    *
    * @return Whether all work orders have been generated.
    **/
-  bool getAllWorkOrdersHelperOneStored(WorkOrdersContainer *container,
+  bool getAllWorkOrdersHelperOneStored(const partition_id part_id,
+                                       WorkOrdersContainer *container,
                                        QueryContext *query_context,
                                        StorageManager *storage_manager);
 
