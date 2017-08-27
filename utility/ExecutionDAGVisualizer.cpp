@@ -59,28 +59,14 @@ DEFINE_bool(visualize_execution_dag_partition_info, false,
             "execution plan DAG. Valid iff 'visualize_execution_dag' turns on.");
 
 ExecutionDAGVisualizer::ExecutionDAGVisualizer(const QueryPlan &plan) {
-  using ROEnumType =
-      typename std::underlying_type<RelationalOperator::OperatorType>::type;
-
-  // Do not display these relational operators in the graph.
-  const std::unordered_set<ROEnumType> no_display_op_types =
-      { RelationalOperator::kDestroyAggregationState,
-        RelationalOperator::kDestroyHash,
-        RelationalOperator::kDropTable };
-
   const auto &dag = plan.getQueryPlanDAG();
   num_nodes_ = dag.size();
 
   // Collect DAG vertices info.
-  std::vector<bool> display_ops(num_nodes_, false);
   for (std::size_t node_index = 0; node_index < num_nodes_; ++node_index) {
     const auto &node = dag.getNodePayload(node_index);
     const RelationalOperator::OperatorType node_type = node.getOperatorType();
-    if (no_display_op_types.find(node_type) != no_display_op_types.end()) {
-      continue;
-    }
 
-    display_ops[node_index] = true;
     NodeInfo &node_info = nodes_[node_index];
     node_info.id = node_index;
     node_info.labels.emplace_back(
@@ -197,15 +183,11 @@ ExecutionDAGVisualizer::ExecutionDAGVisualizer(const QueryPlan &plan) {
 
   // Collect DAG edges info.
   for (std::size_t node_index = 0; node_index < num_nodes_; ++node_index) {
-    if (display_ops[node_index]) {
-      for (const auto &link : dag.getDependents(node_index)) {
-        if (display_ops[link.first]) {
-          edges_.emplace_back();
-          edges_.back().src_node_id = node_index;
-          edges_.back().dst_node_id = link.first;
-          edges_.back().is_pipeline_breaker = link.second;
-        }
-      }
+    for (const auto &link : dag.getDependents(node_index)) {
+      edges_.emplace_back();
+      edges_.back().src_node_id = node_index;
+      edges_.back().dst_node_id = link.first;
+      edges_.back().is_pipeline_breaker = link.second;
     }
   }
 }
