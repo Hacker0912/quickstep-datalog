@@ -96,8 +96,9 @@ class SelectOperator : public RelationalOperator {
       const QueryContext::predicate_id predicate_index,
       const QueryContext::scalar_group_id selection_index,
       const bool input_relation_is_stored)
-      : RelationalOperator(query_id, input_relation.getNumPartitions(), has_repartition,
-                           output_relation.getNumPartitions()),
+        // NOTE(zuyu): logically treated as a single input partition if repartitioning.
+      : RelationalOperator(query_id, has_repartition ? 1u : input_relation.getNumPartitions(),
+                           has_repartition, output_relation.getNumPartitions()),
         input_relation_(input_relation),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
@@ -113,15 +114,15 @@ class SelectOperator : public RelationalOperator {
     placement_scheme_ = input_relation.getNUMAPlacementSchemePtr();
 #endif
     if (input_relation_is_stored) {
-      if (input_relation.hasPartitionScheme()) {
+      if (num_partitions_ == 1u) {
+        input_relation_block_ids_[0] = input_relation.getBlocksSnapshot();
+      } else {
+        DCHECK(input_relation.hasPartitionScheme());
         const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
 
         for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
           input_relation_block_ids_[part_id] = part_scheme.getBlocksInPartition(part_id);
         }
-      } else {
-        DCHECK_EQ(1u, num_partitions_);
-        input_relation_block_ids_[0] = input_relation.getBlocksSnapshot();
       }
     }
   }
@@ -155,8 +156,9 @@ class SelectOperator : public RelationalOperator {
       const QueryContext::predicate_id predicate_index,
       std::vector<attribute_id> &&selection,
       const bool input_relation_is_stored)
-      : RelationalOperator(query_id, input_relation.getNumPartitions(), has_repartition,
-                           output_relation.getNumPartitions()),
+        // NOTE(zuyu): logically treated as a single input partition if repartitioning.
+      : RelationalOperator(query_id, has_repartition ? 1u : input_relation.getNumPartitions(),
+                           has_repartition, output_relation.getNumPartitions()),
         input_relation_(input_relation),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
@@ -173,15 +175,15 @@ class SelectOperator : public RelationalOperator {
     placement_scheme_ = input_relation.getNUMAPlacementSchemePtr();
 #endif
     if (input_relation_is_stored) {
-      if (input_relation.hasPartitionScheme()) {
+      if (num_partitions_ == 1u) {
+        input_relation_block_ids_[0] = input_relation.getBlocksSnapshot();
+      } else {
+        DCHECK(input_relation.hasPartitionScheme());
         const PartitionScheme &part_scheme = *input_relation.getPartitionScheme();
 
         for (std::size_t part_id = 0; part_id < num_partitions_; ++part_id) {
           input_relation_block_ids_[part_id] = part_scheme.getBlocksInPartition(part_id);
         }
-      } else {
-        DCHECK_EQ(1u, num_partitions_);
-        input_relation_block_ids_[0] = input_relation.getBlocksSnapshot();
       }
     }
   }
