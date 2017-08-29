@@ -75,7 +75,7 @@ bool UpdateOperator::getAllWorkOrders(
               op_index_,
               scheduler_client_id,
               bus),
-          op_index_);
+          op_index_, part_id);
     }
   }
   started_ = true;

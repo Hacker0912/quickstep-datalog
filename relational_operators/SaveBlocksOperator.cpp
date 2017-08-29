@@ -48,7 +48,7 @@ bool SaveBlocksOperator::getAllWorkOrders(
             destination_block_ids_[part_id][num_workorders_generated_[part_id]],
             force_,
             storage_manager),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

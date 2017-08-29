@@ -48,7 +48,7 @@ bool InsertOperator::getAllWorkOrders(
           query_id_,
           query_context->getInsertDestination(output_destination_index_),
           query_context->releaseTuple(tuple_index_)),
-      op_index_);
+      op_index_, part_id);
 
   return true;
 }

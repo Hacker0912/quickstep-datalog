@@ -63,7 +63,7 @@ bool SortRunGenerationOperator::getAllWorkOrders(
                                          sort_config,
                                          output_destination,
                                          storage_manager),
-          op_index_);
+          op_index_, part_id);
     }
 
     started_ = true;
@@ -79,7 +79,7 @@ bool SortRunGenerationOperator::getAllWorkOrders(
               sort_config,
               output_destination,
               storage_manager),
-          op_index_);
+          op_index_, part_id);
       ++num_workorders_generated_;
     }
     return done_feeding_input_relation_;

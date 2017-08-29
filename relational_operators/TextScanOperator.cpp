@@ -147,7 +147,7 @@ bool TextScanOperator::getAllWorkOrders(
                                 options_->getDelimiter(),
                                 options_->escapeStrings(),
                                 output_destination),
-          op_index_);
+          op_index_, part_id);
     }
 
     // Deal with the residual partial segment whose size is less than
@@ -161,7 +161,7 @@ bool TextScanOperator::getAllWorkOrders(
                                 options_->getDelimiter(),
                                 options_->escapeStrings(),
                                 output_destination),
-          op_index_);
+          op_index_, part_id);
     }
   }
 

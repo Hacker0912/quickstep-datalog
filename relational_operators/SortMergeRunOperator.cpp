@@ -187,7 +187,7 @@ bool SortMergeRunOperator::generateWorkOrders(
                                                   storage_manager,
                                                   scheduler_client_id,
                                                   bus),
-                                  op_index_);
+                                  op_index_, 0u /* partition_id */);
   }
 
   return done_generating;

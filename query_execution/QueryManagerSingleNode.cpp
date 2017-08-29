@@ -151,7 +151,7 @@ std::size_t QueryManagerSingleNode::getRebuildWorkOrders(const dag_node_index in
                              part_ids[i],
                              foreman_client_id_,
                              bus_),
-        index);
+        index, part_ids[i]);
   }
 
   return partially_filled_block_refs.size();

@@ -68,7 +68,7 @@ bool BuildLIPFilterOperator::getAllWorkOrders(
               storage_manager,
               CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
               CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-          op_index_);
+          op_index_, part_id);
     }
     return isLastPartition(part_id);
   }
@@ -84,7 +84,7 @@ bool BuildLIPFilterOperator::getAllWorkOrders(
             storage_manager,
             CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
             CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

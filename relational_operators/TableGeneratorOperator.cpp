@@ -55,7 +55,7 @@ bool TableGeneratorOperator::getAllWorkOrders(
           query_context->getGeneratorFunctionHandle(
               generator_function_index_),
           query_context->getInsertDestination(output_destination_index_)),
-      op_index_);
+      op_index_, part_id);
   started_ = true;
   return true;
 }

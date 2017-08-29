@@ -38,7 +38,7 @@ bool DestroyHashOperator::getAllWorkOrders(
     tmb::MessageBus *bus) {
   container->addNormalWorkOrder(
       new DestroyHashWorkOrder(query_id_, hash_table_index_, part_id, query_context),
-      op_index_);
+      op_index_, part_id);
   return isLastPartition(part_id);
 }
 

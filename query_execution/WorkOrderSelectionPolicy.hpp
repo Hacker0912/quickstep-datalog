@@ -24,6 +24,7 @@
 #include <stack>
 #include <queue>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "utility/Macros.hpp"
 
 #include "glog/logging.h"
@@ -51,7 +52,8 @@ class WorkOrderSelectionPolicy {
    *
    * @param operator_index The operator index for added work order.
    **/
-  virtual void addWorkOrder(const std::size_t operator_index) = 0;
+  virtual void addWorkOrder(const std::size_t operator_index,
+                            const partition_id part_id) = 0;
 
   /**
    * @brief Choose the operator index for next workorder execution based on the policy.
@@ -84,7 +86,8 @@ class FifoWorkOrderSelectionPolicy final : public WorkOrderSelectionPolicy {
     return !work_orders_.empty();
   }
 
-  void addWorkOrder(const std::size_t operator_index) override {
+  void addWorkOrder(const std::size_t operator_index,
+                    const partition_id part_id) override {
     work_orders_.push(operator_index);
   }
 
@@ -116,7 +119,8 @@ class LifoWorkOrderSelectionPolicy final : public WorkOrderSelectionPolicy {
     return !work_orders_.empty();
   }
 
-  void addWorkOrder(const std::size_t operator_index) override {
+  void addWorkOrder(const std::size_t operator_index,
+                    const partition_id part_id) override {
     work_orders_.push(operator_index);
   }
 

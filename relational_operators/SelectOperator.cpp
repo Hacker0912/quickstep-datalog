@@ -74,7 +74,7 @@ bool SelectOperator::getAllWorkOrders(
           new SelectWorkOrder(query_id_, input_relation_, part_id, input_block_id, predicate, simple_projection_,
                               simple_selection_, selection, output_destination, storage_manager,
                               CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context), numa_node),
-          op_index_);
+          op_index_, part_id);
     }
     return isLastPartition(part_id);
   }
@@ -92,7 +92,7 @@ bool SelectOperator::getAllWorkOrders(
         new SelectWorkOrder(query_id_, input_relation_, part_id, block, predicate, simple_projection_,
                             simple_selection_, selection, output_destination, storage_manager,
                             CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context), numa_node),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

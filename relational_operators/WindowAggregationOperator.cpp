@@ -55,7 +55,7 @@ bool WindowAggregationOperator::getAllWorkOrders(
           query_context->releaseWindowAggregationState(window_aggregation_state_index_),
           std::move(relation_blocks),
           query_context->getInsertDestination(output_destination_index_)),
-      op_index_);
+      op_index_, part_id);
   generated_ = true;
   return true;
 }

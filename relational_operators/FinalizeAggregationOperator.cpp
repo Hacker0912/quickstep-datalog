@@ -55,7 +55,7 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
             state_part_id,
             agg_state,
             query_context->getInsertDestination(output_destination_index_)),
-        op_index_);
+        op_index_, part_id);
   }
 
   return isLastPartition(part_id);

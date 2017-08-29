@@ -67,7 +67,7 @@ bool DeleteOperator::getAllWorkOrders(
                               op_index_,
                               scheduler_client_id,
                               bus),
-          op_index_);
+          op_index_, part_id);
     }
     return isLastPartition(part_id);
   }
@@ -83,7 +83,7 @@ bool DeleteOperator::getAllWorkOrders(
                             op_index_,
                             scheduler_client_id,
                             bus),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

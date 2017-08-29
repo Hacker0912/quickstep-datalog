@@ -73,7 +73,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrders(
                 query_context->getInsertDestination(
                     output_destination_index_),
                 storage_manager),
-            op_index_);
+            op_index_, part_id);
       }
     }
     return isLastPartition(part_id);
@@ -244,7 +244,7 @@ std::size_t NestedLoopsJoinOperator::getAllWorkOrdersHelperBothNotStored(const p
               query_context->getScalarGroup(selection_index_),
               query_context->getInsertDestination(output_destination_index_),
               storage_manager),
-          op_index_);
+          op_index_, part_id);
     }
   }
   // Return the number of workorders produced.
@@ -281,7 +281,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(const partition_id
                 selection,
                 output_destination,
                 storage_manager),
-            op_index_);
+            op_index_, part_id);
       }
     }
     num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
@@ -303,7 +303,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(const partition_id
                                        selection,
                                        output_destination,
                                        storage_manager),
-          op_index_);
+          op_index_, part_id);
     }
   }
   num_left_workorders_generated_[part_id] = left_relation_block_ids_[part_id].size();

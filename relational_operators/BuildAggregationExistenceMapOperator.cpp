@@ -99,7 +99,7 @@ bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
               build_attribute_,
               query_context->getAggregationState(aggr_state_index_, part_id),
               storage_manager),
-          op_index_);
+          op_index_, part_id);
     }
     return isLastPartition(part_id);
   }
@@ -114,7 +114,7 @@ bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
               build_attribute_,
               query_context->getAggregationState(aggr_state_index_, part_id),
               storage_manager),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

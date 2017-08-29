@@ -51,7 +51,7 @@ bool DropTableOperator::getAllWorkOrders(
   container->addNormalWorkOrder(
       new DropTableWorkOrder(
           query_id_, std::move(relation_blocks), storage_manager),
-      op_index_);
+      op_index_, part_id);
 
   database_->setStatus(CatalogDatabase::Status::kPendingBlockDeletions);
   return true;

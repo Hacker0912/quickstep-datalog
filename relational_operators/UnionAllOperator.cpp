@@ -70,7 +70,7 @@ void UnionAllOperator::addWorkOrdersSingleRelation(
               select_attribute_ids_[relation_index],
               output_destination,
               storage_manager),
-          op_index_);
+          op_index_, 0u /* partition_id */);
     }
   } else {
     std::size_t num_generated = num_workorders_generated_[relation_index];
@@ -84,7 +84,7 @@ void UnionAllOperator::addWorkOrdersSingleRelation(
               select_attribute_ids_[relation_index],
               output_destination,
               storage_manager),
-          op_index_);
+          op_index_, 0u /* partition_id */);
       ++num_generated;
     }
     num_workorders_generated_[relation_index] = num_generated;

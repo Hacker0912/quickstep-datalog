@@ -26,6 +26,7 @@
 #include <queue>
 #include <vector>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/WorkOrderSelectionPolicy.hpp"
 #include "relational_operators/WorkOrder.hpp"
 #include "utility/Macros.hpp"
@@ -240,11 +241,12 @@ class WorkOrdersContainer {
    * @param workorder A pointer to the WorkOrder to be added.
    * @param operator_index The index of the operator in the query DAG.
    **/
-  void addNormalWorkOrder(WorkOrder *workorder, const std::size_t operator_index) {
+  void addNormalWorkOrder(WorkOrder *workorder, const std::size_t operator_index,
+                          const partition_id part_id) {
     DCHECK(workorder != nullptr);
     DCHECK_LT(operator_index, num_operators_);
     normal_workorders_[operator_index].addWorkOrder(workorder);
-    normal_work_orders_policy_.addWorkOrder(operator_index);
+    normal_work_orders_policy_.addWorkOrder(operator_index, part_id);
   }
 
   /**
@@ -259,11 +261,12 @@ class WorkOrdersContainer {
    * @param operator_index The index of the operator in the query DAG.
    **/
   void addRebuildWorkOrder(WorkOrder *workorder,
-                           const std::size_t operator_index) {
+                           const std::size_t operator_index,
+                           const partition_id part_id) {
     DCHECK(workorder != nullptr);
     DCHECK_LT(operator_index, num_operators_);
     rebuild_workorders_[operator_index].addWorkOrder(workorder);
-    rebuild_work_orders_policy_.addWorkOrder(operator_index);
+    rebuild_work_orders_policy_.addWorkOrder(operator_index, part_id);
   }
 
   /**

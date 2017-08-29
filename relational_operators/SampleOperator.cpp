@@ -67,7 +67,7 @@ bool SampleOperator::getAllWorkOrders(
                                   percentage_,
                                   output_destination,
                                   storage_manager),
-              op_index_);
+              op_index_, part_id);
         }
       }
     } else {
@@ -81,7 +81,7 @@ bool SampleOperator::getAllWorkOrders(
                                                           percentage_,
                                                           output_destination,
                                                           storage_manager),
-                                      op_index_);
+                                      op_index_, part_id);
       }
     }
 
@@ -100,7 +100,7 @@ bool SampleOperator::getAllWorkOrders(
                 percentage_,
                 output_destination,
                 storage_manager),
-            op_index_);
+            op_index_, part_id);
         ++num_workorders_generated_;
       }
     }
@@ -115,7 +115,7 @@ bool SampleOperator::getAllWorkOrders(
               percentage_,
               output_destination,
               storage_manager),
-          op_index_);
+          op_index_, part_id);
       ++num_workorders_generated_;
     }
   }

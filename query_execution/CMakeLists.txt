@@ -333,6 +333,7 @@ target_link_libraries(quickstep_queryexecution_WorkOrderProtosContainer
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryexecution_WorkOrdersContainer
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_WorkOrderSelectionPolicy
                       quickstep_relationaloperators_WorkOrder
                       quickstep_utility_Macros
@@ -354,6 +355,7 @@ target_link_libraries(quickstep_queryexecution_WorkerDirectory
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryexecution_WorkOrderSelectionPolicy
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryexecution_WorkerSelectionPolicy
                       quickstep_queryexecution_WorkerDirectory

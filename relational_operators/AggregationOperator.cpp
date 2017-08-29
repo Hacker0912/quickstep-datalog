@@ -51,7 +51,7 @@ bool AggregationOperator::getAllWorkOrders(
               input_block_id,
               query_context->getAggregationState(aggr_state_index_, part_id),
               CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-          op_index_);
+          op_index_, part_id);
     }
     return isLastPartition(part_id);
   }
@@ -64,7 +64,7 @@ bool AggregationOperator::getAllWorkOrders(
             input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
             query_context->getAggregationState(aggr_state_index_, part_id),
             CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
-        op_index_);
+        op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
   return done_feeding_input_relation_;

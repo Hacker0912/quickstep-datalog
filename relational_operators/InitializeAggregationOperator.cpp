@@ -53,7 +53,7 @@ bool InitializeAggregationOperator::getAllWorkOrders(
                                            part_id,
                                            state_part_id,
                                            agg_state),
-        op_index_);
+        op_index_, part_id);
   }
 
   return isLastPartition(part_id);
