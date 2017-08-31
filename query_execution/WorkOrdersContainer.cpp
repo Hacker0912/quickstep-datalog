@@ -25,6 +25,7 @@
 #include <memory>
 #include <vector>
 
+#include "catalog/CatalogTypedefs.hpp"
 #include "relational_operators/WorkOrder.hpp"
 
 #include "glog/logging.h"
@@ -36,7 +37,24 @@ namespace quickstep {
 WorkOrdersContainer::~WorkOrdersContainer() {
   // For each operator ..
   for (std::size_t op = 0; op < num_operators_; ++op) {
-    if (hasNormalWorkOrder(op) || hasRebuildWorkOrder(op)) {
+    bool has_work_order = false;
+    for (partition_id part_id = 0; part_id < normal_workorders_[op].size(); ++part_id) {
+      if (hasNormalWorkOrder(op, part_id)) {
+        has_work_order = true;
+        break;
+      }
+    }
+
+    if (!has_work_order) {
+      for (partition_id part_id = 0; part_id < rebuild_workorders_[op].size(); ++part_id) {
+        if (hasRebuildWorkOrder(op, part_id)) {
+          has_work_order = true;
+          break;
+        }
+      }
+    }
+
+    if (has_work_order) {
       LOG(WARNING) << "Destroying a WorkOrdersContainer that still has pending WorkOrders.";
       break;
     }

@@ -76,7 +76,7 @@ bool SelectOperator::getAllWorkOrders(
                               CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context), numa_node),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   }
 
   while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
@@ -95,7 +95,7 @@ bool SelectOperator::getAllWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool SelectOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -120,7 +120,7 @@ bool SelectOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) 
         ++num_workorders_generated_[part_id];
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

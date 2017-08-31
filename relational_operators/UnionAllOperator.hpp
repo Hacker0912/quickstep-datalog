@@ -75,7 +75,8 @@ class UnionAllOperator : public RelationalOperator {
                    const QueryContext::insert_destination_id output_destination_index,
                    const std::vector<bool> &input_relations_are_stored,
                    const std::vector<std::vector<attribute_id>> &select_attribute_ids)
-      : RelationalOperator(query_id),
+      : RelationalOperator(query_id, 1u /* input_num_partition */, output_relation.getNumPartitions() != 1u,
+                           output_relation.getNumPartitions()),
         input_relations_(input_relations),
         input_relations_are_stored_(input_relations_are_stored),
         output_relation_(output_relation),
@@ -133,7 +134,7 @@ class UnionAllOperator : public RelationalOperator {
                       const relation_id input_relation_id,
                       const partition_id part_id) override;
 
-  void doneFeedingInputBlocks(const relation_id rel_id) override;
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override;
 
   bool getAllWorkOrders(const partition_id part_id,
                         WorkOrdersContainer *container,

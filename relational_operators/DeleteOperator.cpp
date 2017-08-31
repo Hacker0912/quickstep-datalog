@@ -69,7 +69,7 @@ bool DeleteOperator::getAllWorkOrders(
                               bus),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   }
 
   while (num_workorders_generated_[part_id] < relation_block_ids_[part_id].size()) {
@@ -86,7 +86,7 @@ bool DeleteOperator::getAllWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool DeleteOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -113,7 +113,7 @@ bool DeleteOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) 
       ++num_workorders_generated_[part_id];
     }
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 serialization::WorkOrder* DeleteOperator::createWorkOrderProto(const partition_id part_id, const block_id block) {

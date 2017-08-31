@@ -46,6 +46,7 @@ bool SortRunGenerationOperator::getAllWorkOrders(
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
+  DCHECK_EQ(0u, part_id);
   DCHECK(query_context != nullptr);
 
   const SortConfiguration &sort_config = query_context->getSortConfig(sort_config_index_);
@@ -82,7 +83,7 @@ bool SortRunGenerationOperator::getAllWorkOrders(
           op_index_, part_id);
       ++num_workorders_generated_;
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 
@@ -104,7 +105,7 @@ bool SortRunGenerationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *
           op_index_);
       ++num_workorders_generated_;
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

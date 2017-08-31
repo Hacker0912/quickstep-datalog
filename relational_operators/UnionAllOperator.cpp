@@ -44,13 +44,13 @@ void UnionAllOperator::feedInputBlock(const block_id input_block_id,
   input_relations_block_ids_[index].push_back(input_block_id);
 }
 
-void UnionAllOperator::doneFeedingInputBlocks(const relation_id rel_id) {
+void UnionAllOperator::doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) {
+  DCHECK_EQ(0u, part_id);
   std::size_t relation_index = relation_id_to_index_.at(rel_id);
   DCHECK(still_feeding_.find(relation_index) != still_feeding_.end());
   still_feeding_.erase(relation_index);
-  if (still_feeding_.size() == 0) {
-    done_feeding_input_relation_ = true;
-  }
+
+  done_feeding_input_relation_[0] = still_feeding_.empty();
 }
 
 void UnionAllOperator::addWorkOrdersSingleRelation(
@@ -125,7 +125,7 @@ bool UnionAllOperator::getAllWorkOrders(
                                    relation_index);
     }
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 bool UnionAllOperator::getAllWorkOrderProtos(WorkOrderProtosContainer* container) {
@@ -156,7 +156,7 @@ bool UnionAllOperator::getAllWorkOrderProtos(WorkOrderProtosContainer* container
       num_workorders_generated_[relation_index] = num_generated;
     }
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 serialization::WorkOrder* UnionAllOperator::createWorkOrderProto(

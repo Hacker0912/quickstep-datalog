@@ -46,6 +46,7 @@ bool SampleOperator::getAllWorkOrders(
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
+  DCHECK_EQ(0u, part_id);
   DCHECK(query_context != nullptr);
 
   InsertDestination *output_destination =
@@ -119,7 +120,7 @@ bool SampleOperator::getAllWorkOrders(
       ++num_workorders_generated_;
     }
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 bool SampleOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -165,7 +166,7 @@ bool SampleOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) 
         ++num_workorders_generated_;
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

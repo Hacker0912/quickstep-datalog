@@ -241,6 +241,7 @@ target_link_libraries(quickstep_queryexecution_QueryExecutionMessages_proto
                       ${PROTOBUF_LIBRARY})
 target_link_libraries(quickstep_queryexecution_QueryExecutionState
                       glog
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_utility_Macros)
 target_link_libraries(quickstep_queryexecution_QueryExecutionTypedefs
                       quickstep_threading_ThreadIDBasedMap

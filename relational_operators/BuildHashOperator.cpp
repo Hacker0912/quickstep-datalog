@@ -81,7 +81,7 @@ bool BuildHashOperator::getAllWorkOrders(
                                  CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   } else {
     JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
     while (num_workorders_generated_[part_id] <
@@ -94,7 +94,7 @@ bool BuildHashOperator::getAllWorkOrders(
           op_index_, part_id);
       ++num_workorders_generated_[part_id];
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[part_id];
   }
 }
 
@@ -117,7 +117,7 @@ bool BuildHashOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *containe
         ++num_workorders_generated_[part_id];
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

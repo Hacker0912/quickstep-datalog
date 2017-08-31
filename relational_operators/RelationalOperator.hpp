@@ -195,8 +195,8 @@ class RelationalOperator {
    *       execution of downstream operator feeding input to this operator by
    *       specified relation.
    **/
-  virtual void doneFeedingInputBlocks(const relation_id rel_id) {
-    done_feeding_input_relation_ = true;
+  virtual void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) {
+    done_feeding_input_relation_[part_id] = true;
   }
 
   /**
@@ -318,7 +318,7 @@ class RelationalOperator {
         num_partitions_(num_partitions),
         output_num_partitions_(output_num_partitions),
         has_repartition_(has_repartition),
-        done_feeding_input_relation_(false),
+        done_feeding_input_relation_(num_partitions),
         lip_deployment_index_(QueryContext::kInvalidLIPDeploymentId) {}
 
   bool isLastPartition(const partition_id part_id) const {
@@ -330,7 +330,7 @@ class RelationalOperator {
   const std::size_t num_partitions_, output_num_partitions_;
   const bool has_repartition_;
 
-  bool done_feeding_input_relation_;
+  std::vector<bool> done_feeding_input_relation_;
   std::size_t op_index_;
 
   QueryContext::lip_deployment_id lip_deployment_index_;

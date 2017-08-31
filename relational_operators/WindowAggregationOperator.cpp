@@ -41,10 +41,6 @@ bool WindowAggregationOperator::getAllWorkOrders(
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (generated_) {
-    return true;
-  }
-
   std::vector<block_id> relation_blocks =
       input_relation_.getBlocksSnapshot();
 
@@ -56,7 +52,6 @@ bool WindowAggregationOperator::getAllWorkOrders(
           std::move(relation_blocks),
           query_context->getInsertDestination(output_destination_index_)),
       op_index_, part_id);
-  generated_ = true;
   return true;
 }
 

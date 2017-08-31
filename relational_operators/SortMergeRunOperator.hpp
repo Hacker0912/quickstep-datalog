@@ -159,7 +159,7 @@ class SortMergeRunOperator : public RelationalOperator {
     }
   }
 
-  void doneFeedingInputBlocks(const relation_id input_relation_id) override;
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override;
 
   void receiveFeedbackMessage(const WorkOrder::FeedbackMessage &msg) override;
 

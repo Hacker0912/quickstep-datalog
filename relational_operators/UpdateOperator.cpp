@@ -54,10 +54,6 @@ bool UpdateOperator::getAllWorkOrders(
     StorageManager *storage_manager,
     const tmb::client_id scheduler_client_id,
     tmb::MessageBus *bus) {
-  if (started_) {
-    return true;
-  }
-
   DCHECK(query_context != nullptr);
   for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
     for (const block_id input_block_id : input_blocks_[part_id]) {
@@ -78,7 +74,6 @@ bool UpdateOperator::getAllWorkOrders(
           op_index_, part_id);
     }
   }
-  started_ = true;
   return true;
 }
 

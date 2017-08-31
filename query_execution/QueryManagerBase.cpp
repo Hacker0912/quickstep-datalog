@@ -27,6 +27,7 @@
 #include "query_execution/QueryContext.hpp"
 #include "query_optimizer/QueryHandle.hpp"
 #include "query_optimizer/QueryPlan.hpp"
+#include "relational_operators/RelationalOperator.hpp"
 #include "relational_operators/WorkOrder.hpp"
 #include "storage/StorageBlockInfo.hpp"
 
@@ -48,9 +49,11 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       query_dag_(DCHECK_NOTNULL(
           DCHECK_NOTNULL(query_handle->getQueryPlanMutable())->getQueryPlanDAGMutable())),
       num_operators_in_dag_(query_dag_->size()),
+      input_num_partitions_(num_operators_in_dag_),
+      output_num_partitions_(num_operators_in_dag_),
+      has_repartitions_(num_operators_in_dag_),
       output_consumers_(num_operators_in_dag_),
       blocking_dependencies_(num_operators_in_dag_),
-      query_exec_state_(new QueryExecutionState(num_operators_in_dag_)),
       blocking_dependents_(num_operators_in_dag_),
       non_blocking_dependencies_(num_operators_in_dag_) {
   if (FLAGS_visualize_execution_dag) {
@@ -58,14 +61,25 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
   }
 
+  std::vector<dag_node_index> rebuild_ops;
+  std::vector<std::unordered_set<dag_node_index>> blocking_dependencies(num_operators_in_dag_);
   for (dag_node_index node_index = 0;
        node_index < num_operators_in_dag_;
        ++node_index) {
+    const RelationalOperator &op = query_dag_->getNodePayload(node_index);
+    input_num_partitions_[node_index] = op.getNumPartitions();
+    output_num_partitions_[node_index] = op.getOutputNumPartitions();
+    has_repartitions_[node_index] = op.hasRepartition();
+
+    LOG(INFO) << op.getName() << " ( " << node_index << " ) has input_num_partitions "
+              << input_num_partitions_[node_index]
+              << ", output_num_partitions " << output_num_partitions_[node_index]
+              << ", has_repartitions " << has_repartitions_[node_index];
+
     const QueryContext::insert_destination_id insert_destination_index =
-        query_dag_->getNodePayload(node_index).getInsertDestinationID();
+        op.getInsertDestinationID();
     if (insert_destination_index != QueryContext::kInvalidInsertDestinationId) {
-      // Rebuild is necessary whenever InsertDestination is present.
-      query_exec_state_->setRebuildRequired(node_index);
+      rebuild_ops.push_back(node_index);
     }
 
     if (query_dag_->getDependencies(node_index).empty()) {
@@ -78,15 +92,30 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       if (query_dag_->getLinkMetadata(node_index, dependent_op_index)) {
         // The link is a pipeline-breaker. Streaming of blocks is not possible
         // between these two operators.
-        blocking_dependencies_[dependent_op_index].insert(node_index);
+        blocking_dependencies[dependent_op_index].insert(node_index);
         blocking_dependents_[node_index].push_back(dependent_op_index);
       } else {
         // The link is not a pipeline-breaker. Streaming of blocks is possible
         // between these two operators.
         non_blocking_dependencies_[dependent_op_index].insert(node_index);
-        output_consumers_[node_index].push_back(dependent_op_index);
+        output_consumers_[node_index].insert(dependent_op_index);
       }
     }
+  }
+
+  for (dag_node_index node_index = 0; node_index < num_operators_in_dag_; ++node_index) {
+    blocking_dependencies_[node_index].resize(input_num_partitions_[node_index]);
+    for (const dag_node_index op_dependency_index : blocking_dependencies[node_index]) {
+      for (partition_id part_id = 0; part_id < input_num_partitions_[node_index]; ++part_id) {
+        blocking_dependencies_[node_index][part_id].insert(op_dependency_index);
+      }
+    }
+  }
+
+  query_exec_state_ = std::make_unique<QueryExecutionState>(input_num_partitions_);
+  for (const dag_node_index node_index : rebuild_ops) {
+    // Rebuild is necessary whenever InsertDestination is present.
+    query_exec_state_->setRebuildRequired(node_index, output_num_partitions_[node_index]);
   }
 }
 
@@ -111,7 +140,7 @@ void QueryManagerBase::processFeedbackMessage(
       query_dag_->getNodePayloadMutable(op_index);
   op->receiveFeedbackMessage(msg);
 
-  if (query_exec_state_->hasDoneGenerationWorkOrders(op_index)) {
+  if (query_exec_state_->hasDoneGenerationWorkOrders(op_index, 0u)) {
     return;
   }
 
@@ -121,34 +150,51 @@ void QueryManagerBase::processFeedbackMessage(
 void QueryManagerBase::processWorkOrderCompleteMessage(
     const dag_node_index op_index,
     const partition_id part_id) {
-  query_exec_state_->decrementNumQueuedWorkOrders(op_index);
+  query_exec_state_->decrementNumQueuedWorkOrders(op_index, part_id);
 
-  if (!checkNormalExecutionOver(op_index)) {
+  if (!checkNormalExecutionOver(op_index, part_id)) {
     // Normal execution under progress for this operator.
     return;
   }
 
-  if (checkRebuildRequired(op_index)) {
-    DCHECK(!checkRebuildInitiated(op_index));
-    if (!initiateRebuild(op_index)) {
-      // Rebuild under progress.
-      return;
-    }
-    // Rebuild initiated and completed right away.
+  if (!checkRebuildRequired(op_index)) {
+    markOperatorFinished(op_index, part_id);
+    return;
   }
 
-  markOperatorFinished(op_index);
+  if (has_repartitions_[op_index]) {
+    if (isInputLastPartition(op_index, part_id) &&
+        initiateRebuild(op_index)) {
+      // Rebuild initiated and completed right away.
+      markOperatorFinished(op_index);
+    }
+    return;
+  }
+
+  DCHECK(!checkRebuildInitiated(op_index, part_id));
+  if (initiateRebuild(op_index, part_id)) {
+    // Rebuild initiated and completed right away.
+    markOperatorFinished(op_index, part_id);
+  }
 }
 
 void QueryManagerBase::processRebuildWorkOrderCompleteMessage(const dag_node_index op_index,
                                                               const partition_id part_id) {
-  query_exec_state_->decrementNumRebuildWorkOrders(op_index);
+  query_exec_state_->decrementNumRebuildWorkOrders(op_index, part_id);
 
-  if (!checkRebuildOver(op_index)) {
+  if (!checkRebuildOver(op_index, part_id)) {
     return;
   }
 
-  markOperatorFinished(op_index);
+  if (!has_repartitions_[op_index]) {
+    markOperatorFinished(op_index, part_id);
+    return;
+  }
+
+  const std::size_t num_rebuild_workorders = query_exec_state_->getNumRebuildWorkOrders(op_index);
+  if (num_rebuild_workorders == 0) {
+    markOperatorFinished(op_index);
+  }
 }
 
 void QueryManagerBase::processDataPipelineMessage(const dag_node_index op_index,
@@ -164,16 +210,22 @@ void QueryManagerBase::processDataPipelineMessage(const dag_node_index op_index,
     // Because of the streamed input just fed, check if there are any new
     // WorkOrders available and if so, fetch them.
     if (checkAllBlockingDependenciesMet(consumer_index)) {
-      fetchNormalWorkOrders(consumer_index);
+      fetchNormalWorkOrders(consumer_index, part_id);
     }
   }
 }
 
 void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
   query_exec_state_->setExecutionFinished(index);
+  markOperatorFinishedHelper(index);
+}
 
+void QueryManagerBase::markOperatorFinishedHelper(const dag_node_index index) {
+  LOG(INFO) << "markOperatorFinished Operator " << index;
   for (const dag_node_index dependent_op_index : blocking_dependents_[index]) {
-    blocking_dependencies_[dependent_op_index].erase(index);
+    for (partition_id part_id = 0; part_id < blocking_dependencies_[dependent_op_index].size(); ++part_id) {
+      blocking_dependencies_[dependent_op_index][part_id].erase(index);
+    }
   }
 
   for (const dag_node_index dependent_op_index : output_consumers_[index]) {
@@ -187,9 +239,13 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
 
   for (const pair<dag_node_index, bool> &dependent_link : query_dag_->getDependents(index)) {
     const dag_node_index dependent_op_index = dependent_link.first;
+
     if (output_rel >= 0) {
-      // Signal dependent operator that current operator is done feeding input blocks.
-      query_dag_->getNodePayloadMutable(dependent_op_index)->doneFeedingInputBlocks(output_rel);
+      RelationalOperator *dependent_op = query_dag_->getNodePayloadMutable(dependent_op_index);
+      for (partition_id part_id = 0; part_id < input_num_partitions_[dependent_op_index]; ++part_id) {
+        // Signal dependent operator that current operator is done feeding input blocks.
+        dependent_op->doneFeedingInputBlocks(output_rel, part_id);
+      }
     }
 
     if (checkAllBlockingDependenciesMet(dependent_op_index)) {
@@ -201,6 +257,35 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
           (!checkRebuildRequired(dependent_op_index) || initiateRebuild(dependent_op_index))) {
         markOperatorFinished(dependent_op_index);
       }
+    }
+  }
+}
+
+void QueryManagerBase::markOperatorFinished(const dag_node_index index,
+                                            const partition_id part_id) {
+  LOG(INFO) << "markOperatorFinished Operator " << index << ", Partition " << part_id;
+  if (query_exec_state_->setExecutionFinished(index, part_id)) {
+    markOperatorFinishedHelper(index);
+    return;
+  }
+
+  RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
+  const relation_id output_rel = op->getOutputRelationID();
+
+  for (const pair<dag_node_index, bool> &dependent_link : query_dag_->getDependents(index)) {
+    const dag_node_index dependent_op_index = dependent_link.first;
+    if (has_repartitions_[index] ||
+        input_num_partitions_[index] != input_num_partitions_[dependent_op_index]) {
+      continue;
+    }
+
+    if (output_rel >= 0) {
+      // Signal dependent operator that current operator is done feeding input blocks.
+      query_dag_->getNodePayloadMutable(dependent_op_index)->doneFeedingInputBlocks(output_rel, part_id);
+    }
+
+    if (checkAllBlockingDependenciesMet(dependent_op_index, part_id)) {
+      fetchNormalWorkOrders(dependent_op_index, part_id);
     }
   }
 }

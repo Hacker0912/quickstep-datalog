@@ -21,8 +21,10 @@
 #define QUICKSTEP_QUERY_EXECUTION_WORK_ORDER_SELECTION_POLICY_HPP_
 
 #include <cstddef>
-#include <stack>
 #include <queue>
+#include <stack>
+#include <utility>
+#include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "utility/Macros.hpp"
@@ -58,9 +60,11 @@ class WorkOrderSelectionPolicy {
   /**
    * @brief Choose the operator index for next workorder execution based on the policy.
    *
-   * @return The operator index chosen for next workorder execution.
+   * @param operator_index The operator index chosen for next workorder execution.
+   * @param part_id The partition id.
    **/
-  virtual std::size_t getOperatorIndexForNextWorkOrder() = 0;
+  virtual void getOperatorIndexForNextWorkOrder(std::size_t *operator_index,
+                                                partition_id *part_id) = 0;
 
  protected:
   /**
@@ -88,19 +92,21 @@ class FifoWorkOrderSelectionPolicy final : public WorkOrderSelectionPolicy {
 
   void addWorkOrder(const std::size_t operator_index,
                     const partition_id part_id) override {
-    work_orders_.push(operator_index);
+    work_orders_.emplace(operator_index, part_id);
   }
 
-  std::size_t getOperatorIndexForNextWorkOrder() override {
+  void getOperatorIndexForNextWorkOrder(std::size_t *operator_index,
+                                        partition_id *part_id) override {
     DCHECK(hasWorkOrder());
-    const std::size_t operator_index = work_orders_.front();
-    work_orders_.pop();
+    const auto &work_order_info = work_orders_.front();
+    *operator_index = work_order_info.first;
+    *part_id = work_order_info.second;
 
-    return operator_index;
+    work_orders_.pop();
   }
 
  private:
-  std::queue<std::size_t> work_orders_;
+  std::queue<std::pair<std::size_t, partition_id>> work_orders_;
 
   DISALLOW_COPY_AND_ASSIGN(FifoWorkOrderSelectionPolicy);
 };
@@ -113,27 +119,45 @@ class LifoWorkOrderSelectionPolicy final : public WorkOrderSelectionPolicy {
   /**
    * @brief Constructor.
    **/
-  LifoWorkOrderSelectionPolicy() = default;
+  explicit LifoWorkOrderSelectionPolicy(const std::vector<std::size_t> &input_num_partitions)
+      : input_num_partitions_(input_num_partitions),
+         work_orders_(1u) {}
 
   bool hasWorkOrder() const override {
-    return !work_orders_.empty();
+    return work_orders_count_ != 0u;
   }
 
   void addWorkOrder(const std::size_t operator_index,
                     const partition_id part_id) override {
-    work_orders_.push(operator_index);
+    DCHECK_LT(operator_index, input_num_partitions_.size());
+    DCHECK_LT(part_id, input_num_partitions_[operator_index]);
+
+    if (work_orders_.size() <= input_num_partitions_[operator_index]) {
+      work_orders_.resize(input_num_partitions_[operator_index]);
+    }
+
+    work_orders_[part_id].push(operator_index);
+    ++work_orders_count_;
   }
 
-  std::size_t getOperatorIndexForNextWorkOrder() override {
+  void getOperatorIndexForNextWorkOrder(std::size_t *operator_index,
+                                        partition_id *part_id) override {
     DCHECK(hasWorkOrder());
-    const std::size_t operator_index = work_orders_.top();
-    work_orders_.pop();
 
-    return operator_index;
+    *part_id = 0;
+    while (work_orders_[*part_id].empty()) {
+      ++(*part_id);
+    }
+
+    *operator_index = work_orders_[*part_id].top();
+    work_orders_[*part_id].pop();
+    --work_orders_count_;
   }
 
  private:
-  std::stack<std::size_t> work_orders_;
+  const std::vector<std::size_t> input_num_partitions_;
+  std::vector<std::stack<std::size_t>> work_orders_;
+  std::size_t work_orders_count_ = 0u;
 
   DISALLOW_COPY_AND_ASSIGN(LifoWorkOrderSelectionPolicy);
 };

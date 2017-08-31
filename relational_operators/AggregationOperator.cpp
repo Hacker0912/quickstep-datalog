@@ -53,7 +53,7 @@ bool AggregationOperator::getAllWorkOrders(
               CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   }
 
   while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
@@ -67,7 +67,7 @@ bool AggregationOperator::getAllWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool AggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -87,7 +87,7 @@ bool AggregationOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contai
         ++num_workorders_generated_[part_id];
       }
     }
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

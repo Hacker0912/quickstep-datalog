@@ -59,7 +59,8 @@ QueryManagerSingleNode::QueryManagerSingleNode(
                                       foreman_client_id_,
                                       bus_)),
       workorders_container_(
-          new WorkOrdersContainer(num_operators_in_dag_, num_numa_nodes)),
+          new WorkOrdersContainer(num_operators_in_dag_, num_numa_nodes, input_num_partitions_,
+                                  output_num_partitions_)),
       database_(static_cast<const CatalogDatabase&>(*catalog_database)) {
   // Collect all the workorders from all the non-blocking relational operators in the DAG.
   for (const dag_node_index index : non_dependent_operators_) {
@@ -73,17 +74,20 @@ QueryManagerSingleNode::QueryManagerSingleNode(
 WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
     const dag_node_index start_operator_index, const numa_node_id numa_node) {
   std::size_t operator_index;
+  partition_id part_id;
   bool is_rebuild;
-  WorkOrder *work_order = workorders_container_->getNextWorkOrder(&operator_index, &is_rebuild);
+  WorkOrder *work_order = workorders_container_->getNextWorkOrder(&operator_index, &part_id, &is_rebuild);
   if (!work_order) {
     return nullptr;
   }
 
+  DLOG(INFO) << "Dispatch " << (is_rebuild ? "Rebuild" : "") << "WorkOrderMessage for Operator "
+             << operator_index << ", Partition " << part_id;
   if (is_rebuild) {
     return WorkerMessage::RebuildWorkOrderMessage(work_order, operator_index);
   }
 
-  query_exec_state_->incrementNumQueuedWorkOrders(operator_index);
+  query_exec_state_->incrementNumQueuedWorkOrders(operator_index, part_id);
   return WorkerMessage::WorkOrderMessage(work_order, operator_index);
 }
 
@@ -92,23 +96,36 @@ bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {
   // The releational operator is not aware of blocking dependencies for
   // uncorrelated scalar queries.
   DCHECK(checkAllBlockingDependenciesMet(index));
-  DCHECK(!query_exec_state_->hasDoneGenerationWorkOrders(index));
+  // DCHECK(!query_exec_state_->hasDoneGenerationWorkOrders(index));
 
   const size_t num_pending_workorders_before =
       workorders_container_->getNumNormalWorkOrders(index);
-  bool done_generation = false;
-  RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
-  for (partition_id part_id = 0; part_id < op->getNumPartitions(); ++part_id) {
-    done_generation =
-        op->getAllWorkOrders(part_id, workorders_container_.get(), query_context_.get(), storage_manager_,
-                             foreman_client_id_, bus_);
-  }
-
-  if (done_generation) {
-    query_exec_state_->setDoneGenerationWorkOrders(index);
+  for (partition_id part_id = 0; part_id < input_num_partitions_[index]; ++part_id) {
+    fetchNormalWorkOrders(index, part_id);
   }
 
   return (num_pending_workorders_before < workorders_container_->getNumNormalWorkOrders(index));
+}
+
+bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index,
+                                                   const partition_id part_id) {
+  const size_t num_pending_workorders_before =
+      workorders_container_->getNumNormalWorkOrders(index, part_id);
+  const bool done_generation =
+      query_dag_->getNodePayloadMutable(index)->getAllWorkOrders(part_id,
+                                                                 workorders_container_.get(),
+                                                                 query_context_.get(),
+                                                                 storage_manager_,
+                                                                 foreman_client_id_,
+                                                                 bus_);
+  if (done_generation) {
+    query_exec_state_->setDoneGenerationWorkOrders(index, part_id);
+    if (!workorders_container_->hasEverNormalWorkOrders(index, part_id)) {
+      query_exec_state_->setExecutionFinished(index, part_id);
+    }
+  }
+
+  return (num_pending_workorders_before < workorders_container_->getNumNormalWorkOrders(index, part_id));
 }
 
 bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index) {
@@ -116,46 +133,78 @@ bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index) {
   DCHECK(checkRebuildRequired(index));
   DCHECK(!checkRebuildInitiated(index));
 
-  const std::size_t num_rebuild_work_orders = getRebuildWorkOrders(index, workorders_container_.get());
-  DCHECK_EQ(workorders_container_->getNumRebuildWorkOrders(index), num_rebuild_work_orders);
-
-  query_exec_state_->setRebuildStatus(
-      index, num_rebuild_work_orders, true);
-
-  return num_rebuild_work_orders == 0;
-}
-
-std::size_t QueryManagerSingleNode::getRebuildWorkOrders(const dag_node_index index,
-                                                         WorkOrdersContainer *container) {
   const RelationalOperator &op = query_dag_->getNodePayload(index);
   const QueryContext::insert_destination_id insert_destination_index = op.getInsertDestinationID();
   DCHECK_NE(insert_destination_index, QueryContext::kInvalidInsertDestinationId);
-
-  std::vector<MutableBlockReference> partially_filled_block_refs;
-  std::vector<partition_id> part_ids;
 
   DCHECK(query_context_ != nullptr);
   InsertDestination *insert_destination = query_context_->getInsertDestination(insert_destination_index);
   DCHECK(insert_destination != nullptr);
 
-  insert_destination->getPartiallyFilledBlocks(&partially_filled_block_refs, &part_ids);
+  std::size_t total_num_rebuild_work_orders = 0;
+  for (partition_id part_id = 0; part_id < output_num_partitions_[index]; ++part_id) {
+    std::vector<MutableBlockReference> partially_filled_block_refs;
+    insert_destination->getPartiallyFilledBlocksInPartition(part_id, &partially_filled_block_refs);
 
-  for (std::vector<MutableBlockReference>::size_type i = 0;
-       i < partially_filled_block_refs.size();
-       ++i) {
-    container->addRebuildWorkOrder(
+    for (std::size_t i = 0; i < partially_filled_block_refs.size(); ++i) {
+      workorders_container_->addRebuildWorkOrder(
+          new RebuildWorkOrder(query_id_,
+                               std::move(partially_filled_block_refs[i]),
+                               index,
+                               op.getOutputRelationID(),
+                               part_id,
+                               foreman_client_id_,
+                               bus_),
+          index, part_id);
+    }
+
+    const std::size_t num_rebuild_work_orders = partially_filled_block_refs.size();
+    query_exec_state_->setRebuildStatus(
+        index, part_id, num_rebuild_work_orders);
+
+    total_num_rebuild_work_orders += num_rebuild_work_orders;
+  }
+
+  return total_num_rebuild_work_orders == 0;
+}
+
+bool QueryManagerSingleNode::initiateRebuild(const dag_node_index index,
+                                             const partition_id part_id) {
+  DCHECK(!workorders_container_->hasRebuildWorkOrder(index, part_id));
+  DCHECK(checkRebuildRequired(index));
+  DCHECK(!checkRebuildInitiated(index, part_id));
+
+  const RelationalOperator &op = query_dag_->getNodePayload(index);
+  const QueryContext::insert_destination_id insert_destination_index = op.getInsertDestinationID();
+  DCHECK_NE(insert_destination_index, QueryContext::kInvalidInsertDestinationId);
+
+  DCHECK(query_context_ != nullptr);
+  InsertDestination *insert_destination = query_context_->getInsertDestination(insert_destination_index);
+  DCHECK(insert_destination != nullptr);
+
+  std::vector<MutableBlockReference> partially_filled_block_refs;
+  insert_destination->getPartiallyFilledBlocksInPartition(part_id, &partially_filled_block_refs);
+
+  for (std::size_t i = 0; i < partially_filled_block_refs.size(); ++i) {
+    workorders_container_->addRebuildWorkOrder(
         new RebuildWorkOrder(query_id_,
                              std::move(partially_filled_block_refs[i]),
                              index,
                              op.getOutputRelationID(),
-                             part_ids[i],
+                             part_id,
                              foreman_client_id_,
                              bus_),
-        index, part_ids[i]);
+        index, part_id);
   }
 
-  return partially_filled_block_refs.size();
+  const std::size_t num_rebuild_work_orders = partially_filled_block_refs.size();
+
+  query_exec_state_->setRebuildStatus(
+      index, part_id, num_rebuild_work_orders);
+
+  return num_rebuild_work_orders == 0;
 }
+
 
 std::size_t QueryManagerSingleNode::getQueryMemoryConsumptionBytes() const {
   const std::size_t temp_relations_memory =

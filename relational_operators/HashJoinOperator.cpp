@@ -224,7 +224,7 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrders(
                                  CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   }
 
   while (num_workorders_generated_[part_id] < probe_relation_block_ids_[part_id].size()) {
@@ -237,7 +237,7 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }  // end while
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool HashJoinOperator::getAllOuterJoinWorkOrders(
@@ -263,7 +263,7 @@ bool HashJoinOperator::getAllOuterJoinWorkOrders(
                                      CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
           op_index_, part_id);
     }
-    return isLastPartition(part_id);
+    return true;
   }
 
   while (num_workorders_generated_[part_id] < probe_relation_block_ids_[part_id].size()) {
@@ -277,7 +277,7 @@ bool HashJoinOperator::getAllOuterJoinWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool HashJoinOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -324,7 +324,7 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrderProtos(
       }
     }
 
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 
@@ -382,7 +382,7 @@ bool HashJoinOperator::getAllOuterJoinWorkOrderProtos(WorkOrderProtosContainer *
       }
     }
 
-    return done_feeding_input_relation_;
+    return done_feeding_input_relation_[0];
   }
 }
 

@@ -51,7 +51,7 @@ bool SaveBlocksOperator::getAllWorkOrders(
         op_index_, part_id);
     ++num_workorders_generated_[part_id];
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[part_id];
 }
 
 bool SaveBlocksOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {
@@ -70,7 +70,7 @@ bool SaveBlocksOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *contain
       ++num_workorders_generated_[part_id];
     }
   }
-  return done_feeding_input_relation_;
+  return done_feeding_input_relation_[0];
 }
 
 void SaveBlocksOperator::updateCatalogOnCompletion() {

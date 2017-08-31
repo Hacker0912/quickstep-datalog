@@ -76,7 +76,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrders(
             op_index_, part_id);
       }
     }
-    return isLastPartition(part_id);
+    return true;
   } else if (!(left_relation_is_stored_ || right_relation_is_stored_)) {
     // Both relations are not stored.
     std::vector<block_id>::size_type new_left_blocks
@@ -131,7 +131,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrders(
       num_left_workorders_generated_[part_id] = left_relation_block_ids_[part_id].size();
       num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
     }
-    return done_feeding_left_relation_ && done_feeding_right_relation_;
+    return done_feeding_left_relation_[part_id] && done_feeding_right_relation_[part_id];
   } else {
     // Only one relation is a stored relation.
     return getAllWorkOrdersHelperOneStored(part_id, container, query_context, storage_manager);
@@ -207,7 +207,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *co
         num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
       }
     }
-    return done_feeding_left_relation_ && done_feeding_right_relation_;
+    return done_feeding_left_relation_[0] && done_feeding_right_relation_[0];
   } else {
     // Only one relation is a stored relation.
     return getAllWorkOrderProtosHelperOneStored(container);
@@ -285,7 +285,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(const partition_id
       }
     }
     num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
-    return done_feeding_right_relation_;
+    return done_feeding_right_relation_[part_id];
   }
 
   for (std::vector<block_id>::size_type left_index = num_left_workorders_generated_[part_id];
@@ -307,7 +307,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(const partition_id
     }
   }
   num_left_workorders_generated_[part_id] = left_relation_block_ids_[part_id].size();
-  return done_feeding_left_relation_;
+  return done_feeding_left_relation_[part_id];
 }
 
 std::size_t NestedLoopsJoinOperator::getAllWorkOrderProtosHelperBothNotStored(
@@ -353,7 +353,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrderProtosHelperOneStored(WorkOrderProt
       }
       num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
     }
-    return done_feeding_right_relation_;
+    return done_feeding_right_relation_[0];
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       for (std::vector<block_id>::size_type left_index = num_left_workorders_generated_[part_id];
@@ -367,7 +367,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrderProtosHelperOneStored(WorkOrderProt
       }
       num_left_workorders_generated_[part_id] = left_relation_block_ids_[part_id].size();
     }
-    return done_feeding_left_relation_;
+    return done_feeding_left_relation_[0];
   }
 }
 

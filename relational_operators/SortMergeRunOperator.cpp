@@ -207,7 +207,7 @@ void SortMergeRunOperator::initializeInputRuns() {
   }
 }
 
-void SortMergeRunOperator::doneFeedingInputBlocks(const relation_id input_relation_id) {
+void SortMergeRunOperator::doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) {
   DCHECK(!input_relation_is_stored_);
 
   // Now we know all the input blocks; compute the merge tree.

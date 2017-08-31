@@ -39,7 +39,7 @@ bool DestroyAggregationStateOperator::getAllWorkOrders(
   container->addNormalWorkOrder(
       new DestroyAggregationStateWorkOrder(query_id_, aggr_state_index_, part_id, query_context),
       op_index_, part_id);
-  return isLastPartition(part_id);
+  return true;
 }
 
 bool DestroyAggregationStateOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *container) {

@@ -238,12 +238,12 @@ class HashJoinOperator : public RelationalOperator {
     return output_relation_.getID();
   }
 
-  void doneFeedingInputBlocks(const relation_id rel_id) override {
+  void doneFeedingInputBlocks(const relation_id rel_id, const partition_id part_id) override {
     // The HashJoinOperator depends on BuildHashOperator too, but it
     // should ignore a doneFeedingInputBlocks() message that comes
     // after completion of BuildHashOperator. Therefore we need this check.
     if (probe_relation_.getID() == rel_id) {
-      done_feeding_input_relation_ = true;
+      done_feeding_input_relation_[part_id] = true;
     }
   }
 

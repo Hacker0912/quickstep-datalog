@@ -58,7 +58,7 @@ bool FinalizeAggregationOperator::getAllWorkOrders(
         op_index_, part_id);
   }
 
-  return isLastPartition(part_id);
+  return true;
 }
 
 // TODO(quickstep-team) : Think about how the number of partitions could be
