@@ -27,12 +27,15 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+namespace quickstep { DECLARE_uint64(max_msgs_per_dispatch_round); }
+
 using quickstep::TextBasedTest;
 
 QUICKSTEP_GENERATE_TEXT_TEST(EXECUTION_GENERATOR_TEST);
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
+  // quickstep::FLAGS_max_msgs_per_dispatch_round = 1;
   // Honor FLAGS_buffer_pool_slots in StorageManager.
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 

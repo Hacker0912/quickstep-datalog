@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "catalog/CatalogRelation.hpp"
@@ -106,6 +107,7 @@ class NestedLoopsJoinOperator : public RelationalOperator {
         nested_loops_join_index_(nested_loops_join_index),
         left_input_relation_(left_input_relation),
         right_input_relation_(right_input_relation),
+        right_input_relation_num_partitions_(right_input_relation.getNumPartitions()),
         output_relation_(output_relation),
         output_destination_index_(output_destination_index),
         join_predicate_index_(join_predicate_index),
@@ -118,7 +120,6 @@ class NestedLoopsJoinOperator : public RelationalOperator {
         num_left_workorders_generated_(num_partitions),
         num_right_workorders_generated_(num_partitions),
         done_feeding_left_relation_(num_partitions),
-        done_feeding_right_relation_(num_partitions),
         all_workorders_generated_(false) {
     DCHECK_NE(join_predicate_index_, QueryContext::kInvalidPredicateId);
 
@@ -159,7 +160,7 @@ class NestedLoopsJoinOperator : public RelationalOperator {
     if (rel_id == left_input_relation_.getID()) {
       done_feeding_left_relation_[part_id] = true;
     } else if (rel_id == right_input_relation_.getID()) {
-      done_feeding_right_relation_[part_id] = true;
+      done_feeding_right_relation_.insert(part_id);
     } else {
       FATAL_ERROR("Wrong relation ID in doneFeedingInputBlocks method.");
     }
@@ -194,6 +195,10 @@ class NestedLoopsJoinOperator : public RelationalOperator {
   }
 
  private:
+  bool done_feeding_right_relation() const {
+    return done_feeding_right_relation_.size() == right_input_relation_num_partitions_;
+  }
+
   /**
    * @brief Pairs block IDs from left and right relation block IDs and generates
    *        NestedLoopsJoinWorkOrders and pushes them to the WorkOrdersContainer
@@ -289,6 +294,7 @@ class NestedLoopsJoinOperator : public RelationalOperator {
 
   const CatalogRelation &left_input_relation_;
   const CatalogRelation &right_input_relation_;
+  const std::size_t right_input_relation_num_partitions_;
 
   const CatalogRelation &output_relation_;
   const QueryContext::insert_destination_id output_destination_index_;
@@ -309,7 +315,7 @@ class NestedLoopsJoinOperator : public RelationalOperator {
   std::vector<std::size_t> num_right_workorders_generated_;
 
   std::vector<bool> done_feeding_left_relation_;
-  std::vector<bool> done_feeding_right_relation_;
+  std::unordered_set<partition_id> done_feeding_right_relation_;
 
   // Applicable only when both the relations are stored relations.
   bool all_workorders_generated_;

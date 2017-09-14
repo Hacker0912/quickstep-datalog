@@ -163,18 +163,23 @@ void QueryManagerBase::processWorkOrderCompleteMessage(
   }
 
   if (has_repartitions_[op_index]) {
-    if (isInputLastPartition(op_index, part_id) &&
-        initiateRebuild(op_index)) {
+    LOG(INFO) << "initiateRebuild for Operator " << op_index << ", Partition " << part_id;
+    for (partition_id part_id = 0; part_id < input_num_partitions_[op_index]; ++part_id) {
+      if (!checkNormalExecutionOver(op_index, part_id)) {
+        return;
+      }
+    }
+
+    if (initiateRebuild(op_index)) {
       // Rebuild initiated and completed right away.
       markOperatorFinished(op_index);
     }
-    return;
-  }
-
-  DCHECK(!checkRebuildInitiated(op_index, part_id));
-  if (initiateRebuild(op_index, part_id)) {
-    // Rebuild initiated and completed right away.
-    markOperatorFinished(op_index, part_id);
+  } else {
+    DCHECK(!checkRebuildInitiated(op_index, part_id));
+    if (initiateRebuild(op_index, part_id)) {
+      // Rebuild initiated and completed right away.
+      markOperatorFinished(op_index, part_id);
+    }
   }
 }
 
@@ -242,7 +247,7 @@ void QueryManagerBase::markOperatorFinishedHelper(const dag_node_index index) {
 
     if (output_rel >= 0) {
       RelationalOperator *dependent_op = query_dag_->getNodePayloadMutable(dependent_op_index);
-      for (partition_id part_id = 0; part_id < input_num_partitions_[dependent_op_index]; ++part_id) {
+      for (partition_id part_id = 0; part_id < output_num_partitions_[index]; ++part_id) {
         // Signal dependent operator that current operator is done feeding input blocks.
         dependent_op->doneFeedingInputBlocks(output_rel, part_id);
       }
@@ -284,6 +289,10 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index,
       query_dag_->getNodePayloadMutable(dependent_op_index)->doneFeedingInputBlocks(output_rel, part_id);
     }
 
+    const auto cit = blocking_dependencies_[dependent_op_index][part_id].find(index);
+    if (cit != blocking_dependencies_[dependent_op_index][part_id].end()) {
+      blocking_dependencies_[dependent_op_index][part_id].erase(cit);
+    }
     if (checkAllBlockingDependenciesMet(dependent_op_index, part_id)) {
       fetchNormalWorkOrders(dependent_op_index, part_id);
     }

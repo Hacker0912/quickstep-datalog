@@ -131,7 +131,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrders(
       num_left_workorders_generated_[part_id] = left_relation_block_ids_[part_id].size();
       num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
     }
-    return done_feeding_left_relation_[part_id] && done_feeding_right_relation_[part_id];
+    return done_feeding_left_relation_[part_id] && done_feeding_right_relation();
   } else {
     // Only one relation is a stored relation.
     return getAllWorkOrdersHelperOneStored(part_id, container, query_context, storage_manager);
@@ -207,7 +207,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrderProtos(WorkOrderProtosContainer *co
         num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
       }
     }
-    return done_feeding_left_relation_[0] && done_feeding_right_relation_[0];
+    return done_feeding_left_relation_[0] && done_feeding_right_relation();
   } else {
     // Only one relation is a stored relation.
     return getAllWorkOrderProtosHelperOneStored(container);
@@ -285,7 +285,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(const partition_id
       }
     }
     num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
-    return done_feeding_right_relation_[part_id];
+    return done_feeding_right_relation();
   }
 
   for (std::vector<block_id>::size_type left_index = num_left_workorders_generated_[part_id];
@@ -353,7 +353,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrderProtosHelperOneStored(WorkOrderProt
       }
       num_right_workorders_generated_[part_id] = right_relation_block_ids_.size();
     }
-    return done_feeding_right_relation_[0];
+    return done_feeding_right_relation();
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       for (std::vector<block_id>::size_type left_index = num_left_workorders_generated_[part_id];

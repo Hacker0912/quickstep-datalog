@@ -359,6 +359,7 @@ class QueryExecutionState {
    * @note By default this flag is false.
    *
    * @param operator_index The index of the given operator.
+   * @param part_id The partition id.
    **/
   inline void setDoneGenerationWorkOrders(const std::size_t operator_index,
                                           const partition_id part_id) {

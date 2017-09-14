@@ -109,6 +109,10 @@ bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {
 
 bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index,
                                                    const partition_id part_id) {
+  if (query_exec_state_->hasDoneGenerationWorkOrders(index, part_id)) {
+    return false;
+  }
+
   const size_t num_pending_workorders_before =
       workorders_container_->getNumNormalWorkOrders(index, part_id);
   const bool done_generation =
