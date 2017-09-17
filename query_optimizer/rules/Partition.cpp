@@ -72,6 +72,8 @@ namespace optimizer {
 namespace E = expressions;
 namespace P = physical;
 
+DEFINE_bool(forced_partitioned_output, false, "Force to produce the output relation w/ partitions.");
+
 static bool ValidateNumRepartitions(const char *flagname, std::uint64_t value) {
   return value > 1u;
 }
@@ -524,6 +526,16 @@ P::PhysicalPtr Partition::applyToNode(const P::PhysicalPtr &node) {
     }
     case P::PhysicalType::kSelection: {
       const P::SelectionPtr selection = static_pointer_cast<const P::Selection>(node);
+      if (FLAGS_forced_partitioned_output) {
+        P::PartitionSchemeHeader::EquivalentPartitionExprIds output_equivalent_partition_expr_ids;
+        output_equivalent_partition_expr_ids.insert(0);
+
+        auto output_partition_scheme_header = make_unique<P::PartitionSchemeHeader>(
+            P::PartitionSchemeHeader::PartitionType::kHash,
+            FLAGS_num_repartitions,
+            P::PartitionSchemeHeader::PartitionExprIds(1, output_equivalent_partition_expr_ids));
+        return selection->copyWithNewOutputPartitionSchemeHeader(output_partition_scheme_header.release());
+      }
 
       const P::PartitionSchemeHeader *input_partition_scheme_header =
           selection->input()->getOutputPartitionSchemeHeader();
