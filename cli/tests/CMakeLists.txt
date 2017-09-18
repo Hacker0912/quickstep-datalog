@@ -50,6 +50,7 @@ target_link_libraries(quickstep_cli_tests_CommandExecutorTest
                       quickstep_catalog_CatalogDatabase
                       quickstep_cli_CommandExecutor
                       quickstep_cli_DropRelation
+                      quickstep_cli_Flags
                       quickstep_cli_PrintToScreen
                       quickstep_parser_ParseStatement
                       quickstep_parser_SqlParserWrapper

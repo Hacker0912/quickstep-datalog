@@ -28,6 +28,7 @@
 #include "catalog/CatalogDatabase.hpp"
 #include "catalog/CatalogRelation.hpp"
 #include "catalog/PartitionScheme.hpp"
+#include "cli/Flags.hpp"
 #include "query_execution/QueryExecutionMessages.pb.h"
 #include "query_execution/QueryExecutionState.hpp"
 #include "query_execution/QueryExecutionTypedefs.hpp"
@@ -48,7 +49,9 @@ DEFINE_bool(profile_and_report_workorder_perf, false,
 
 PolicyEnforcerBase::PolicyEnforcerBase(CatalogDatabaseLite *catalog_database)
     : catalog_database_(catalog_database),
-      profile_individual_workorders_(FLAGS_profile_and_report_workorder_perf || FLAGS_visualize_execution_dag) {
+      profile_individual_workorders_(FLAGS_profile_and_report_workorder_perf || FLAGS_visualize_execution_dag),
+      num_available_workers_(FLAGS_num_workers) {
+  DCHECK_GT(num_available_workers_, 0u);
 }
 
 void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
@@ -57,7 +60,10 @@ void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
 
   switch (tagged_message.message_type()) {
     case kWorkOrderCompleteMessage: {
+      ++num_available_workers_;
+
       serialization::WorkOrderCompletionMessage proto;
+
       // Note: This proto message contains the time it took to execute the
       // WorkOrder. It can be accessed in this scope.
       CHECK(proto.ParseFromArray(tagged_message.message(),
@@ -76,6 +82,8 @@ void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
       break;
     }
     case kRebuildWorkOrderCompleteMessage: {
+      ++num_available_workers_;
+
       serialization::WorkOrderCompletionMessage proto;
       // Note: This proto message contains the time it took to execute the
       // rebuild WorkOrder. It can be accessed in this scope.

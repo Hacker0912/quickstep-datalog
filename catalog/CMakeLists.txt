@@ -243,6 +243,7 @@ target_link_libraries(CatalogRelationStatistics_unittest
                       quickstep_catalog_CatalogRelationStatistics
                       quickstep_cli_CommandExecutor
                       quickstep_cli_DropRelation
+                      quickstep_cli_Flags
                       quickstep_parser_ParseStatement
                       quickstep_parser_SqlParserWrapper
                       quickstep_queryexecution_ForemanSingleNode

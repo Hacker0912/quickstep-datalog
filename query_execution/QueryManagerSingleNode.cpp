@@ -69,21 +69,28 @@ QueryManagerSingleNode::QueryManagerSingleNode(
   }
 }
 
-WorkerMessage* QueryManagerSingleNode::getNextWorkerMessage(
-    const dag_node_index start_operator_index, const numa_node_id numa_node) {
+void QueryManagerSingleNode::getNextWorkerMessages(std::size_t *num_available_workers,
+                                                   std::vector<std::unique_ptr<WorkerMessage>> *worker_messages) {
   std::size_t operator_index;
   bool is_rebuild;
-  WorkOrder *work_order = workorders_container_->getNextWorkOrder(&operator_index, &is_rebuild);
-  if (!work_order) {
-    return nullptr;
-  }
+  WorkOrder *work_order = nullptr;
 
-  if (is_rebuild) {
-    return WorkerMessage::RebuildWorkOrderMessage(work_order, operator_index);
-  }
+  while (*num_available_workers > 0) {
+    work_order = workorders_container_->getNextWorkOrder(&operator_index, &is_rebuild);
+    if (!work_order) {
+      return;
+    }
 
-  query_exec_state_->incrementNumQueuedWorkOrders(operator_index);
-  return WorkerMessage::WorkOrderMessage(work_order, operator_index);
+    --(*num_available_workers);
+    if (is_rebuild) {
+      worker_messages->push_back(std::unique_ptr<WorkerMessage>(
+          WorkerMessage::RebuildWorkOrderMessage(work_order, operator_index)));
+    } else {
+      query_exec_state_->incrementNumQueuedWorkOrders(operator_index);
+      worker_messages->push_back(std::unique_ptr<WorkerMessage>(
+          WorkerMessage::WorkOrderMessage(work_order, operator_index)));
+    }
+  }
 }
 
 bool QueryManagerSingleNode::fetchNormalWorkOrders(const dag_node_index index) {

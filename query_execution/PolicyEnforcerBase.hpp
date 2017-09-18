@@ -186,6 +186,8 @@ class PolicyEnforcerBase {
 
   WorkOrderTimeRecorder workorder_time_recorder_;
 
+  std::size_t num_available_workers_;
+
  private:
   /**
    * @brief Decrement the number of queued workorders for the given worker by 1.

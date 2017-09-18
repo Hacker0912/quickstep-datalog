@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
@@ -80,13 +81,9 @@ class QueryManagerSingleNode final : public QueryManagerBase {
    *        with the operator at this index.
    * @param numa_node The next WorkOrder should preferably have its input(s)
    *        from this numa_node. This is a hint and not a binding requirement.
-   *
-   * @return A pointer to the WorkerMessage. If there's no WorkOrder to be
-   *         executed, return NULL.
    **/
-  WorkerMessage* getNextWorkerMessage(
-      const dag_node_index start_operator_index,
-      const numa_node_id node_id = kAnyNUMANodeID);
+  void getNextWorkerMessages(std::size_t *num_available_workers,
+                             std::vector<std::unique_ptr<WorkerMessage>> *worker_messages);
 
   /**
    * @brief Get a pointer to the QueryContext.

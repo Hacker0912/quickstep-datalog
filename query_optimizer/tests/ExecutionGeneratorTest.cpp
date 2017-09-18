@@ -21,6 +21,7 @@
 #include <memory>
 #include <iostream>
 
+#include "cli/Flags.hpp"
 #include "query_optimizer/tests/ExecutionGeneratorTestRunner.hpp"
 #include "utility/textbased_test/TextBasedTestDriver.hpp"
 
@@ -34,6 +35,7 @@ QUICKSTEP_GENERATE_TEXT_TEST(EXECUTION_GENERATOR_TEST);
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   // Honor FLAGS_buffer_pool_slots in StorageManager.
+  quickstep::FLAGS_num_workers = 1;
   gflags::ParseCommandLineFlags(&argc, &argv, true);
 
   if (argc < 4) {

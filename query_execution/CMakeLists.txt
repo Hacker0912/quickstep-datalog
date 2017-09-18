@@ -144,6 +144,7 @@ target_link_libraries(quickstep_queryexecution_PolicyEnforcerBase
                       quickstep_catalog_CatalogDatabase
                       quickstep_catalog_CatalogRelation
                       quickstep_catalog_PartitionScheme
+                      quickstep_cli_Flags
                       quickstep_queryexecution_QueryExecutionMessages_proto
                       quickstep_queryexecution_QueryExecutionState
                       quickstep_queryexecution_QueryExecutionTypedefs
@@ -422,6 +423,7 @@ if (ENABLE_DISTRIBUTED)
   add_test(BlockLocator_unittest BlockLocator_unittest)
 endif(ENABLE_DISTRIBUTED)
 
+if (0)
 add_executable(QueryManagerSingleNode_unittest
   "${CMAKE_CURRENT_SOURCE_DIR}/tests/QueryManagerSingleNode_unittest.cpp")
 target_link_libraries(QueryManagerSingleNode_unittest
@@ -453,6 +455,7 @@ target_link_libraries(QueryManagerSingleNode_unittest
                       quickstep_utility_Macros
                       tmb)
 add_test(QueryManagerSingleNode_unittest QueryManagerSingleNode_unittest)
+endif (0)
 
 add_executable(WorkOrdersContainer_unittest
                "${CMAKE_CURRENT_SOURCE_DIR}/tests/WorkOrdersContainer_unittest.cpp")

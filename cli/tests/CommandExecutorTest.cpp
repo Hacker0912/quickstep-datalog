@@ -21,6 +21,7 @@
 #include <fstream>
 #include <memory>
 
+#include "cli/Flags.hpp"
 #include "cli/tests/CommandExecutorTestRunner.hpp"
 #include "utility/textbased_test/TextBasedTestDriver.hpp"
 
@@ -32,6 +33,7 @@ QUICKSTEP_GENERATE_TEXT_TEST(COMMAND_EXECUTOR_TEST);
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
+  quickstep::FLAGS_num_workers = 1;
 
   if (argc < 4) {
     LOG(ERROR) << "Must have at least 3 arguments, but " << argc - 1

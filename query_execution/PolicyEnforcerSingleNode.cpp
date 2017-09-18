@@ -39,47 +39,29 @@
 
 namespace quickstep {
 
-DEFINE_uint64(max_msgs_per_dispatch_round, 20, "Maximum number of messages that"
-              " can be allocated in a single round of dispatch of messages to"
-              " the workers.");
-
 void PolicyEnforcerSingleNode::getWorkerMessages(
     std::vector<std::unique_ptr<WorkerMessage>> *worker_messages) {
   // Iterate over admitted queries until either there are no more
   // messages available, or the maximum number of messages have
   // been collected.
   DCHECK(worker_messages->empty());
-  // TODO(harshad) - Make this function generic enough so that it
-  // works well when multiple queries are getting executed.
-  std::size_t per_query_share = 0;
-  if (!admitted_queries_.empty()) {
-    per_query_share = FLAGS_max_msgs_per_dispatch_round / admitted_queries_.size();
-  } else {
+  if (admitted_queries_.empty()) {
     LOG(WARNING) << "Requesting WorkerMessages when no query is running";
     return;
   }
-  DCHECK_GT(per_query_share, 0u);
-  std::vector<std::size_t> finished_queries_ids;
 
+  DCHECK_EQ(1u, admitted_queries_.size());
+
+  std::vector<std::size_t> finished_queries_ids;
   for (const auto &admitted_query_info : admitted_queries_) {
-    QueryManagerBase *curr_query_manager = admitted_query_info.second.get();
+    QueryManagerSingleNode *curr_query_manager = static_cast<QueryManagerSingleNode*>(admitted_query_info.second.get());
     DCHECK(curr_query_manager != nullptr);
-    std::size_t messages_collected_curr_query = 0;
-    while (messages_collected_curr_query < per_query_share) {
-      WorkerMessage *next_worker_message =
-          static_cast<QueryManagerSingleNode*>(curr_query_manager)->getNextWorkerMessage(0, kAnyNUMANodeID);
-      if (next_worker_message != nullptr) {
-        ++messages_collected_curr_query;
-        worker_messages->push_back(std::unique_ptr<WorkerMessage>(next_worker_message));
-      } else {
-        // No more work ordes from the current query at this time.
-        // Check if the query's execution is over.
-        if (curr_query_manager->getQueryExecutionState().hasQueryExecutionFinished()) {
-          // If the query has been executed, remove it.
-          finished_queries_ids.push_back(admitted_query_info.first);
-        }
-        break;
-      }
+    curr_query_manager->getNextWorkerMessages(&num_available_workers_, worker_messages);
+
+    // Check if the query's execution is over.
+    if (curr_query_manager->getQueryExecutionState().hasQueryExecutionFinished()) {
+      // If the query has been executed, remove it.
+      finished_queries_ids.push_back(admitted_query_info.first);
     }
   }
   for (const std::size_t finished_qid : finished_queries_ids) {

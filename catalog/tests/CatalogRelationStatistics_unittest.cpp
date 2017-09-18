@@ -30,6 +30,7 @@
 #include "catalog/CatalogRelationStatistics.hpp"
 #include "cli/CommandExecutor.hpp"
 #include "cli/DropRelation.hpp"
+#include "cli/Flags.hpp"
 #include "parser/ParseStatement.hpp"
 #include "parser/SqlParserWrapper.hpp"
 #include "query_execution/ForemanSingleNode.hpp"
@@ -87,6 +88,7 @@ class CatalogRelationStatisticsTest : public ::testing::Test {
     worker_directory_.reset(
         new WorkerDirectory(1, {worker_->getBusClientID()}, {-1}));
 
+    FLAGS_num_workers = 1;
     foreman_.reset(
         new ForemanSingleNode(main_thread_client_id_,
                               worker_directory_.get(),
