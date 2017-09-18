@@ -285,8 +285,18 @@ class QueryManagerBase {
    **/
   virtual bool checkRebuildOver(const dag_node_index index) const = 0;
 
+  /**
+   * @brief Check if the given operator has ever a normal work order.
+   *
+   * @param index The index of the given operator in the DAG.
+   *
+   * @return True if the operator has a normal work order, false otherwise.
+   **/
+  virtual bool hasEverNormalWorkOrders(const dag_node_index index) const = 0;
+
   // For all nodes, store their pipeline breaking dependents (if any).
   std::vector<std::vector<dag_node_index>> blocking_dependents_;
+  std::vector<std::unordered_set<dag_node_index>> non_blocking_dependencies_;
 
   DISALLOW_COPY_AND_ASSIGN(QueryManagerBase);
 };

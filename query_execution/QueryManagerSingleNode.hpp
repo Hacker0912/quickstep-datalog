@@ -112,6 +112,10 @@ class QueryManagerSingleNode final : public QueryManagerBase {
            (query_exec_state_->getNumRebuildWorkOrders(index) == 0);
   }
 
+  bool hasEverNormalWorkOrders(const dag_node_index index) const override {
+    return workorders_container_->hasEverNormalWorkOrders(index);
+  }
+
   /**
    * @brief Get the rebuild WorkOrders for an operator.
    *

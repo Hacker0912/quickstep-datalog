@@ -51,7 +51,8 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       output_consumers_(num_operators_in_dag_),
       blocking_dependencies_(num_operators_in_dag_),
       query_exec_state_(new QueryExecutionState(num_operators_in_dag_)),
-      blocking_dependents_(num_operators_in_dag_) {
+      blocking_dependents_(num_operators_in_dag_),
+      non_blocking_dependencies_(num_operators_in_dag_) {
   if (FLAGS_visualize_execution_dag) {
     dag_visualizer_ =
         std::make_unique<quickstep::ExecutionDAGVisualizer>(query_handle_->getQueryPlan());
@@ -82,6 +83,7 @@ QueryManagerBase::QueryManagerBase(QueryHandle *query_handle)
       } else {
         // The link is not a pipeline-breaker. Streaming of blocks is possible
         // between these two operators.
+        non_blocking_dependencies_[dependent_op_index].insert(node_index);
         output_consumers_[node_index].push_back(dependent_op_index);
       }
     }
@@ -174,6 +176,10 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
     blocking_dependencies_[dependent_op_index].erase(index);
   }
 
+  for (const dag_node_index dependent_op_index : output_consumers_[index]) {
+    non_blocking_dependencies_[dependent_op_index].erase(index);
+  }
+
   RelationalOperator *op = query_dag_->getNodePayloadMutable(index);
   op->updateCatalogOnCompletion();
 
@@ -190,6 +196,11 @@ void QueryManagerBase::markOperatorFinished(const dag_node_index index) {
       // Process the dependent operator (of the operator whose WorkOrder
       // was just executed) for which all the dependencies have been met.
       fetchNormalWorkOrders(dependent_op_index);
+
+      if (non_blocking_dependencies_[dependent_op_index].empty() &&
+          !hasEverNormalWorkOrders(dependent_op_index)) {
+        markOperatorFinished(dependent_op_index);
+      }
     }
   }
 }

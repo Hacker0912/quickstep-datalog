@@ -54,7 +54,8 @@ class WorkOrdersContainer {
    **/
   WorkOrdersContainer(const std::size_t num_operators,
                       const std::size_t num_numa_nodes)
-      : num_operators_(num_operators), num_numa_nodes_(num_numa_nodes) {
+      : num_operators_(num_operators), num_numa_nodes_(num_numa_nodes),
+        has_ever_normal_workorders_(num_operators) {
     DEBUG_ASSERT(num_operators != 0);
     for (std::size_t op = 0; op < num_operators; ++op) {
       normal_workorders_.push_back(
@@ -245,6 +246,8 @@ class WorkOrdersContainer {
     DCHECK_LT(operator_index, num_operators_);
     normal_workorders_[operator_index].addWorkOrder(workorder);
     normal_work_orders_policy_.addWorkOrder(operator_index);
+
+    has_ever_normal_workorders_[operator_index] = true;
   }
 
   /**
@@ -341,6 +344,18 @@ class WorkOrdersContainer {
       const std::size_t operator_index) const {
     return getNumNormalWorkOrders(operator_index) +
            getNumRebuildWorkOrders(operator_index);
+  }
+
+  /**
+   * @brief Check if the given operator has ever a normal work order.
+   *
+   * @param index The index of the given operator in the DAG.
+   *
+   * @return True if the operator has a normal work order, false otherwise.
+   **/
+  bool hasEverNormalWorkOrders(const std::size_t operator_index) const {
+    DCHECK_LT(operator_index, num_operators_);
+    return has_ever_normal_workorders_[operator_index];
   }
 
  private:
@@ -540,8 +555,11 @@ class WorkOrdersContainer {
   LifoWorkOrderSelectionPolicy normal_work_orders_policy_;
   FifoWorkOrderSelectionPolicy rebuild_work_orders_policy_;
 
+  std::vector<bool> has_ever_normal_workorders_;
+
   DISALLOW_COPY_AND_ASSIGN(WorkOrdersContainer);
 };
+
 /** @} */
 
 }  // namespace quickstep
