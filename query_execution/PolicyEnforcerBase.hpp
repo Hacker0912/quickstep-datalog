@@ -100,7 +100,15 @@ class PolicyEnforcerBase {
    *
    * @param message The message.
    **/
-  void processMessage(const TaggedMessage &tagged_message);
+  void processWorkOrderFeedbackMessage(const WorkOrder::FeedbackMessage &message);
+  void processWorkOrderCompleteMessage(const serialization::WorkOrderCompletionMessage &proto);
+  void processRebuildWorkOrderCompleteMessage(const serialization::WorkOrderCompletionMessage &proto);
+  void processCatalogRelationNewBlockMessage(const serialization::CatalogRelationNewBlockMessage &proto);
+  void processDataPipelineMessage(const std::size_t query_id,
+                                  const QueryManagerBase::dag_node_index op_index,
+                                  const block_id block,
+                                  const relation_id rel_id,
+                                  const partition_id part_id);
 
   /**
    * @brief Check if there are any queries to be executed.
@@ -195,6 +203,20 @@ class PolicyEnforcerBase {
    **/
   virtual void decrementNumQueuedWorkOrders(
       const serialization::WorkOrderCompletionMessage &proto) = 0;
+
+  void processOnQueryCompletion(const std::size_t query_id) {
+    if (admitted_queries_[query_id]->getQueryExecutionState().hasQueryExecutionFinished()) {
+      onQueryCompletion(admitted_queries_[query_id].get());
+
+      removeQuery(query_id);
+      if (!waiting_queries_.empty()) {
+        // Admit the earliest waiting query.
+        QueryHandle *new_query = waiting_queries_.front();
+        waiting_queries_.pop();
+        admitQuery(new_query);
+      }
+    }
+  }
 
   DISALLOW_COPY_AND_ASSIGN(PolicyEnforcerBase);
 };

@@ -38,7 +38,11 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
+using std::size_t;
+
 namespace quickstep {
+
+namespace S = serialization;
 
 DECLARE_bool(visualize_execution_dag);
 
@@ -51,99 +55,61 @@ PolicyEnforcerBase::PolicyEnforcerBase(CatalogDatabaseLite *catalog_database)
       profile_individual_workorders_(FLAGS_profile_and_report_workorder_perf || FLAGS_visualize_execution_dag) {
 }
 
-void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
-  std::size_t query_id;
-  QueryManagerBase::dag_node_index op_index;
+void PolicyEnforcerBase::processWorkOrderCompleteMessage(const S::WorkOrderCompletionMessage &proto) {
+  decrementNumQueuedWorkOrders(proto);
 
-  switch (tagged_message.message_type()) {
-    case kWorkOrderCompleteMessage: {
-      serialization::WorkOrderCompletionMessage proto;
-      // Note: This proto message contains the time it took to execute the
-      // WorkOrder. It can be accessed in this scope.
-      CHECK(proto.ParseFromArray(tagged_message.message(),
-                                 tagged_message.message_bytes()));
-      decrementNumQueuedWorkOrders(proto);
-
-      if (profile_individual_workorders_) {
-        recordTimeForWorkOrder(proto);
-      }
-
-      query_id = proto.query_id();
-      DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
-
-      op_index = proto.operator_index();
-      admitted_queries_[query_id]->processWorkOrderCompleteMessage(op_index, proto.partition_id());
-      break;
-    }
-    case kRebuildWorkOrderCompleteMessage: {
-      serialization::WorkOrderCompletionMessage proto;
-      // Note: This proto message contains the time it took to execute the
-      // rebuild WorkOrder. It can be accessed in this scope.
-      CHECK(proto.ParseFromArray(tagged_message.message(),
-                                 tagged_message.message_bytes()));
-      decrementNumQueuedWorkOrders(proto);
-
-      query_id = proto.query_id();
-      DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
-
-      op_index = proto.operator_index();
-      admitted_queries_[query_id]->processRebuildWorkOrderCompleteMessage(op_index, proto.partition_id());
-      break;
-    }
-    case kCatalogRelationNewBlockMessage: {
-      serialization::CatalogRelationNewBlockMessage proto;
-      CHECK(proto.ParseFromArray(tagged_message.message(),
-                                 tagged_message.message_bytes()));
-
-      const block_id block = proto.block_id();
-
-      CatalogRelation *relation =
-          static_cast<CatalogDatabase*>(catalog_database_)->getRelationByIdMutable(proto.relation_id());
-      relation->addBlock(block);
-
-      if (proto.has_partition_id()) {
-        relation->getPartitionSchemeMutable()->addBlockToPartition(block, proto.partition_id());
-      }
-      return;
-    }
-    case kDataPipelineMessage: {
-      serialization::DataPipelineMessage proto;
-      CHECK(proto.ParseFromArray(tagged_message.message(),
-                                 tagged_message.message_bytes()));
-      query_id = proto.query_id();
-      DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
-
-      op_index = proto.operator_index();
-      admitted_queries_[query_id]->processDataPipelineMessage(
-          op_index, proto.block_id(), proto.relation_id(), proto.partition_id());
-      break;
-    }
-    case kWorkOrderFeedbackMessage: {
-      WorkOrder::FeedbackMessage msg(
-          const_cast<void *>(tagged_message.message()),
-          tagged_message.message_bytes());
-      query_id = msg.header().query_id;
-      DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
-
-      op_index = msg.header().rel_op_index;
-      admitted_queries_[query_id]->processFeedbackMessage(op_index, msg);
-      break;
-    }
-    default:
-      LOG(FATAL) << "Unknown message type found in PolicyEnforcer";
+  if (profile_individual_workorders_) {
+    // Note: This proto message contains the time it took to execute the
+    // WorkOrder. It can be accessed in this scope.
+    recordTimeForWorkOrder(proto);
   }
-  if (admitted_queries_[query_id]->queryStatus(op_index) ==
-          QueryManagerBase::QueryStatusCode::kQueryExecuted) {
-    onQueryCompletion(admitted_queries_[query_id].get());
 
-    removeQuery(query_id);
-    if (!waiting_queries_.empty()) {
-      // Admit the earliest waiting query.
-      QueryHandle *new_query = waiting_queries_.front();
-      waiting_queries_.pop();
-      admitQuery(new_query);
-    }
+  const size_t query_id = proto.query_id();
+  DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
+
+  admitted_queries_[query_id]->processWorkOrderCompleteMessage(proto.operator_index(), proto.partition_id());
+
+  processOnQueryCompletion(query_id);
+}
+
+void PolicyEnforcerBase::processRebuildWorkOrderCompleteMessage(const S::WorkOrderCompletionMessage &proto) {
+  decrementNumQueuedWorkOrders(proto);
+
+  const size_t query_id = proto.query_id();
+  DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
+
+  admitted_queries_[query_id]->processRebuildWorkOrderCompleteMessage(proto.operator_index(), proto.partition_id());
+
+  processOnQueryCompletion(query_id);
+}
+
+void PolicyEnforcerBase::processCatalogRelationNewBlockMessage(const S::CatalogRelationNewBlockMessage &proto) {
+  const block_id block = proto.block_id();
+
+  CatalogRelation *relation =
+      static_cast<CatalogDatabase*>(catalog_database_)->getRelationByIdMutable(proto.relation_id());
+  relation->addBlock(block);
+
+  if (proto.has_partition_id()) {
+    relation->getPartitionSchemeMutable()->addBlockToPartition(block, proto.partition_id());
   }
+}
+
+void PolicyEnforcerBase::processDataPipelineMessage(const size_t query_id,
+                                                    const QueryManagerBase::dag_node_index op_index,
+                                                    const block_id block, const relation_id rel_id,
+                                                    const partition_id part_id) {
+  DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
+
+  admitted_queries_[query_id]->processDataPipelineMessage(op_index, block, rel_id, part_id);
+}
+
+void PolicyEnforcerBase::processWorkOrderFeedbackMessage(const WorkOrder::FeedbackMessage &msg) {
+  const auto &header = msg.header();
+  const size_t query_id = header.query_id;
+  DCHECK(admitted_queries_.find(query_id) != admitted_queries_.end());
+
+  admitted_queries_[query_id]->processFeedbackMessage(header.rel_op_index, msg);
 }
 
 void PolicyEnforcerBase::removeQuery(const std::size_t query_id) {

@@ -130,10 +130,12 @@ target_link_libraries(quickstep_queryexecution_ForemanSingleNode
                       quickstep_queryexecution_ForemanBase
                       quickstep_queryexecution_PolicyEnforcerBase
                       quickstep_queryexecution_PolicyEnforcerSingleNode
+                      quickstep_queryexecution_QueryExecutionMessages_proto
                       quickstep_queryexecution_QueryExecutionTypedefs
                       quickstep_queryexecution_QueryExecutionUtil
                       quickstep_queryexecution_WorkerDirectory
                       quickstep_queryexecution_WorkerMessage
+                      quickstep_relationaloperators_WorkOrder
                       quickstep_threading_ThreadUtil
                       quickstep_utility_EqualsAnyConstant
                       quickstep_utility_Macros

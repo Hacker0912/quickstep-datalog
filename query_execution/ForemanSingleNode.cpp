@@ -28,10 +28,12 @@
 #include "query_execution/AdmitRequestMessage.hpp"
 #include "query_execution/PolicyEnforcerBase.hpp"
 #include "query_execution/PolicyEnforcerSingleNode.hpp"
+#include "query_execution/QueryExecutionMessages.pb.h"
 #include "query_execution/QueryExecutionTypedefs.hpp"
 #include "query_execution/QueryExecutionUtil.hpp"
 #include "query_execution/WorkerDirectory.hpp"
 #include "query_execution/WorkerMessage.hpp"
+#include "relational_operators/WorkOrder.hpp"
 #include "threading/ThreadUtil.hpp"
 #include "utility/EqualsAnyConstant.hpp"
 #include "utility/Macros.hpp"
@@ -114,15 +116,6 @@ void ForemanSingleNode::run() {
     const TaggedMessage &tagged_message = annotated_msg.tagged_message;
     const tmb::message_type_id message_type = tagged_message.message_type();
     switch (message_type) {
-      case kCatalogRelationNewBlockMessage:  // Fall through
-      case kDataPipelineMessage:
-      case kRebuildWorkOrderCompleteMessage:
-      case kWorkOrderCompleteMessage:
-      case kWorkOrderFeedbackMessage: {
-        policy_enforcer_->processMessage(tagged_message);
-        break;
-      }
-
       case kAdmitRequestMessage: {
         const AdmitRequestMessage *msg =
             static_cast<const AdmitRequestMessage *>(tagged_message.message());
@@ -140,6 +133,49 @@ void ForemanSingleNode::run() {
           LOG(WARNING) << "The scheduler could not admit all the queries";
           // TODO(harshad) - Inform the main thread about the failure.
         }
+        break;
+      }
+      case kCatalogRelationNewBlockMessage: {
+        serialization::CatalogRelationNewBlockMessage proto;
+        CHECK(proto.ParseFromArray(tagged_message.message(),
+                                   tagged_message.message_bytes()));
+
+        policy_enforcer_->processCatalogRelationNewBlockMessage(proto);
+        break;
+      }
+      case kDataPipelineMessage: {
+        serialization::DataPipelineMessage proto;
+        CHECK(proto.ParseFromArray(tagged_message.message(),
+                                   tagged_message.message_bytes()));
+
+        policy_enforcer_->processDataPipelineMessage(proto.query_id(),
+                                                     proto.operator_index(),
+                                                     proto.block_id(),
+                                                     proto.relation_id(),
+                                                     proto.partition_id());
+        break;
+      }
+      case kRebuildWorkOrderCompleteMessage: {
+        serialization::WorkOrderCompletionMessage proto;
+        CHECK(proto.ParseFromArray(tagged_message.message(),
+                                   tagged_message.message_bytes()));
+
+        policy_enforcer_->processRebuildWorkOrderCompleteMessage(proto);
+        break;
+      }
+      case kWorkOrderCompleteMessage: {
+        serialization::WorkOrderCompletionMessage proto;
+        CHECK(proto.ParseFromArray(tagged_message.message(),
+                                   tagged_message.message_bytes()));
+
+        policy_enforcer_->processWorkOrderCompleteMessage(proto);
+        break;
+      }
+      case kWorkOrderFeedbackMessage: {
+        const WorkOrder::FeedbackMessage msg(const_cast<void *>(tagged_message.message()),
+                                             tagged_message.message_bytes());
+
+        policy_enforcer_->processWorkOrderFeedbackMessage(msg);
         break;
       }
       case kPoisonMessage: {
