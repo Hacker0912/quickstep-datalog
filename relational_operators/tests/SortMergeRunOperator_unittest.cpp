@@ -1602,7 +1602,8 @@ class SortMergeRunOperatorTest : public ::testing::Test {
     // Feed blocks.
     DVLOG(1) << "Feeding " << to_feed.size() << " blocks.";
     for (const block_id block : to_feed) {
-      merge_op_->feedInputBlock(block, input_table_->getID(), 0 /* partition_id */);
+      merge_op_->feedInputBlock(block, input_table_->getID(), 0 /* partition_id */,
+                                kInvalidWorkerMessageRecipientIndexHint);
     }
 
     // Remove fed blocks.

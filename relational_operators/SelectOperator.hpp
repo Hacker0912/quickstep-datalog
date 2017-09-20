@@ -210,9 +210,12 @@ class SelectOperator : public RelationalOperator {
 
   void feedInputBlock(const block_id input_block_id,
                       const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id,
+                      const std::size_t worker_thread_index) override {
     if (input_relation_id == input_relation_.getID()) {
       input_relation_block_ids_[part_id].push_back(input_block_id);
+
+      feeded_block_locality_.emplace(input_block_id, worker_thread_index);
     }
   }
 
@@ -295,8 +298,9 @@ class SelectWorkOrder : public WorkOrder {
                   InsertDestination *output_destination,
                   StorageManager *storage_manager,
                   LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
-                  const numa_node_id numa_node = 0)
-      : WorkOrder(query_id, part_id),
+                  const numa_node_id numa_node = 0,
+                  const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_relation_(input_relation),
         input_block_id_(input_block_id),
         predicate_(predicate),

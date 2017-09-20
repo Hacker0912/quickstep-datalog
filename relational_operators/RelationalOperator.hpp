@@ -23,11 +23,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
 #include "query_execution/QueryContext.hpp"
+#include "query_execution/QueryExecutionTypedefs.hpp"
 #include "relational_operators/WorkOrder.hpp"
 #include "storage/StorageBlockInfo.hpp"
 #include "utility/Macros.hpp"
@@ -172,7 +174,7 @@ class RelationalOperator {
    * @param part_id The partition ID of 'input_block_id'.
    **/
   virtual void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                              const partition_id part_id) {}
+                              const partition_id part_id, const std::size_t worker_thread_index) {}
 
   /**
    * @brief Signal the end of feeding of input blocks for this
@@ -319,6 +321,15 @@ class RelationalOperator {
         done_feeding_input_relation_(false),
         lip_deployment_index_(QueryContext::kInvalidLIPDeploymentId) {}
 
+  std::size_t recipient_index_hint(const block_id block) const {
+    const auto cit = feeded_block_locality_.find(block);
+    if (cit != feeded_block_locality_.end()) {
+      return cit->second;
+    }
+
+    return kInvalidWorkerMessageRecipientIndexHint;
+  }
+
   const std::size_t query_id_;
   const std::size_t num_partitions_, output_num_partitions_;
   const bool has_repartition_;
@@ -328,6 +339,8 @@ class RelationalOperator {
 
   QueryContext::lip_deployment_id lip_deployment_index_;
   std::unordered_set<QueryContext::lip_filter_id> lip_filter_indexes_;
+
+  std::unordered_map<block_id, std::size_t> feeded_block_locality_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(RelationalOperator);

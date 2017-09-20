@@ -111,16 +111,19 @@ bool BuildAggregationExistenceMapOperator::getAllWorkOrders(
   } else {
     for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
       while (num_workorders_generated_[part_id] < input_relation_block_ids_[part_id].size()) {
+        const block_id block = input_relation_block_ids_[part_id][num_workorders_generated_[part_id]];
         container->addNormalWorkOrder(
             new BuildAggregationExistenceMapWorkOrder(
                   query_id_,
                   input_relation_,
                   part_id,
-                  input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+                  block,
                   build_attribute_,
                   query_context->getAggregationState(aggr_state_index_, part_id),
-                  storage_manager),
+                  storage_manager,
+                  recipient_index_hint(block)),
             op_index_);
+        // feeded_block_locality_.erase(block);
         ++num_workorders_generated_[part_id];
       }
     }

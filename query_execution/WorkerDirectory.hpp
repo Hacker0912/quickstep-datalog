@@ -23,11 +23,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "query_execution/QueryExecutionTypedefs.hpp"
 #include "utility/Macros.hpp"
+
+#include "glog/logging.h"
 
 namespace quickstep {
 
@@ -65,6 +68,10 @@ class WorkerDirectory {
     DEBUG_ASSERT(num_workers > 0);
     DEBUG_ASSERT(client_ids.size() == num_workers);
     DEBUG_ASSERT(numa_node_ids.size() == num_workers);
+
+    for (std::size_t i = 0; i < client_ids.size(); ++i) {
+      client_id_to_worker_thread_indexes_.emplace(client_ids[i], i);
+    }
   }
 
   /**
@@ -134,9 +141,22 @@ class WorkerDirectory {
    *
    * @return The TMB client ID of the given worker.
    **/
-  inline const client_id getClientID(const std::size_t worker_thread_index) const {
+  inline client_id getClientID(const std::size_t worker_thread_index) const {
     DEBUG_ASSERT(worker_thread_index < num_workers_);
     return client_ids_[worker_thread_index];
+  }
+
+  /**
+   * @brief Get the index of the specified worker.
+   *
+   * @param cid The TMB client ID of the given worker.
+   *
+   * @return The logical ID of the given worker.
+   **/
+  inline std::size_t getWorkerThreadIndex(const client_id cid) const {
+    const auto cit = client_id_to_worker_thread_indexes_.find(cid);
+    DCHECK(cit != client_id_to_worker_thread_indexes_.end());
+    return cit->second;;
   }
 
   /**
@@ -160,6 +180,8 @@ class WorkerDirectory {
    * @param numa_node_id The NUMA node ID where the new worker is pinned.
    **/
   inline void addWorker(const client_id cid, const int numa_node_id) {
+    client_id_to_worker_thread_indexes_.emplace(cid, num_workers_);
+
     ++num_workers_;
     num_queued_workorders_.push_back(0);
     numa_node_ids_.push_back(numa_node_id);
@@ -232,6 +254,8 @@ class WorkerDirectory {
 
   // The vector of client IDs
   std::vector<client_id> client_ids_;
+
+  std::unordered_map<client_id, std::size_t> client_id_to_worker_thread_indexes_;
 
   DISALLOW_COPY_AND_ASSIGN(WorkerDirectory);
 };

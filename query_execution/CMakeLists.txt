@@ -352,6 +352,8 @@ target_link_libraries(quickstep_queryexecution_Worker
 target_link_libraries(quickstep_queryexecution_WorkerDirectory
                       quickstep_queryexecution_QueryExecutionTypedefs
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_queryexecution_WorkerMessage
+                      quickstep_relationaloperators_WorkOrder)
 target_link_libraries(quickstep_queryexecution_WorkOrderSelectionPolicy
                       glog
                       quickstep_utility_Macros)

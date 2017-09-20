@@ -237,6 +237,7 @@ std::size_t NestedLoopsJoinOperator::getAllWorkOrdersHelperBothNotStored(WorkOrd
   for (std::vector<block_id>::size_type left_index = left_min;
        left_index < left_max;
        ++left_index) {
+    const block_id left_block = left_relation_block_ids_[part_id][left_index];
     for (std::vector<block_id>::size_type right_index = right_min;
          right_index < right_max;
          ++right_index) {
@@ -246,12 +247,13 @@ std::size_t NestedLoopsJoinOperator::getAllWorkOrdersHelperBothNotStored(WorkOrd
               left_input_relation_,
               right_input_relation_,
               part_id,
-              left_relation_block_ids_[part_id][left_index],
+              left_block,
               right_relation_block_ids_[right_index],
               query_context->getPredicate(join_predicate_index_),
               query_context->getScalarGroup(selection_index_),
               query_context->getInsertDestination(output_destination_index_),
-              storage_manager),
+              storage_manager,
+              recipient_index_hint(left_block)),
           op_index_);
     }
   }
@@ -276,6 +278,7 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(WorkOrdersContaine
       for (std::vector<block_id>::size_type right_index = num_right_workorders_generated_[part_id];
            right_index < right_relation_block_ids_.size();
            ++right_index) {
+        const block_id right_block = right_relation_block_ids_[right_index];
         for (const block_id left_block_id : left_relation_block_ids_[part_id]) {
           container->addNormalWorkOrder(
               new NestedLoopsJoinWorkOrder(
@@ -284,11 +287,12 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(WorkOrdersContaine
                   right_input_relation_,
                   part_id,
                   left_block_id,
-                  right_relation_block_ids_[right_index],
+                  right_block,
                   join_predicate,
                   selection,
                   output_destination,
-                  storage_manager),
+                  storage_manager,
+                  recipient_index_hint(right_block)),
               op_index_);
         }
       }
@@ -300,18 +304,20 @@ bool NestedLoopsJoinOperator::getAllWorkOrdersHelperOneStored(WorkOrdersContaine
       for (std::vector<block_id>::size_type left_index = num_left_workorders_generated_[part_id];
            left_index < left_relation_block_ids_[part_id].size();
            ++left_index) {
+        const block_id left_block = left_relation_block_ids_[part_id][left_index];
         for (const block_id right_block_id : right_relation_block_ids_) {
           container->addNormalWorkOrder(
               new NestedLoopsJoinWorkOrder(query_id_,
                                            left_input_relation_,
                                            right_input_relation_,
                                            part_id,
-                                           left_relation_block_ids_[part_id][left_index],
+                                           left_block,
                                            right_block_id,
                                            join_predicate,
                                            selection,
                                            output_destination,
-                                           storage_manager),
+                                           storage_manager,
+                                           recipient_index_hint(left_block)),
               op_index_);
         }
       }

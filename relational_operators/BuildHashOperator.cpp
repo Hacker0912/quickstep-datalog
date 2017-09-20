@@ -92,11 +92,12 @@ bool BuildHashOperator::getAllWorkOrders(
       JoinHashTable *hash_table = query_context->getJoinHashTable(hash_table_index_, part_id);
       while (num_workorders_generated_[part_id] <
              input_relation_block_ids_[part_id].size()) {
+        const block_id block = input_relation_block_ids_[part_id][num_workorders_generated_[part_id]];
         container->addNormalWorkOrder(
             new BuildHashWorkOrder(query_id_, input_relation_, join_key_attributes_, any_join_key_attributes_nullable_,
-                                   part_id, input_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                                   hash_table, storage_manager,
-                                   CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context)),
+                                   part_id, block, hash_table, storage_manager,
+                                   CreateLIPFilterBuilderHelper(lip_deployment_index_, query_context),
+                                   recipient_index_hint(block)),
             op_index_);
         ++num_workorders_generated_[part_id];
       }

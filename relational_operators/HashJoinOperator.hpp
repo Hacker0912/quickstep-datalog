@@ -224,9 +224,11 @@ class HashJoinOperator : public RelationalOperator {
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     DCHECK_EQ(probe_relation_.getID(), input_relation_id);
     probe_relation_block_ids_[part_id].push_back(input_block_id);
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
@@ -338,8 +340,9 @@ class HashInnerJoinWorkOrder : public WorkOrder {
       const JoinHashTable &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id, part_id),
+      LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
+      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
         join_key_attributes_(join_key_attributes),
@@ -482,8 +485,9 @@ class HashSemiJoinWorkOrder : public WorkOrder {
       const JoinHashTable &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id, part_id),
+      LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
+      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
         join_key_attributes_(join_key_attributes),
@@ -618,8 +622,9 @@ class HashAntiJoinWorkOrder : public WorkOrder {
       const JoinHashTable &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id, part_id),
+      LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
+      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
         join_key_attributes_(join_key_attributes),
@@ -760,8 +765,9 @@ class HashOuterJoinWorkOrder : public WorkOrder {
       const JoinHashTable &hash_table,
       InsertDestination *output_destination,
       StorageManager *storage_manager,
-      LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id, part_id),
+      LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
+      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         build_relation_(build_relation),
         probe_relation_(probe_relation),
         join_key_attributes_(join_key_attributes),

@@ -125,10 +125,13 @@ class TableExportOperator : public RelationalOperator {
 
   void feedInputBlock(const block_id input_block_id,
                       const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id,
+                      const std::size_t worker_thread_index) override {
     if (input_relation_id == input_relation_.getID()) {
       SpinMutexLock lock(block_ids_mutex_);
       input_relation_block_ids_.emplace_back(input_block_id);
+
+      feeded_block_locality_.emplace(input_block_id, worker_thread_index);
     }
   }
 

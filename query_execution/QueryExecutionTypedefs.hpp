@@ -62,6 +62,8 @@ using ClientIDMap = ThreadIDBasedMap<client_id,
                                      'a',
                                      'p'>;
 
+constexpr std::size_t kInvalidWorkerMessageRecipientIndexHint = static_cast<std::size_t>(-1);
+
 #ifdef QUICKSTEP_DISTRIBUTED
 
 constexpr std::size_t kInvalidShiftbossIndex = static_cast<std::size_t>(-1);

@@ -309,6 +309,10 @@ class WorkOrder {
     return partition_id_;
   }
 
+  std::size_t recipient_index_hint() const {
+    return recipient_index_hint_;
+  }
+
  protected:
   /**
    * @brief Constructor.
@@ -317,12 +321,15 @@ class WorkOrder {
    * @param part_id The partition id.
    **/
   explicit WorkOrder(const std::size_t query_id,
-                     const partition_id part_id = 0)
+                     const partition_id part_id = 0,
+                     const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
       : query_id_(query_id),
-        partition_id_(part_id) {}
+        partition_id_(part_id),
+        recipient_index_hint_(recipient_index_hint) {}
 
   const std::size_t query_id_;
   const partition_id partition_id_;
+  const std::size_t recipient_index_hint_;
 
   // A vector of preferred NUMA node IDs where this workorder should be executed.
   // These node IDs typically indicate the NUMA node IDs of the input(s) of the

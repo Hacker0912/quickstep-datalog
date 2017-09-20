@@ -22,18 +22,17 @@
 
 #include <cstddef>
 
+#include "relational_operators/WorkOrder.hpp"
+
 namespace quickstep {
 
-class WorkOrder;
 /**
  * @brief The messages to be sent to the worker from Foreman.
  *
- * @note  This class is copyable.
+ * @note This class is copyable.
  **/
 class WorkerMessage {
  public:
-  static constexpr int kInvalidRecipientIndexHint = -1;
-
   enum class WorkerMessageType {
     kRebuildWorkOrder = 0,
     kWorkOrder,
@@ -104,15 +103,15 @@ class WorkerMessage {
    *
    * @param recipient_index_hint The hint i.e. the worker thread index.
    **/
-  inline void setRecipientHint(const int recipient_index_hint) {
+  inline void setRecipientHint(const std::size_t recipient_index_hint) {
     recipient_index_hint_ = recipient_index_hint;
   }
 
   /**
    * @brief Get the hint for the recipient worker thread. The hint is invalid if
-   *        it is kInvalidRecipientIndexHint.
+   *        it is kInvalidWorkerMessageRecipientIndexHint.
    **/
-  inline int getRecipientHint() const {
+  inline std::size_t getRecipientHint() const {
     return recipient_index_hint_;
   }
 
@@ -131,12 +130,12 @@ class WorkerMessage {
       : work_unit_(work_unit),
         relational_op_index_(relational_op_index),
         type_(type),
-        recipient_index_hint_(kInvalidRecipientIndexHint) {}
+        recipient_index_hint_(work_unit->recipient_index_hint()) {}
 
   WorkOrder *work_unit_;
   const std::size_t relational_op_index_;
   const WorkerMessageType type_;
-  int recipient_index_hint_;
+  std::size_t recipient_index_hint_;
 };
 
 }  // namespace quickstep

@@ -126,8 +126,10 @@ class BuildAggregationExistenceMapOperator : public RelationalOperator {
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     input_relation_block_ids_[part_id].push_back(input_block_id);
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
  private:
@@ -168,8 +170,10 @@ class BuildAggregationExistenceMapWorkOrder : public WorkOrder {
                                         const block_id build_block_id,
                                         const attribute_id build_attribute,
                                         AggregationOperationState *state,
-                                        StorageManager *storage_manager)
-      : WorkOrder(query_id, part_id),
+                                        StorageManager *storage_manager,
+                                        const std::size_t recipient_index_hint =
+                                            kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_relation_(input_relation),
         build_block_id_(build_block_id),
         build_attribute_(build_attribute),

@@ -117,11 +117,13 @@ class QueryManagerBase {
    * @param rel_id The ID of the relation that produced 'block'.
    * @param part_id The partition ID of 'block', if any. By default, a block
    *        blongs to the only partition (aka, no partition).
+   * @param worker_thread_index The logical ID of the worker that sends the message.
    **/
   void processDataPipelineMessage(const dag_node_index op_index,
                                   const block_id block,
                                   const relation_id rel_id,
-                                  const partition_id part_id = 0);
+                                  const partition_id part_id,
+                                  const std::size_t worker_thread_index);
 
   /**
    * @brief Fetch all work orders currently available in relational operator and

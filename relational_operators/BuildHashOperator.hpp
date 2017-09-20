@@ -139,7 +139,7 @@ class BuildHashOperator : public RelationalOperator {
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     if (is_broadcast_join_) {
       for (partition_id probe_part_id = 0; probe_part_id < num_partitions_; ++probe_part_id) {
         input_relation_block_ids_[probe_part_id].push_back(input_block_id);
@@ -147,6 +147,8 @@ class BuildHashOperator : public RelationalOperator {
     } else {
       input_relation_block_ids_[part_id].push_back(input_block_id);
     }
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
  private:
@@ -201,8 +203,9 @@ class BuildHashWorkOrder : public WorkOrder {
                      const block_id build_block_id,
                      JoinHashTable *hash_table,
                      StorageManager *storage_manager,
-                     LIPFilterBuilder *lip_filter_builder)
-      : WorkOrder(query_id, part_id),
+                     LIPFilterBuilder *lip_filter_builder,
+                     const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_relation_(input_relation),
         join_key_attributes_(join_key_attributes),
         any_join_key_attributes_nullable_(any_join_key_attributes_nullable),

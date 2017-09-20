@@ -128,8 +128,11 @@ class BuildLIPFilterOperator : public RelationalOperator {
 
   void feedInputBlock(const block_id input_block_id,
                       const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id,
+                      const std::size_t worker_thread_index) override {
     input_relation_block_ids_[part_id].push_back(input_block_id);
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
  private:
@@ -180,8 +183,9 @@ class BuildLIPFilterWorkOrder : public WorkOrder {
                           const Predicate *build_side_predicate,
                           StorageManager *storage_manager,
                           LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
-                          LIPFilterBuilder *lip_filter_builder)
-      : WorkOrder(query_id, part_id),
+                          LIPFilterBuilder *lip_filter_builder,
+                          const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_relation_(input_relation),
         build_block_id_(build_block_id),
         build_side_predicate_(build_side_predicate),

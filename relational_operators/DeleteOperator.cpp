@@ -80,17 +80,12 @@ bool DeleteOperator::getAllWorkOrders(
 
   for (partition_id part_id = 0; part_id < num_partitions_; ++part_id) {
     while (num_workorders_generated_[part_id] < relation_block_ids_[part_id].size()) {
+      const block_id block = relation_block_ids_[part_id][num_workorders_generated_[part_id]];
       container->addNormalWorkOrder(
-          new DeleteWorkOrder(query_id_,
-                              relation_,
-                              part_id,
-                              relation_block_ids_[part_id][num_workorders_generated_[part_id]],
-                              predicate,
-                              storage_manager,
-                              op_index_,
-                              scheduler_client_id,
-                              bus),
+          new DeleteWorkOrder(query_id_, relation_, part_id, block, predicate, storage_manager,
+                              op_index_, scheduler_client_id, bus, recipient_index_hint(block)),
           op_index_);
+      // feeded_block_locality_.erase(block);
       ++num_workorders_generated_[part_id];
     }
   }

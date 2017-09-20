@@ -237,13 +237,15 @@ bool HashJoinOperator::getAllNonOuterJoinWorkOrders(
           *(query_context->getJoinHashTable(hash_table_index_, part_id));
 
       while (num_workorders_generated_[part_id] < probe_relation_block_ids_[part_id].size()) {
+        const block_id block = probe_relation_block_ids_[part_id][num_workorders_generated_[part_id]];
         container->addNormalWorkOrder(
             new JoinWorkOrderClass(query_id_, build_relation_, probe_relation_, join_key_attributes_,
-                                   any_join_key_attributes_nullable_, part_id,
-                                   probe_relation_block_ids_[part_id][num_workorders_generated_[part_id]],
+                                   any_join_key_attributes_nullable_, part_id, block,
                                    residual_predicate, selection, hash_table, output_destination, storage_manager,
-                                   CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context)),
+                                   CreateLIPFilterAdaptiveProberHelper(lip_deployment_index_, query_context),
+                                   recipient_index_hint(block)),
             op_index_);
+        // feeded_block_locality_.erase(block);
         ++num_workorders_generated_[part_id];
       }  // end while
     }  // end for

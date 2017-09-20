@@ -119,9 +119,11 @@ class DeleteOperator : public RelationalOperator {
   }
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     DCHECK(!relation_is_stored_);
     relation_block_ids_[part_id].push_back(input_block_id);
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
  private:
@@ -174,8 +176,9 @@ class DeleteWorkOrder : public WorkOrder {
                   StorageManager *storage_manager,
                   const std::size_t delete_operator_index,
                   const tmb::client_id scheduler_client_id,
-                  MessageBus *bus)
-      : WorkOrder(query_id, part_id),
+                  MessageBus *bus,
+                  const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_relation_(input_relation),
         input_block_id_(input_block_id),
         predicate_(predicate),

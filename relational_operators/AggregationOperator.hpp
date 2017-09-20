@@ -119,8 +119,10 @@ class AggregationOperator : public RelationalOperator {
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     input_relation_block_ids_[part_id].push_back(input_block_id);
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
  private:
@@ -162,8 +164,9 @@ class AggregationWorkOrder : public WorkOrder {
                        const partition_id part_id,
                        const block_id input_block_id,
                        AggregationOperationState *state,
-                       LIPFilterAdaptiveProber *lip_filter_adaptive_prober)
-      : WorkOrder(query_id, part_id),
+                       LIPFilterAdaptiveProber *lip_filter_adaptive_prober,
+                       const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         input_block_id_(input_block_id),
         state_(DCHECK_NOTNULL(state)),
         lip_filter_adaptive_prober_(lip_filter_adaptive_prober) {}

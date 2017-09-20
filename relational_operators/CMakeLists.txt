@@ -358,6 +358,7 @@ target_link_libraries(quickstep_relationaloperators_RelationalOperator
                       glog
                       quickstep_catalog_CatalogTypedefs
                       quickstep_queryexecution_QueryContext
+                      quickstep_queryexecution_QueryExecutionTypedefs
                       quickstep_relationaloperators_WorkOrder
                       quickstep_storage_StorageBlockInfo
                       quickstep_utility_Macros

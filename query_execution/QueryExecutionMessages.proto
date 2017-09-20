@@ -62,6 +62,7 @@ message CatalogRelationNewBlockMessage {
   required uint64 query_id = 4;
 }
 
+// Next tag: 7.
 message DataPipelineMessage {
   required uint64 operator_index = 1;
   required fixed64 block_id = 2;

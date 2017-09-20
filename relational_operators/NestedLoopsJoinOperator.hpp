@@ -165,7 +165,7 @@ class NestedLoopsJoinOperator : public RelationalOperator {
   }
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id, const std::size_t worker_thread_index) override {
     if (input_relation_id == left_input_relation_.getID()) {
       left_relation_block_ids_[part_id].push_back(input_block_id);
     } else if (input_relation_id == right_input_relation_.getID()) {
@@ -174,6 +174,8 @@ class NestedLoopsJoinOperator : public RelationalOperator {
       LOG(FATAL) << "The input block sent to the NestedLoopsJoinOperator belongs "
                  << "to a different relation than the left and right relations";
     }
+
+    feeded_block_locality_.emplace(input_block_id, worker_thread_index);
   }
 
   QueryContext::insert_destination_id getInsertDestinationID() const override {
@@ -349,8 +351,9 @@ class NestedLoopsJoinWorkOrder : public WorkOrder {
       const Predicate *join_predicate,
       const std::vector<std::unique_ptr<const Scalar>> &selection,
       InsertDestination *output_destination,
-      StorageManager *storage_manager)
-      : WorkOrder(query_id, part_id),
+      StorageManager *storage_manager,
+      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint)
+      : WorkOrder(query_id, part_id, recipient_index_hint),
         left_input_relation_(left_input_relation),
         right_input_relation_(right_input_relation),
         left_block_id_(left_block_id),

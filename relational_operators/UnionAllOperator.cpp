@@ -20,6 +20,7 @@
 #include "relational_operators/UnionAllOperator.hpp"
 
 #include <cstddef>
+#include <unordered_map>
 #include <vector>
 
 #include "catalog/CatalogTypedefs.hpp"
@@ -39,7 +40,8 @@ namespace quickstep {
 
 void UnionAllOperator::feedInputBlock(const block_id input_block_id,
                                       const relation_id input_relation_id,
-                                      const partition_id part_id) {
+                                      const partition_id part_id,
+                                      const std::size_t worker_thread_index) {
   std::size_t index = relation_id_to_index_.at(input_relation_id);
   input_relations_block_ids_[index].push_back(input_block_id);
 }
@@ -76,11 +78,12 @@ void UnionAllOperator::addWorkOrdersSingleRelation(
     std::size_t num_generated = num_workorders_generated_[relation_index];
     const std::vector<block_id> &all_blocks = input_relations_block_ids_[relation_index];
     while (num_generated < all_blocks.size()) {
+      const block_id block = all_blocks[num_generated];
       container->addNormalWorkOrder(
           new UnionAllWorkOrder(
               query_id_,
               *input_relations_[relation_index],
-              all_blocks[num_generated],
+              block,
               select_attribute_ids_[relation_index],
               output_destination,
               storage_manager),

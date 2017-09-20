@@ -118,7 +118,8 @@ void ForemanSingleNode::run() {
       case kRebuildWorkOrderCompleteMessage:
       case kWorkOrderCompleteMessage:
       case kWorkOrderFeedbackMessage: {
-        policy_enforcer_->processMessage(tagged_message);
+        policy_enforcer_->processMessage(tagged_message,
+                                         worker_directory_->getWorkerThreadIndex(annotated_msg.sender));
         break;
       }
 
@@ -190,10 +191,9 @@ bool ForemanSingleNode::canCollectNewMessages(const tmb::message_type_id message
 void ForemanSingleNode::dispatchWorkerMessages(const vector<unique_ptr<WorkerMessage>> &messages) {
   for (const auto &message : messages) {
     DCHECK(message != nullptr);
-    const int recipient_worker_thread_index = message->getRecipientHint();
-    if (recipient_worker_thread_index != WorkerMessage::kInvalidRecipientIndexHint) {
-      sendWorkerMessage(static_cast<size_t>(recipient_worker_thread_index),
-                        *message);
+    const size_t recipient_worker_thread_index = message->getRecipientHint();
+    if (recipient_worker_thread_index != kInvalidWorkerMessageRecipientIndexHint) {
+      sendWorkerMessage(recipient_worker_thread_index, *message);
       worker_directory_->incrementNumQueuedWorkOrders(recipient_worker_thread_index);
     } else {
       const size_t least_loaded_worker_thread_index = worker_directory_->getLeastLoadedWorker().first;

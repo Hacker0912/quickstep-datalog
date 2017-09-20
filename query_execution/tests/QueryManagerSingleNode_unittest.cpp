@@ -183,7 +183,8 @@ class MockOperator: public RelationalOperator {
   }
 
   void feedInputBlock(const block_id input_block_id, const relation_id input_relation_id,
-                      const partition_id part_id) override {
+                      const partition_id part_id,
+                      const std::size_t recipient_index_hint = kInvalidWorkerMessageRecipientIndexHint) override {
     ++num_calls_feedblock_;
     MOCK_OP_LOG(3) << "count(" << num_calls_feedblock_ << ")";
   }
@@ -255,7 +256,9 @@ class QueryManagerTest : public ::testing::Test {
 
     query_manager_->processDataPipelineMessage(source_operator_index,
                                                0 /* dummy block ID */,
-                                               0 /* dummy relation ID */);
+                                               0 /* dummy relation ID */,
+                                               kPartitionId,
+                                               kInvalidWorkerMessageRecipientIndexHint);
     return query_manager_->getQueryExecutionState().hasQueryExecutionFinished();
   }
 
@@ -278,7 +281,9 @@ class QueryManagerTest : public ::testing::Test {
 
     query_manager_->processDataPipelineMessage(index,
                                                0 /* dummy block ID */,
-                                               0 /* dummy relation ID */);
+                                               0 /* dummy relation ID */,
+                                               kPartitionId,
+                                               kInvalidWorkerMessageRecipientIndexHint);
     return query_manager_->getQueryExecutionState().hasQueryExecutionFinished();
   }
 

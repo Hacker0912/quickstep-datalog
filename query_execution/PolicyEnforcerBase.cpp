@@ -51,7 +51,8 @@ PolicyEnforcerBase::PolicyEnforcerBase(CatalogDatabaseLite *catalog_database)
       profile_individual_workorders_(FLAGS_profile_and_report_workorder_perf || FLAGS_visualize_execution_dag) {
 }
 
-void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
+void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message,
+                                        const std::size_t worker_thread_index) {
   std::size_t query_id;
   QueryManagerBase::dag_node_index op_index;
 
@@ -115,7 +116,7 @@ void PolicyEnforcerBase::processMessage(const TaggedMessage &tagged_message) {
 
       op_index = proto.operator_index();
       admitted_queries_[query_id]->processDataPipelineMessage(
-          op_index, proto.block_id(), proto.relation_id(), proto.partition_id());
+          op_index, proto.block_id(), proto.relation_id(), proto.partition_id(), worker_thread_index);
       break;
     }
     case kWorkOrderFeedbackMessage: {

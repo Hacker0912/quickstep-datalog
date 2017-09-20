@@ -131,7 +131,8 @@ class UnionAllOperator : public RelationalOperator {
 
   void feedInputBlock(const block_id input_block_id,
                       const relation_id input_relation_id,
-                      const partition_id part_id) override;
+                      const partition_id part_id,
+                      const std::size_t worker_thread_index) override;
 
   void doneFeedingInputBlocks(const relation_id rel_id) override;
 

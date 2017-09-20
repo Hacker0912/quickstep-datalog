@@ -99,8 +99,10 @@ class PolicyEnforcerBase {
    *        policy enforcer.
    *
    * @param message The message.
+   * @param worker_thread_index The logical ID of the worker that sends the message.
    **/
-  void processMessage(const TaggedMessage &tagged_message);
+  void processMessage(const TaggedMessage &tagged_message,
+                      const std::size_t worker_thread_index);
 
   /**
    * @brief Check if there are any queries to be executed.
