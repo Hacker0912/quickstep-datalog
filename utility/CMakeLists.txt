@@ -186,6 +186,7 @@ add_library(quickstep_utility_ExecutionDAGVisualizer
 add_library(quickstep_utility_Glob Glob.cpp Glob.hpp)
 add_library(quickstep_utility_HashError ../empty_src.cpp HashError.hpp)
 add_library(quickstep_utility_HashPair ../empty_src.cpp HashPair.hpp)
+add_library(quickstep_utility_LockFreeStack ../empty_src.cpp LockFreeStack.hpp)
 add_library(quickstep_utility_Macros ../empty_src.cpp Macros.hpp)
 add_library(quickstep_utility_MemStream ../empty_src.cpp MemStream.hpp)
 add_library(quickstep_utility_NetworkUtil NetworkUtil.cpp NetworkUtil.hpp)
@@ -278,6 +279,8 @@ target_link_libraries(quickstep_utility_ExecutionDAGVisualizer
                       ${GFLAGS_LIB_NAME})
 target_link_libraries(quickstep_utility_Glob
                       glog)
+target_link_libraries(quickstep_utility_LockFreeStack
+                      quickstep_utility_Macros)
 target_link_libraries(quickstep_utility_MemStream
                       glog
                       quickstep_utility_Macros)
@@ -372,6 +375,7 @@ target_link_libraries(quickstep_utility
                       quickstep_utility_Glob
                       quickstep_utility_HashError
                       quickstep_utility_HashPair
+                      quickstep_utility_LockFreeStack
                       quickstep_utility_Macros
                       quickstep_utility_MemStream
                       quickstep_utility_NetworkUtil
@@ -440,6 +444,13 @@ target_link_libraries(EqualsAnyConstant_unittest
                       quickstep_utility_EqualsAnyConstant
                       ${LIBS})
 add_test(EqualsAnyConstant_unittest EqualsAnyConstant_unittest)
+
+add_executable(LockFreeStack_unittest "${CMAKE_CURRENT_SOURCE_DIR}/tests/LockFreeStack_unittest.cpp")
+target_link_libraries(LockFreeStack_unittest
+                      gtest
+                      gtest_main
+                      quickstep_utility_LockFreeStack)
+add_test(LockFreeStack_unittest LockFreeStack_unittest)
 
 add_executable(NetworkUtil_unittest "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetworkUtil_unittest.cpp")
 target_link_libraries(NetworkUtil_unittest

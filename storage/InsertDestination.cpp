@@ -427,61 +427,59 @@ MutableBlockReference BlockPoolInsertDestination::createNewBlock() {
 
 void BlockPoolInsertDestination::getPartiallyFilledBlocks(std::vector<MutableBlockReference> *partial_blocks,
                                                           vector<partition_id> *part_ids) {
-  SpinMutexLock lock(mutex_);
-  for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_.size(); ++i) {
-    partial_blocks->push_back((std::move(available_block_refs_[i])));
+  MutableBlockReference block_ref;
+  while (available_block_refs_.popIfAvailable(&block_ref)) {
+    partial_blocks->push_back(std::move(block_ref));
     // No partition.
     part_ids->push_back(0u);
   }
-
-  available_block_refs_.clear();
 }
 
 MutableBlockReference BlockPoolInsertDestination::getBlockForInsertion() {
-  SpinMutexLock lock(mutex_);
-  if (available_block_refs_.empty()) {
-    if (available_block_ids_.empty()) {
-      return createNewBlock();
-    } else {
-      const block_id id = available_block_ids_.back();
-      available_block_ids_.pop_back();
-      MutableBlockReference retval = storage_manager_->getBlockMutable(id, relation_);
-      return retval;
-    }
-  } else {
-    MutableBlockReference retval = std::move(available_block_refs_.back());
-    available_block_refs_.pop_back();
-    return retval;
+  MutableBlockReference block_ref;
+  if (available_block_refs_.popIfAvailable(&block_ref)) {
+    return block_ref;
   }
+
+  block_id id;
+  if (available_block_ids_.popIfAvailable(&id)) {
+    return storage_manager_->getBlockMutable(id, relation_);
+  }
+
+  return createNewBlock();
 }
 
 void BlockPoolInsertDestination::returnBlock(MutableBlockReference &&block, const bool full) {
-  {
-    SpinMutexLock lock(mutex_);
-    if (full) {
-      done_block_ids_.push_back(block->getID());
-    } else {
-      available_block_refs_.push_back(std::move(block));
-      return;
-    }
+  if (!full) {
+    available_block_refs_.push(std::move(block));
+    return;
   }
+
   DEBUG_ASSERT(full);
+  const block_id id = block->getID();
+  done_block_ids_.push(id);
+
   // If the block is full, rebuild before pipelining it.
   if (!block->rebuild()) {
-    LOG_WARNING("Rebuilding of StorageBlock with ID: " << block->getID() <<
+    LOG_WARNING("Rebuilding of StorageBlock with ID: " << id <<
                 "invalidated one or more IndexSubBlocks.");
   }
   // Note that the block will only be sent if it's full (true).
-  sendBlockFilledMessage(block->getID());
+  sendBlockFilledMessage(id);
 }
 
 const std::vector<block_id>& BlockPoolInsertDestination::getTouchedBlocksInternal() {
-  for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_.size(); ++i) {
-    done_block_ids_.push_back(available_block_refs_[i]->getID());
+  MutableBlockReference block_ref;
+  while (available_block_refs_.popIfAvailable(&block_ref)) {
+    touched_blocks_.push_back(block_ref->getID());
   }
-  available_block_refs_.clear();
 
-  return done_block_ids_;
+  block_id id;
+  while (done_block_ids_.popIfAvailable(&id)) {
+    touched_blocks_.push_back(id);
+  }
+
+  return touched_blocks_;
 }
 
 PartitionAwareInsertDestination::PartitionAwareInsertDestination(

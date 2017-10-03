@@ -782,6 +782,7 @@ target_link_libraries(quickstep_storage_InsertDestination
                       quickstep_threading_ThreadIDBasedMap
                       quickstep_types_TypedValue
                       quickstep_types_containers_Tuple
+                      quickstep_utility_LockFreeStack
                       quickstep_utility_Macros
                       tmb)
 target_link_libraries(quickstep_storage_InsertDestinationInterface

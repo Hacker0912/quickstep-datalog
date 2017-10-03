@@ -41,6 +41,7 @@
 #include "threading/SpinMutex.hpp"
 #include "threading/ThreadIDBasedMap.hpp"
 #include "types/containers/Tuple.hpp"
+#include "utility/LockFreeStack.hpp"
 #include "utility/Macros.hpp"
 
 #include "glog/logging.h"
@@ -437,8 +438,11 @@ class BlockPoolInsertDestination : public InsertDestination {
                           relational_op_index,
                           query_id,
                           scheduler_client_id,
-                          bus),
-        available_block_ids_(std::move(blocks)) {
+                          bus) {
+    for (std::size_t i = 0; i < blocks.size(); ++i) {
+      available_block_ids_.push(blocks[i]);
+    }
+
     // TODO(chasseur): Once block fill statistics are available, replace this
     // with something smarter.
   }
@@ -462,11 +466,13 @@ class BlockPoolInsertDestination : public InsertDestination {
   FRIEND_TEST(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest);
 
   // A vector of references to blocks which are loaded in memory.
-  std::vector<MutableBlockReference> available_block_refs_;
+  LockFreeStack<MutableBlockReference> available_block_refs_;
   // A vector of blocks from the relation that are not loaded in memory yet.
-  std::vector<block_id> available_block_ids_;
+  LockFreeStack<block_id> available_block_ids_;
   // A vector of fully filled blocks.
-  std::vector<block_id> done_block_ids_;
+  LockFreeStack<block_id> done_block_ids_;
+
+  std::vector<block_id> touched_blocks_;
 
   DISALLOW_COPY_AND_ASSIGN(BlockPoolInsertDestination);
 };
