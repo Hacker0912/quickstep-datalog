@@ -988,8 +988,10 @@ target_link_libraries(quickstep_storage_StorageBlockInfo
                       quickstep_utility_Macros
                       quickstep_utility_StringUtil)
 target_link_libraries(quickstep_storage_StorageBlockLayout
+                      ${GFLAGS_LIB_NAME}
                       glog
                       quickstep_catalog_CatalogRelationSchema
+                      quickstep_catalog_CatalogTypedefs
                       quickstep_storage_StorageBlockInfo
                       quickstep_storage_StorageBlockLayout_proto
                       quickstep_storage_StorageConstants

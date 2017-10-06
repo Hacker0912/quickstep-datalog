@@ -23,14 +23,16 @@
 #include <string>
 #include <vector>
 
-#include "glog/logging.h"
-
 #include "catalog/CatalogRelationSchema.hpp"
+#include "catalog/CatalogTypedefs.hpp"
 #include "storage/StorageBlockLayout.pb.h"
 #include "storage/StorageConstants.hpp"
 #include "storage/StorageErrors.hpp"
 #include "storage/SubBlockTypeRegistry.hpp"
 #include "utility/Macros.hpp"
+
+#include "gflags/gflags.h"
+#include "glog/logging.h"
 
 using std::size_t;
 using std::string;
@@ -38,6 +40,9 @@ using std::strlen;
 using std::vector;
 
 namespace quickstep {
+
+DEFINE_bool(use_column_store, false,
+            "Use column store as the default storage layout, instead of the row store.");
 
 StorageBlockLayout::StorageBlockLayout(const CatalogRelationSchema &relation,
                                        const StorageBlockLayoutDescription &proto)
@@ -148,17 +153,32 @@ void StorageBlockLayout::copyHeaderTo(void *dest) const {
 
 StorageBlockLayout* StorageBlockLayout::GenerateDefaultLayout(const CatalogRelationSchema &relation,
                                                               const bool relation_variable_length) {
-  // TODO(marc): In the future we may use relation_variable_length (columnstores as intermediate
-  //             blocks), but for now, all we do is add (void) so that the compiler will not complain
-  //             about an unused variable.
-  (void) relation_variable_length;
   StorageBlockLayout *layout = new StorageBlockLayout(relation);
 
   StorageBlockLayoutDescription *description = layout->getDescriptionMutable();
   description->set_num_slots(1);
 
   TupleStorageSubBlockDescription *tuple_store_description = description->mutable_tuple_store_description();
-  tuple_store_description->set_sub_block_type(TupleStorageSubBlockDescription::SPLIT_ROW_STORE);
+
+  TupleStorageSubBlockDescription::TupleStorageSubBlockType block_type =
+      TupleStorageSubBlockDescription::SPLIT_ROW_STORE;
+  if (FLAGS_use_column_store) {
+    if (relation_variable_length) {
+      block_type = TupleStorageSubBlockDescription::COMPRESSED_COLUMN_STORE;
+      // TODO(quickstep-team): Choose the sort attribute smarter.
+      tuple_store_description->SetExtension(CompressedColumnStoreTupleStorageSubBlockDescription::sort_attribute_id,
+                                            0);
+      for (std::size_t attr_id = 0; attr_id < relation.size(); ++attr_id) {
+        if (relation.getVariableLengthAttributeIndex(attr_id) != kInvalidCatalogId) {
+          tuple_store_description->AddExtension(
+              CompressedColumnStoreTupleStorageSubBlockDescription::compressed_attribute_id, attr_id);
+        }
+      }
+    } else {
+      block_type = TupleStorageSubBlockDescription::BASIC_COLUMN_STORE;
+    }
+  }
+  tuple_store_description->set_sub_block_type(block_type);
 
   layout->finalize();
   return layout;
