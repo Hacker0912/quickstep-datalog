@@ -174,6 +174,7 @@ add_library(quickstep_utility_Cast ../empty_src.cpp Cast.hpp)
 add_library(quickstep_utility_CheckSnprintf ../empty_src.cpp CheckSnprintf.hpp)
 add_library(quickstep_utility_ColumnVectorCache ../empty_src.cpp ColumnVectorCache.hpp)
 add_library(quickstep_utility_CompositeHash ../empty_src.cpp CompositeHash.hpp)
+add_library(quickstep_utility_ConcurrentQueue ../empty_src.cpp ConcurrentQueue.hpp)
 add_library(quickstep_utility_BarrieredReadWriteConcurrentBitVector
             ../empty_src.cpp
             BarrieredReadWriteConcurrentBitVector.hpp)
@@ -365,6 +366,7 @@ target_link_libraries(quickstep_utility
                       quickstep_utility_CheckSnprintf
                       quickstep_utility_ColumnVectorCache
                       quickstep_utility_CompositeHash
+                      quickstep_utility_ConcurrentQueue
                       quickstep_utility_DAG
                       quickstep_utility_DisjointTreeForest
                       quickstep_utility_EqualsAnyConstant

@@ -666,7 +666,7 @@ TEST_F(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest) {
   DCHECK(insert_destination != nullptr);
   MutableBlockReference block_ref;
   static_cast<BlockPoolInsertDestination *>(insert_destination)
-      ->available_block_refs_.push_back(move(block_ref));
+      ->available_block_refs_.enqueue(move(block_ref));
 
   EXPECT_EQ(1, op1.getNumCalls(MockOperator::kGetAllWorkOrders));
   EXPECT_EQ(1, op1.getNumWorkOrders());

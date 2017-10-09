@@ -41,6 +41,7 @@
 #include "threading/SpinMutex.hpp"
 #include "threading/ThreadIDBasedMap.hpp"
 #include "types/containers/Tuple.hpp"
+#include "utility/ConcurrentQueue.hpp"
 #include "utility/Macros.hpp"
 
 #include "glog/logging.h"
@@ -454,8 +455,10 @@ class BlockPoolInsertDestination : public InsertDestination {
                           relational_op_index,
                           query_id,
                           scheduler_client_id,
-                          bus),
-        available_block_ids_(std::move(blocks)) {
+                          bus) {
+    for (auto i = 0; i < blocks.size(); ++i) {
+      available_block_ids_.enqueue(blocks[i]);
+    }
     // TODO(chasseur): Once block fill statistics are available, replace this
     // with something smarter.
   }
@@ -479,11 +482,11 @@ class BlockPoolInsertDestination : public InsertDestination {
   FRIEND_TEST(QueryManagerTest, TwoNodesDAGPartiallyFilledBlocksTest);
 
   // A vector of references to blocks which are loaded in memory.
-  std::vector<MutableBlockReference> available_block_refs_;
+  moodycamel::ConcurrentQueue<MutableBlockReference> available_block_refs_;
   // A vector of blocks from the relation that are not loaded in memory yet.
-  std::vector<block_id> available_block_ids_;
+  moodycamel::ConcurrentQueue<block_id> available_block_ids_;
   // A vector of fully filled blocks.
-  std::vector<block_id> done_block_ids_;
+  moodycamel::ConcurrentQueue<block_id> done_block_ids_;
 
   DISALLOW_COPY_AND_ASSIGN(BlockPoolInsertDestination);
 };
@@ -521,7 +524,6 @@ class PartitionAwareInsertDestination : public InsertDestination {
       tmb::MessageBus *bus);
 
   ~PartitionAwareInsertDestination() override {
-    delete[] mutexes_for_partition_;
   }
 
   /**
@@ -532,8 +534,7 @@ class PartitionAwareInsertDestination : public InsertDestination {
    * @part_id The partition to add the block to.
    **/
   void addBlockToPool(const block_id bid, const partition_id part_id) {
-    SpinMutexLock lock(mutexes_for_partition_[part_id]);
-    available_block_ids_[part_id].push_back(bid);
+    available_block_ids_[part_id].enqueue(bid);
   }
 
   void getPartiallyFilledBlocks(std::vector<MutableBlockReference> *partial_blocks,
@@ -619,13 +620,11 @@ class PartitionAwareInsertDestination : public InsertDestination {
   void getPartiallyFilledBlocksInPartition(std::vector<MutableBlockReference> *partial_blocks,
                                            std::vector<partition_id> *part_ids,
                                            const partition_id part_id) {
-    SpinMutexLock lock(mutexes_for_partition_[part_id]);
-    for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_[part_id].size(); ++i) {
-      partial_blocks->push_back((std::move(available_block_refs_[part_id][i])));
+    MutableBlockReference block_ref;
+    while (available_block_refs_[part_id].try_dequeue(block_ref)) {
+      partial_blocks->push_back(std::move(block_ref));
       part_ids->push_back(part_id);
     }
-
-    available_block_refs_[part_id].clear();
   }
 
   partition_id getPartitionId(const Tuple &tuple) const {
@@ -663,13 +662,11 @@ class PartitionAwareInsertDestination : public InsertDestination {
   std::unique_ptr<const PartitionSchemeHeader> partition_scheme_header_;
 
   // A vector of available block references for each partition.
-  std::vector< std::vector<MutableBlockReference> > available_block_refs_;
+  std::vector<moodycamel::ConcurrentQueue<MutableBlockReference>> available_block_refs_;
   // A vector of available block ids for each partition.
-  std::vector< std::vector<block_id> > available_block_ids_;
+  std::vector<moodycamel::ConcurrentQueue<block_id>> available_block_ids_;
   // A vector of done block ids for each partition.
-  std::vector< std::vector<block_id> > done_block_ids_;
-  // Mutex for locking each partition separately.
-  SpinMutex *mutexes_for_partition_;
+  std::vector<moodycamel::ConcurrentQueue<block_id>> done_block_ids_;
 
   partition_id input_partition_id_ = 0u;
 

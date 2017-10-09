@@ -377,7 +377,6 @@ MutableBlockReference AlwaysCreateBlockInsertDestination::createNewBlock() {
 }
 
 MutableBlockReference AlwaysCreateBlockInsertDestination::getBlockForInsertion() {
-  SpinMutexLock lock(mutex_);
   return createNewBlock();
 }
 
@@ -427,61 +426,61 @@ MutableBlockReference BlockPoolInsertDestination::createNewBlock() {
 
 void BlockPoolInsertDestination::getPartiallyFilledBlocks(std::vector<MutableBlockReference> *partial_blocks,
                                                           vector<partition_id> *part_ids) {
-  SpinMutexLock lock(mutex_);
-  for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_.size(); ++i) {
-    partial_blocks->push_back((std::move(available_block_refs_[i])));
+  MutableBlockReference block_ref;
+  while (available_block_refs_.try_dequeue(block_ref)) {
+    partial_blocks->push_back((std::move(block_ref)));
     // No partition.
     part_ids->push_back(0u);
   }
-
-  available_block_refs_.clear();
 }
 
 MutableBlockReference BlockPoolInsertDestination::getBlockForInsertion() {
-  SpinMutexLock lock(mutex_);
-  if (available_block_refs_.empty()) {
-    if (available_block_ids_.empty()) {
-      return createNewBlock();
-    } else {
-      const block_id id = available_block_ids_.back();
-      available_block_ids_.pop_back();
-      MutableBlockReference retval = storage_manager_->getBlockMutable(id, relation_);
-      return retval;
-    }
-  } else {
-    MutableBlockReference retval = std::move(available_block_refs_.back());
-    available_block_refs_.pop_back();
-    return retval;
+  MutableBlockReference block_ref;
+  if (available_block_refs_.try_dequeue(block_ref)) {
+    return block_ref;
   }
+
+  block_id id;
+  if (available_block_ids_.try_dequeue(id)) {
+    return storage_manager_->getBlockMutable(id, relation_);
+  }
+
+  return createNewBlock();
 }
 
 void BlockPoolInsertDestination::returnBlock(MutableBlockReference &&block, const bool full) {
-  {
-    SpinMutexLock lock(mutex_);
-    if (full) {
-      done_block_ids_.push_back(block->getID());
-    } else {
-      available_block_refs_.push_back(std::move(block));
-      return;
-    }
+  if (!full) {
+    available_block_refs_.enqueue(std::move(block));
+    return;
   }
+
   DEBUG_ASSERT(full);
+  const block_id id = block->getID();
+  done_block_ids_.enqueue(id);
+
   // If the block is full, rebuild before pipelining it.
   if (!block->rebuild()) {
-    LOG_WARNING("Rebuilding of StorageBlock with ID: " << block->getID() <<
+    LOG_WARNING("Rebuilding of StorageBlock with ID: " << id <<
                 "invalidated one or more IndexSubBlocks.");
   }
   // Note that the block will only be sent if it's full (true).
-  sendBlockFilledMessage(block->getID());
+  sendBlockFilledMessage(id);
 }
 
 std::vector<block_id> BlockPoolInsertDestination::getTouchedBlocksInternal() {
-  for (std::vector<MutableBlockReference>::size_type i = 0; i < available_block_refs_.size(); ++i) {
-    done_block_ids_.push_back(available_block_refs_[i]->getID());
-  }
-  available_block_refs_.clear();
+  vector<block_id> blocks;
 
-  return done_block_ids_;
+  MutableBlockReference block_ref;
+  while (available_block_refs_.try_dequeue(block_ref)) {
+    blocks.push_back(block_ref->getID());
+  }
+
+  block_id block;
+  while (done_block_ids_.try_dequeue(block)) {
+    blocks.push_back(block);
+  }
+
+  return blocks;
 }
 
 PartitionAwareInsertDestination::PartitionAwareInsertDestination(
@@ -504,10 +503,16 @@ PartitionAwareInsertDestination::PartitionAwareInsertDestination(
                         bus),
       partition_scheme_header_(DCHECK_NOTNULL(partition_scheme_header)),
       available_block_refs_(partition_scheme_header_->getNumPartitions()),
-      available_block_ids_(move(partitions)),
-      done_block_ids_(partition_scheme_header_->getNumPartitions()),
-      mutexes_for_partition_(
-          new SpinMutex[partition_scheme_header_->getNumPartitions()]) {}
+      available_block_ids_(partition_scheme_header_->getNumPartitions()),
+      done_block_ids_(partition_scheme_header_->getNumPartitions()) {
+  for (partition_id part_id = 0;
+       part_id < partition_scheme_header_->getNumPartitions();
+       ++part_id) {
+    for (std::size_t i = 0; i < partitions[part_id].size(); ++i) {
+      available_block_ids_[part_id].enqueue(partitions[part_id][i]);
+    }
+  }
+}
 
 MutableBlockReference PartitionAwareInsertDestination::createNewBlock() {
   FATAL_ERROR("PartitionAwareInsertDestination::createNewBlock needs a partition id as an argument.");
@@ -552,14 +557,15 @@ std::vector<block_id> PartitionAwareInsertDestination::getTouchedBlocksInternal(
   for (std::size_t part_id = 0;
        part_id < partition_scheme_header_->getNumPartitions();
        ++part_id) {
-    for (std::size_t i = 0; i < available_block_refs_[part_id].size(); ++i) {
-      done_block_ids_[part_id].push_back(available_block_refs_[part_id][i]->getID());
+    MutableBlockReference block_ref;
+    while (available_block_refs_[part_id].try_dequeue(block_ref)) {
+      all_partitions_done_block_ids.push_back(block_ref->getID());
     }
-    available_block_refs_[part_id].clear();
 
-    all_partitions_done_block_ids.insert(
-        all_partitions_done_block_ids.end(), done_block_ids_[part_id].begin(), done_block_ids_[part_id].end());
-    done_block_ids_[part_id].clear();
+    block_id block;
+    while (done_block_ids_[part_id].try_dequeue(block)) {
+      all_partitions_done_block_ids.push_back(block);
+    }
   }
   return all_partitions_done_block_ids;
 }
@@ -723,21 +729,19 @@ void PartitionAwareInsertDestination::insertTuplesFromVector(std::vector<Tuple>:
 
 MutableBlockReference PartitionAwareInsertDestination::getBlockForInsertionInPartition(const partition_id part_id) {
   DCHECK_LT(part_id, partition_scheme_header_->getNumPartitions());
-  SpinMutexLock lock(mutexes_for_partition_[part_id]);
-  if (available_block_refs_[part_id].empty()) {
-    if (available_block_ids_[part_id].empty()) {
-      return createNewBlockInPartition(part_id);
-    } else {
-      const block_id id = available_block_ids_[part_id].back();
-      available_block_ids_[part_id].pop_back();
-      MutableBlockReference retval = storage_manager_->getBlockMutable(id, relation_);
-      return retval;
-    }
-  } else {
-    MutableBlockReference retval = std::move(available_block_refs_[part_id].back());
-    available_block_refs_[part_id].pop_back();
-    return retval;
+
+  MutableBlockReference block_ref;
+  if (available_block_refs_[part_id].try_dequeue(block_ref)) {
+    return block_ref;
   }
+
+
+  block_id id;
+  if (available_block_ids_[part_id].try_dequeue(id)) {
+    return storage_manager_->getBlockMutable(id, relation_);
+  }
+
+  return createNewBlockInPartition(part_id);
 }
 
 void PartitionAwareInsertDestination::returnBlock(MutableBlockReference &&block, const bool full) {
@@ -748,23 +752,20 @@ void PartitionAwareInsertDestination::returnBlockInPartition(MutableBlockReferen
                                                              const bool full,
                                                              const partition_id part_id) {
   DCHECK_LT(part_id, partition_scheme_header_->getNumPartitions());
-  {
-    SpinMutexLock lock(mutexes_for_partition_[part_id]);
-    if (full) {
-      done_block_ids_[part_id].push_back(block->getID());
-    } else {
-      available_block_refs_[part_id].push_back(std::move(block));
-      return;
-    }
+  if (!full) {
+    available_block_refs_[part_id].enqueue(std::move(block));
+    return;
   }
   DEBUG_ASSERT(full);
+  const block_id id = block->getID();
+  done_block_ids_[part_id].enqueue(id);
   // If the block is full, rebuild before pipelining it.
   if (!block->rebuild()) {
-    LOG_WARNING("Rebuilding of StorageBlock with ID: " << block->getID()
+    LOG_WARNING("Rebuilding of StorageBlock with ID: " << id
                                                        << "invalidated one or more IndexSubBlocks.");
   }
   // Note that the block will only be sent if it's full (true).
-  sendBlockFilledMessage(block->getID(), part_id);
+  sendBlockFilledMessage(id, part_id);
 }
 
 }  // namespace quickstep
