@@ -516,7 +516,9 @@ elseif(MSVC)
 endif()
 
 # Link with atomic library.
-# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+if (NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
+ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+endif()
 
 # Set the include directories to the project root directory and the root of the build tree (where
 # generated headers will go).
