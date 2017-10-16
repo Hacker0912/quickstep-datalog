@@ -78,6 +78,8 @@ bool PartitionSchemeHeader::ProtoIsValid(
   // Check that the proto has a valid partition type.
   switch (proto.partition_type()) {
     case serialization::PartitionSchemeHeader::HASH:
+      return proto.ExtensionSize(serialization::HashPartitionSchemeHeader::partition_attr_types) ==
+                 proto.partition_attribute_ids_size();
     case serialization::PartitionSchemeHeader::RANDOM:
       return true;
     case serialization::PartitionSchemeHeader::RANGE: {
@@ -107,7 +109,13 @@ PartitionSchemeHeader* PartitionSchemeHeader::ReconstructFromProto(
 
   switch (proto.partition_type()) {
     case serialization::PartitionSchemeHeader::HASH: {
-      return new HashPartitionSchemeHeader(proto.num_partitions(), move(partition_attribute_ids));
+      std::vector<const Type*> attr_types;
+      for (int i = 0; i < proto.ExtensionSize(serialization::HashPartitionSchemeHeader::partition_attr_types); ++i) {
+        attr_types.push_back(&TypeFactory::ReconstructFromProto(
+            proto.GetExtension(serialization::HashPartitionSchemeHeader::partition_attr_types, i)));
+      }
+      return new HashPartitionSchemeHeader(proto.num_partitions(), move(partition_attribute_ids),
+                                           move(attr_types));
     }
     case serialization::PartitionSchemeHeader::RANDOM: {
       return new RandomPartitionSchemeHeader(proto.num_partitions());
@@ -201,6 +209,17 @@ std::string PartitionSchemeHeader::toString(const CatalogRelationSchema &relatio
   oss << " ) PARTITIONS " << num_partitions_ << '\n';
 
   return oss.str();
+}
+
+serialization::PartitionSchemeHeader HashPartitionSchemeHeader::getProto() const {
+  serialization::PartitionSchemeHeader proto = PartitionSchemeHeader::getProto();
+
+  for (const Type *type : partition_attr_types_) {
+    proto.AddExtension(serialization::HashPartitionSchemeHeader::partition_attr_types)
+        ->MergeFrom(type->getProto());
+  }
+
+  return proto;
 }
 
 serialization::PartitionSchemeHeader RangePartitionSchemeHeader::getProto() const {

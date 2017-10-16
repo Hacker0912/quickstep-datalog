@@ -510,11 +510,14 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
   const P::PartitionSchemeHeader *partition_scheme_header = physical->getOutputPartitionSchemeHeader();
   if (partition_scheme_header) {
     PartitionSchemeHeader::PartitionAttributeIds output_partition_attr_ids;
+    std::vector<const Type*> output_partition_attribute_types;
     for (const auto &partition_equivalent_expr_ids : partition_scheme_header->partition_expr_ids) {
       DCHECK(!partition_equivalent_expr_ids.empty());
       const E::ExprId partition_expr_id = *partition_equivalent_expr_ids.begin();
       DCHECK(attribute_substitution_map_.find(partition_expr_id) != attribute_substitution_map_.end());
       output_partition_attr_ids.push_back(attribute_substitution_map_[partition_expr_id]->getID());
+      output_partition_attribute_types.push_back(
+          &catalog_relation->getAttributeById(output_partition_attr_ids.back())->getType());
     }
 
     const size_t num_partition = partition_scheme_header->num_partitions;
@@ -522,7 +525,8 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
     switch (partition_scheme_header->partition_type) {
       case P::PartitionSchemeHeader::PartitionType::kHash:
         output_partition_scheme_header =
-            make_unique<HashPartitionSchemeHeader>(num_partition, move(output_partition_attr_ids));
+            make_unique<HashPartitionSchemeHeader>(num_partition, move(output_partition_attr_ids),
+                                                   move(output_partition_attribute_types));
         break;
       case P::PartitionSchemeHeader::PartitionType::kRandom:
         output_partition_scheme_header =

@@ -652,7 +652,7 @@ L::LogicalPtr Resolver::resolveCreateTable(
       block_properties(resolveBlockProperties(create_table_statement));
 
   std::shared_ptr<const S::PartitionSchemeHeader> partition_scheme_header_proto(
-      resolvePartitionClause(create_table_statement));
+      resolvePartitionClause(create_table_statement, attributes));
 
   return L::CreateTable::Create(relation_name, attributes, block_properties, partition_scheme_header_proto);
 }
@@ -833,7 +833,8 @@ StorageBlockLayoutDescription* Resolver::resolveBlockProperties(
 }
 
 const S::PartitionSchemeHeader* Resolver::resolvePartitionClause(
-    const ParseStatementCreateTable &create_table_statement) {
+    const ParseStatementCreateTable &create_table_statement,
+    const std::vector<E::AttributeReferencePtr> &attributes) {
   const ParsePartitionClause *partition_clause = create_table_statement.opt_partition_clause();
   if (partition_clause == nullptr) {
     return nullptr;
@@ -875,6 +876,13 @@ const S::PartitionSchemeHeader* Resolver::resolvePartitionClause(
     unique_partition_attrs.insert(attr_id);
 
     proto->add_partition_attribute_ids(attr_id);
+  }
+
+  if (partition_type == kHashPartitionType) {
+    for (int i = 0; i < proto->partition_attribute_ids_size(); ++i) {
+      const Type &type = attributes[proto->partition_attribute_ids(i)]->getValueType();
+      proto->AddExtension(S::HashPartitionSchemeHeader::partition_attr_types)->MergeFrom(type.getProto());
+    }
   }
 
   return proto.release();

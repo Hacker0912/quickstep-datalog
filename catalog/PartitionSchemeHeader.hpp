@@ -21,6 +21,7 @@
 #define QUICKSTEP_CATALOG_PARTITION_SCHEME_HEADER_HPP_
 
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <random>
 #include <string>
@@ -30,20 +31,25 @@
 #include "catalog/Catalog.pb.h"
 #include "catalog/CatalogTypedefs.hpp"
 #include "storage/StorageConstants.hpp"
+#include "storage/TupleIdSequence.hpp"
+#include "storage/ValueAccessor.hpp"
+#include "storage/ValueAccessorUtil.hpp"
 #include "threading/SpinMutex.hpp"
+#include "types/Type.hpp"
 #include "types/TypedValue.hpp"
 #include "types/operations/comparisons/Comparison.hpp"
 #include "types/operations/comparisons/EqualComparison.hpp"
 #include "types/operations/comparisons/LessComparison.hpp"
 #include "utility/CompositeHash.hpp"
+#include "utility/HashPair.hpp"
 #include "utility/Macros.hpp"
 
+#include "farmhash/farmhash.h"
 #include "glog/logging.h"
 
 namespace quickstep {
 
 class CatalogRelationSchema;
-class Type;
 
 /** \addtogroup Catalog
  *  @{
@@ -109,6 +115,10 @@ class PartitionSchemeHeader {
   // tuples that correspond to those partitions.
   virtual partition_id getPartitionId(
       const PartitionValues &value_of_attributes) const = 0;
+
+  virtual void setPartitionMembership(
+      std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+      ValueAccessor *accessor) const = 0;
 
   /**
    * @brief Serialize the Partition Scheme as Protocol Buffer.
@@ -186,8 +196,10 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
    * @param attributes A vector of attributes on which the partitioning happens.
    **/
   HashPartitionSchemeHeader(const std::size_t num_partitions,
-                            PartitionAttributeIds &&attributes)  // NOLINT(whitespace/operators)
+                            PartitionAttributeIds &&attributes,  // NOLINT(whitespace/operators)
+                            std::vector<const Type*> &&partition_attribute_types)
       : PartitionSchemeHeader(PartitionType::kHash, num_partitions, std::move(attributes)),
+        partition_attr_types_(std::move(partition_attribute_types)),
         is_power_of_two_(!(num_partitions & (num_partitions - 1))) {
   }
 
@@ -203,6 +215,32 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
     return getPartitionId(HashCompositeKey(value_of_attributes));
   }
 
+  void setPartitionMembership(
+      std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+      ValueAccessor *accessor) const override {
+    DCHECK_EQ(1u, partition_attribute_ids_.size());
+
+    InvokeOnAnyValueAccessor(
+        accessor,
+        [this,
+         &partition_membership,
+         &accessor](auto *accessor) -> void {
+      while (accessor->next()) {
+        std::size_t hash_code = getHashCode(partition_attr_types_.front(),
+                                            accessor->getUntypedValue(partition_attribute_ids_.front()));
+        for (std::size_t i = 1; i < partition_attribute_ids_.size(); ++i) {
+          const void *data = accessor->getUntypedValue(partition_attribute_ids_[i]);
+          hash_code = CombineHashes(hash_code, getHashCode(partition_attr_types_[i], data));
+        }
+
+        const partition_id part_id = getPartitionId(hash_code);
+        (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+      }
+    });
+  }
+
+  serialization::PartitionSchemeHeader getProto() const override;
+
  private:
   partition_id getPartitionId(const std::size_t hash_code) const {
     if (is_power_of_two_) {
@@ -213,7 +251,39 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
                                           : hash_code;
   }
 
+  std::size_t getHashCode(const Type *type, const void *data) const {
+    switch (type->getTypeID()) {
+      case kInt:
+      case kFloat:
+        return *static_cast<const std::uint32_t*>(data);
+      case kLong:
+      case kDouble:
+      case kDate:
+      case kDatetime:
+      case kDatetimeInterval:
+      case kYearMonthInterval:
+        return *static_cast<const std::uint64_t*>(data);
+      case kChar: {
+        // Don't hash any bytes that follow it.
+        const std::size_t length =
+            strnlen(static_cast<const char*>(data),
+                    static_cast<const AsciiStringSuperType*>(type)->getStringLength());
+        return util::Hash(static_cast<const char*>(data), length);
+      }
+      case kVarChar:
+        // Don't hash a null-terminator.
+        return util::Hash(static_cast<const char*>(data),
+                          static_cast<const AsciiStringSuperType*>(type)->getStringLength() - 1);
+      default:
+        LOG(FATAL) << "Unsupported type.";
+    }
+  }
+
+  // The size is equal to 'partition_attribute_ids_.size()'.
+  const std::vector<const Type*> partition_attr_types_;
+
   const bool is_power_of_two_;
+
   DISALLOW_COPY_AND_ASSIGN(HashPartitionSchemeHeader);
 };
 
@@ -243,6 +313,21 @@ class RandomPartitionSchemeHeader final : public PartitionSchemeHeader {
       const PartitionValues &value_of_attributes) const override {
     SpinMutexLock lock(mutex_);
     return dist_(mt_);
+  }
+
+  void setPartitionMembership(
+      std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+      ValueAccessor *accessor) const override {
+    InvokeOnAnyValueAccessor(
+        accessor,
+        [this,
+         &partition_membership,
+         &accessor](auto *accessor) -> void {
+      SpinMutexLock lock(mutex_);
+      while (accessor->next()) {
+        (*partition_membership)[dist_(mt_)]->set(accessor->getCurrentPosition());
+      }
+    });
   }
 
  private:
@@ -331,6 +416,12 @@ class RangePartitionSchemeHeader final : public PartitionSchemeHeader {
     }
 
     return start;
+  }
+
+  void setPartitionMembership(
+      std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+      ValueAccessor *accessor) const override {
+    LOG(FATAL) << "TODO";
   }
 
   serialization::PartitionSchemeHeader getProto() const override;
