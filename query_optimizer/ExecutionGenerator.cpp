@@ -154,6 +154,7 @@ using std::atomic;
 using std::make_unique;
 using std::move;
 using std::pair;
+using std::size_t;
 using std::static_pointer_cast;
 using std::unique_ptr;
 using std::unordered_map;
@@ -523,11 +524,18 @@ void ExecutionGenerator::createTemporaryCatalogRelation(
     const size_t num_partition = partition_scheme_header->num_partitions;
     unique_ptr<PartitionSchemeHeader> output_partition_scheme_header;
     switch (partition_scheme_header->partition_type) {
-      case P::PartitionSchemeHeader::PartitionType::kHash:
+      case P::PartitionSchemeHeader::PartitionType::kHash: {
+        vector<TypeID> type_ids;
+        vector<size_t> type_lengths;
+        for (const Type *type : output_partition_attribute_types) {
+          type_ids.push_back(type->getTypeID());
+          type_lengths.push_back(type->getPrintWidth());
+        }
         output_partition_scheme_header =
             make_unique<HashPartitionSchemeHeader>(num_partition, move(output_partition_attr_ids),
-                                                   move(output_partition_attribute_types));
+                                                   move(type_ids), move(type_lengths));
         break;
+      }
       case P::PartitionSchemeHeader::PartitionType::kRandom:
         output_partition_scheme_header =
             make_unique<RandomPartitionSchemeHeader>(num_partition);

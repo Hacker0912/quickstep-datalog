@@ -118,8 +118,9 @@
 #include "storage/StorageConstants.hpp"
 #include "types/IntType.hpp"
 #include "types/Type.hpp"
-#include "types/TypedValue.hpp"
 #include "types/TypeFactory.hpp"
+#include "types/TypeID.hpp"
+#include "types/TypedValue.hpp"
 #include "types/operations/binary_operations/BinaryOperation.hpp"
 #include "types/operations/comparisons/Comparison.hpp"
 #include "types/operations/comparisons/ComparisonFactory.hpp"
@@ -881,7 +882,8 @@ const S::PartitionSchemeHeader* Resolver::resolvePartitionClause(
   if (partition_type == kHashPartitionType) {
     for (int i = 0; i < proto->partition_attribute_ids_size(); ++i) {
       const Type &type = attributes[proto->partition_attribute_ids(i)]->getValueType();
-      proto->AddExtension(S::HashPartitionSchemeHeader::partition_attr_types)->MergeFrom(type.getProto());
+      proto->AddExtension(S::HashPartitionSchemeHeader::partition_attr_types, SerializeTypeID(type.getTypeID()));
+      proto->AddExtension(S::HashPartitionSchemeHeader::type_lengths, type.getPrintWidth());
     }
   }
 

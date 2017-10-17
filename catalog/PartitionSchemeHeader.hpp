@@ -36,6 +36,7 @@
 #include "storage/ValueAccessorUtil.hpp"
 #include "threading/SpinMutex.hpp"
 #include "types/Type.hpp"
+#include "types/TypeID.hpp"
 #include "types/TypedValue.hpp"
 #include "types/operations/comparisons/Comparison.hpp"
 #include "types/operations/comparisons/EqualComparison.hpp"
@@ -197,10 +198,14 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
    **/
   HashPartitionSchemeHeader(const std::size_t num_partitions,
                             PartitionAttributeIds &&attributes,  // NOLINT(whitespace/operators)
-                            std::vector<const Type*> &&partition_attribute_types)
+                            std::vector<TypeID> &&partition_attribute_types,
+                            std::vector<std::size_t> &&partition_attribute_type_lengths)
       : PartitionSchemeHeader(PartitionType::kHash, num_partitions, std::move(attributes)),
-        partition_attr_types_(std::move(partition_attribute_types)),
+        partition_attr_type_ids_(std::move(partition_attribute_types)),
+        partition_attribute_type_lengths_(std::move(partition_attribute_type_lengths)),
         is_power_of_two_(!(num_partitions & (num_partitions - 1))) {
+    DCHECK_EQ(partition_attribute_type_lengths_.size(),
+              partition_attr_type_ids_.size());
   }
 
   /**
@@ -226,11 +231,11 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
          &partition_membership,
          &accessor](auto *accessor) -> void {
       while (accessor->next()) {
-        std::size_t hash_code = getHashCode(partition_attr_types_.front(),
+        std::size_t hash_code = getHashCode(0,
                                             accessor->getUntypedValue(partition_attribute_ids_.front()));
         for (std::size_t i = 1; i < partition_attribute_ids_.size(); ++i) {
           const void *data = accessor->getUntypedValue(partition_attribute_ids_[i]);
-          hash_code = CombineHashes(hash_code, getHashCode(partition_attr_types_[i], data));
+          hash_code = CombineHashes(hash_code, getHashCode(i, data));
         }
 
         const partition_id part_id = getPartitionId(hash_code);
@@ -251,8 +256,8 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
                                           : hash_code;
   }
 
-  std::size_t getHashCode(const Type *type, const void *data) const {
-    switch (type->getTypeID()) {
+  std::size_t getHashCode(const std::size_t index, const void *data) const {
+    switch (partition_attr_type_ids_[index]) {
       case kInt:
       case kFloat:
         return *static_cast<const std::uint32_t*>(data);
@@ -265,22 +270,22 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
         return *static_cast<const std::uint64_t*>(data);
       case kChar: {
         // Don't hash any bytes that follow it.
-        const std::size_t length =
-            strnlen(static_cast<const char*>(data),
-                    static_cast<const AsciiStringSuperType*>(type)->getStringLength());
-        return util::Hash(static_cast<const char*>(data), length);
+        const std::size_t actual_length =
+            strnlen(static_cast<const char*>(data), partition_attribute_type_lengths_[index]);
+        return util::Hash(static_cast<const char*>(data), actual_length);
       }
       case kVarChar:
         // Don't hash a null-terminator.
         return util::Hash(static_cast<const char*>(data),
-                          static_cast<const AsciiStringSuperType*>(type)->getStringLength() - 1);
+                          partition_attribute_type_lengths_[index] - 1);
       default:
         LOG(FATAL) << "Unsupported type.";
     }
   }
 
   // The size is equal to 'partition_attribute_ids_.size()'.
-  const std::vector<const Type*> partition_attr_types_;
+  const std::vector<TypeID> partition_attr_type_ids_;
+  const std::vector<std::size_t> partition_attribute_type_lengths_;
 
   const bool is_power_of_two_;
 

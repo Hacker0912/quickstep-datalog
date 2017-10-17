@@ -271,14 +271,14 @@ class HashJoinOperatorTest : public ::testing::TestWithParam<HashTableImplType> 
 
   void insertTuplesWithSingleAttributePartitions() {
     // Set PartitionScheme.
-    const CatalogAttribute &dim_attr = *dim_table_->getAttributeByName("long");
     dim_part_scheme_ = new PartitionScheme(
-        new HashPartitionSchemeHeader(kMultiplePartitions, { dim_attr.getID() }, { &(dim_attr.getType()) }));
+        new HashPartitionSchemeHeader(kMultiplePartitions, { dim_table_->getAttributeByName("long")->getID() },
+                                      { kLong }, { 0 }));
     dim_table_->setPartitionScheme(dim_part_scheme_);
 
-    const CatalogAttribute &fact_attr = *fact_table_->getAttributeByName("long");
     fact_part_scheme_ = new PartitionScheme(
-        new HashPartitionSchemeHeader(kMultiplePartitions, { fact_attr.getID() }, { &(fact_attr.getType()) }));
+        new HashPartitionSchemeHeader(kMultiplePartitions, { fact_table_->getAttributeByName("long")->getID() },
+                                      { kLong }, { 0 }));
     fact_table_->setPartitionScheme(fact_part_scheme_);
 
     // Create StorageLayout

@@ -22,6 +22,8 @@
 
 #include <cstddef>
 
+#include "types/Type.pb.h"
+
 namespace quickstep {
 
 /**
@@ -64,6 +66,10 @@ struct TypeSignature {
  * @note Defined out-of-line in TypeID.cpp
  **/
 extern const char *kTypeNames[kNumTypeIDs];
+
+extern TypeID DeserializeTypeID(const serialization::Type::TypeID type_id_proto);
+
+extern serialization::Type::TypeID SerializeTypeID(const TypeID type_id);
 
 }  // namespace quickstep
 

@@ -33,6 +33,7 @@
 #include "types/Type.hpp"
 #include "types/Type.pb.h"
 #include "types/TypeFactory.hpp"
+#include "types/TypeID.hpp"
 #include "types/TypedValue.hpp"
 #include "types/TypedValue.pb.h"
 
@@ -79,6 +80,8 @@ bool PartitionSchemeHeader::ProtoIsValid(
   switch (proto.partition_type()) {
     case serialization::PartitionSchemeHeader::HASH:
       return proto.ExtensionSize(serialization::HashPartitionSchemeHeader::partition_attr_types) ==
+                 proto.partition_attribute_ids_size() &&
+             proto.ExtensionSize(serialization::HashPartitionSchemeHeader::type_lengths) ==
                  proto.partition_attribute_ids_size();
     case serialization::PartitionSchemeHeader::RANDOM:
       return true;
@@ -109,13 +112,19 @@ PartitionSchemeHeader* PartitionSchemeHeader::ReconstructFromProto(
 
   switch (proto.partition_type()) {
     case serialization::PartitionSchemeHeader::HASH: {
-      std::vector<const Type*> attr_types;
+      std::vector<TypeID> attr_types;
       for (int i = 0; i < proto.ExtensionSize(serialization::HashPartitionSchemeHeader::partition_attr_types); ++i) {
-        attr_types.push_back(&TypeFactory::ReconstructFromProto(
+        attr_types.push_back(DeserializeTypeID(
             proto.GetExtension(serialization::HashPartitionSchemeHeader::partition_attr_types, i)));
       }
+
+      std::vector<size_t> type_lengths;
+      for (int i = 0; i < proto.ExtensionSize(serialization::HashPartitionSchemeHeader::type_lengths); ++i) {
+        type_lengths.push_back(
+            proto.GetExtension(serialization::HashPartitionSchemeHeader::type_lengths, i));
+      }
       return new HashPartitionSchemeHeader(proto.num_partitions(), move(partition_attribute_ids),
-                                           move(attr_types));
+                                           move(attr_types), move(type_lengths));
     }
     case serialization::PartitionSchemeHeader::RANDOM: {
       return new RandomPartitionSchemeHeader(proto.num_partitions());
@@ -214,9 +223,13 @@ std::string PartitionSchemeHeader::toString(const CatalogRelationSchema &relatio
 serialization::PartitionSchemeHeader HashPartitionSchemeHeader::getProto() const {
   serialization::PartitionSchemeHeader proto = PartitionSchemeHeader::getProto();
 
-  for (const Type *type : partition_attr_types_) {
-    proto.AddExtension(serialization::HashPartitionSchemeHeader::partition_attr_types)
-        ->MergeFrom(type->getProto());
+  for (const TypeID type : partition_attr_type_ids_) {
+    proto.AddExtension(serialization::HashPartitionSchemeHeader::partition_attr_types,
+                       SerializeTypeID(type));
+  }
+
+  for (const size_t length : partition_attribute_type_lengths_) {
+    proto.AddExtension(serialization::HashPartitionSchemeHeader::type_lengths, length);
   }
 
   return proto;
