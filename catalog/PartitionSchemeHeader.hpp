@@ -222,27 +222,7 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
 
   void setPartitionMembership(
       std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
-      ValueAccessor *accessor) const override {
-    DCHECK_EQ(1u, partition_attribute_ids_.size());
-
-    InvokeOnAnyValueAccessor(
-        accessor,
-        [this,
-         &partition_membership,
-         &accessor](auto *accessor) -> void {
-      while (accessor->next()) {
-        std::size_t hash_code = getHashCode(0,
-                                            accessor->getUntypedValue(partition_attribute_ids_.front()));
-        for (std::size_t i = 1; i < partition_attribute_ids_.size(); ++i) {
-          const void *data = accessor->getUntypedValue(partition_attribute_ids_[i]);
-          hash_code = CombineHashes(hash_code, getHashCode(i, data));
-        }
-
-        const partition_id part_id = getPartitionId(hash_code);
-        (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
-      }
-    });
-  }
+      ValueAccessor *accessor) const override;
 
   serialization::PartitionSchemeHeader getProto() const override;
 
@@ -256,28 +236,62 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
                                           : hash_code;
   }
 
-  std::size_t getHashCode(const std::size_t index, const void *data) const {
-    switch (partition_attr_type_ids_[index]) {
+  template <TypeID type_id, typename ValueAccessorT, typename ...Optional>
+  void computeHash(const bool first,
+                   std::vector<std::size_t>::iterator it,
+                   ValueAccessorT *accessor,
+                   const attribute_id attr_id,
+                   const Optional &...length) const {
+    if (first) {
+      computeHashHelper<true, type_id>(it, accessor, attr_id, length...);
+    } else {
+      computeHashHelper<false, type_id>(it, accessor, attr_id, length...);
+    }
+  }
+
+  template <bool first, TypeID type_id, typename ValueAccessorT, typename ...Optional>
+  void computeHashHelper(std::vector<std::size_t>::iterator it,
+                         ValueAccessorT *accessor,
+                         const attribute_id attr_id,
+                         const Optional &...length) const {
+    accessor->beginIteration();
+    while (accessor->next()) {
+      std::size_t hash_code = getHashCode<type_id>(accessor->getUntypedValue(attr_id), length...);
+      if (first) {
+        *it = hash_code;
+      } else {
+        *it = CombineHashes(*it, hash_code);
+      }
+      ++it;
+    }
+  }
+
+  template <TypeID type_id>
+  std::size_t getHashCode(const void *data) const {
+    switch (type_id) {
       case kInt:
-      case kFloat:
         return *static_cast<const std::uint32_t*>(data);
       case kLong:
-      case kDouble:
-      case kDate:
-      case kDatetime:
-      case kDatetimeInterval:
-      case kYearMonthInterval:
         return *static_cast<const std::uint64_t*>(data);
+      case kVarChar: {
+        const char *p_char = static_cast<const char*>(data);
+        // Don't hash any bytes that follow it.
+        return util::Hash(p_char, std::strlen(p_char));
+      }
+      default:
+        LOG(FATAL) << "Unsupported type.";
+    }
+  }
+
+  template <TypeID type_id>
+  std::size_t getHashCode(const void *data, const std::size_t length) const {
+    switch (type_id) {
       case kChar: {
         // Don't hash any bytes that follow it.
         const std::size_t actual_length =
-            strnlen(static_cast<const char*>(data), partition_attribute_type_lengths_[index]);
+            strnlen(static_cast<const char*>(data), length);
         return util::Hash(static_cast<const char*>(data), actual_length);
       }
-      case kVarChar:
-        // Don't hash a null-terminator.
-        return util::Hash(static_cast<const char*>(data),
-                          partition_attribute_type_lengths_[index] - 1);
       default:
         LOG(FATAL) << "Unsupported type.";
     }

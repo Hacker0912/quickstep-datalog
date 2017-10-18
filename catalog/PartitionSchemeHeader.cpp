@@ -20,6 +20,7 @@
 #include "catalog/PartitionSchemeHeader.hpp"
 
 #include <cstddef>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -30,6 +31,7 @@
 #include "catalog/CatalogAttribute.hpp"
 #include "catalog/CatalogRelationSchema.hpp"
 #include "catalog/CatalogTypedefs.hpp"
+#include "storage/ValueAccessorUtil.hpp"
 #include "types/Type.hpp"
 #include "types/Type.pb.h"
 #include "types/TypeFactory.hpp"
@@ -218,6 +220,54 @@ std::string PartitionSchemeHeader::toString(const CatalogRelationSchema &relatio
   oss << " ) PARTITIONS " << num_partitions_ << '\n';
 
   return oss.str();
+}
+
+void HashPartitionSchemeHeader::setPartitionMembership(
+    std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+    ValueAccessor *accessor) const {
+  InvokeOnAnyValueAccessor(
+      accessor,
+      [this,
+       &partition_membership,
+       &accessor](auto *accessor) -> void {
+    const std::size_t num_tuples = accessor->getNumTuples();
+    std::vector<std::size_t> buffer(num_tuples);
+
+    for (std::size_t i = 0; i < partition_attribute_ids_.size(); ++i) {
+      const bool first = (i == 0);
+      const attribute_id attr_id = partition_attribute_ids_[i];
+      switch (partition_attr_type_ids_[i]) {
+        case kInt:
+        case kFloat:
+          this->computeHash<kInt>(first, buffer.begin(), accessor, attr_id);
+          break;
+        case kLong:
+        case kDouble:
+        case kDate:
+        case kDatetime:
+        case kDatetimeInterval:
+        case kYearMonthInterval:
+          this->computeHash<kLong>(first, buffer.begin(), accessor, attr_id);
+          break;
+        case kChar:
+          this->computeHash<kChar>(first, buffer.begin(), accessor, attr_id, partition_attribute_type_lengths_[i]);
+          break;
+        case kVarChar:
+          this->computeHash<kVarChar>(first, buffer.begin(), accessor, attr_id);
+          break;
+        default:
+          LOG(FATAL) << "Unsupported type.";
+      }
+    }
+
+    accessor->beginIteration();
+    auto cit = buffer.begin();
+    while (accessor->next()) {
+      const partition_id part_id = getPartitionId(*cit);
+      (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+      ++cit;
+    }
+  });
 }
 
 serialization::PartitionSchemeHeader HashPartitionSchemeHeader::getProto() const {
