@@ -222,6 +222,16 @@ std::string PartitionSchemeHeader::toString(const CatalogRelationSchema &relatio
   return oss.str();
 }
 
+partition_id HashPartitionSchemeHeader::getPartitionId(
+    const PartitionValues &value_of_attributes) const {
+  DCHECK_EQ(partition_attribute_ids_.size(), value_of_attributes.size());
+  if (is_power_of_two_) {
+    return getPartitionId<true>(HashCompositeKey(value_of_attributes));
+  } else {
+    return getPartitionId<false>(HashCompositeKey(value_of_attributes));
+  }
+}
+
 void HashPartitionSchemeHeader::setPartitionMembership(
     std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
     ValueAccessor *accessor) const {
@@ -230,6 +240,36 @@ void HashPartitionSchemeHeader::setPartitionMembership(
       [this,
        &partition_membership,
        &accessor](auto *accessor) -> void {
+    if (partition_attribute_ids_.size() == 1) {
+      const attribute_id attr_id = partition_attribute_ids_.front();
+
+      accessor->beginIteration();
+      switch (partition_attr_type_ids_.front()) {
+        case kInt:
+        case kFloat:
+          this->setPartitionMembershipHelper<kInt>(accessor, attr_id, partition_membership);
+          break;
+        case kLong:
+        case kDouble:
+        case kDate:
+        case kDatetime:
+        case kDatetimeInterval:
+        case kYearMonthInterval:
+          this->setPartitionMembershipHelper<kLong>(accessor, attr_id, partition_membership);
+          break;
+        case kChar:
+          this->setPartitionMembershipHelper<kChar>(accessor, attr_id, partition_membership,
+                                                    partition_attribute_type_lengths_.front());
+          break;
+        case kVarChar:
+          this->setPartitionMembershipHelper<kVarChar>(accessor, attr_id, partition_membership);
+          break;
+        default:
+          LOG(FATAL) << "Unsupported type.";
+      }
+      return;
+    }
+
     const std::size_t num_tuples = accessor->getNumTuples();
     std::vector<std::size_t> buffer(num_tuples);
 
@@ -239,7 +279,7 @@ void HashPartitionSchemeHeader::setPartitionMembership(
       switch (partition_attr_type_ids_[i]) {
         case kInt:
         case kFloat:
-          this->computeHash<kInt>(first, buffer.begin(), accessor, attr_id);
+          this->computeCombinedHash<kInt>(first, buffer.begin(), accessor, attr_id);
           break;
         case kLong:
         case kDouble:
@@ -247,13 +287,14 @@ void HashPartitionSchemeHeader::setPartitionMembership(
         case kDatetime:
         case kDatetimeInterval:
         case kYearMonthInterval:
-          this->computeHash<kLong>(first, buffer.begin(), accessor, attr_id);
+          this->computeCombinedHash<kLong>(first, buffer.begin(), accessor, attr_id);
           break;
         case kChar:
-          this->computeHash<kChar>(first, buffer.begin(), accessor, attr_id, partition_attribute_type_lengths_[i]);
+          this->computeCombinedHash<kChar>(first, buffer.begin(), accessor, attr_id,
+                                           partition_attribute_type_lengths_[i]);
           break;
         case kVarChar:
-          this->computeHash<kVarChar>(first, buffer.begin(), accessor, attr_id);
+          this->computeCombinedHash<kVarChar>(first, buffer.begin(), accessor, attr_id);
           break;
         default:
           LOG(FATAL) << "Unsupported type.";
@@ -262,10 +303,18 @@ void HashPartitionSchemeHeader::setPartitionMembership(
 
     accessor->beginIteration();
     auto cit = buffer.begin();
-    while (accessor->next()) {
-      const partition_id part_id = getPartitionId(*cit);
-      (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
-      ++cit;
+    if (is_power_of_two_) {
+      while (accessor->next()) {
+        const partition_id part_id = getPartitionId<true>(*cit);
+        (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+        ++cit;
+      }
+    } else {
+      while (accessor->next()) {
+        const partition_id part_id = getPartitionId<false>(*cit);
+        (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+        ++cit;
+      }
     }
   });
 }

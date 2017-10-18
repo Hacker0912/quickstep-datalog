@@ -215,10 +215,7 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
   }
 
   partition_id getPartitionId(
-      const PartitionValues &value_of_attributes) const override {
-    DCHECK_EQ(partition_attribute_ids_.size(), value_of_attributes.size());
-    return getPartitionId(HashCompositeKey(value_of_attributes));
-  }
+      const PartitionValues &value_of_attributes) const override;
 
   void setPartitionMembership(
       std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
@@ -227,33 +224,33 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
   serialization::PartitionSchemeHeader getProto() const override;
 
  private:
-  partition_id getPartitionId(const std::size_t hash_code) const {
-    if (is_power_of_two_) {
-      return hash_code & (num_partitions_ - 1);
-    }
-
-    return (hash_code >= num_partitions_) ? hash_code % num_partitions_
-                                          : hash_code;
-  }
+  template <bool is_power_of_two>
+  partition_id getPartitionId(const std::size_t hash_code) const;
 
   template <TypeID type_id, typename ValueAccessorT, typename ...Optional>
-  void computeHash(const bool first,
-                   std::vector<std::size_t>::iterator it,
-                   ValueAccessorT *accessor,
-                   const attribute_id attr_id,
-                   const Optional &...length) const {
+  void setPartitionMembershipHelper(ValueAccessorT *accessor,
+                                    const attribute_id attr_id,
+                                    std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+                                    const Optional &...length) const;
+
+  template <TypeID type_id, typename ValueAccessorT, typename ...Optional>
+  void computeCombinedHash(const bool first,
+                           std::vector<std::size_t>::iterator it,
+                           ValueAccessorT *accessor,
+                           const attribute_id attr_id,
+                           const Optional &...length) const {
     if (first) {
-      computeHashHelper<true, type_id>(it, accessor, attr_id, length...);
+      computeCombinedHashHelper<true, type_id>(it, accessor, attr_id, length...);
     } else {
-      computeHashHelper<false, type_id>(it, accessor, attr_id, length...);
+      computeCombinedHashHelper<false, type_id>(it, accessor, attr_id, length...);
     }
   }
 
   template <bool first, TypeID type_id, typename ValueAccessorT, typename ...Optional>
-  void computeHashHelper(std::vector<std::size_t>::iterator it,
-                         ValueAccessorT *accessor,
-                         const attribute_id attr_id,
-                         const Optional &...length) const {
+  void computeCombinedHashHelper(std::vector<std::size_t>::iterator it,
+                                 ValueAccessorT *accessor,
+                                 const attribute_id attr_id,
+                                 const Optional &...length) const {
     accessor->beginIteration();
     while (accessor->next()) {
       std::size_t hash_code = getHashCode<type_id>(accessor->getUntypedValue(attr_id), length...);
@@ -305,6 +302,37 @@ class HashPartitionSchemeHeader final : public PartitionSchemeHeader {
 
   DISALLOW_COPY_AND_ASSIGN(HashPartitionSchemeHeader);
 };
+
+template <>
+inline partition_id HashPartitionSchemeHeader::getPartitionId<true>(const std::size_t hash_code) const {
+  return hash_code & (num_partitions_ - 1);
+}
+
+template <>
+inline partition_id HashPartitionSchemeHeader::getPartitionId<false>(const std::size_t hash_code) const {
+  return (hash_code >= num_partitions_) ? hash_code % num_partitions_
+                                        : hash_code;
+}
+
+template <TypeID type_id, typename ValueAccessorT, typename ...Optional>
+inline void HashPartitionSchemeHeader::setPartitionMembershipHelper(
+    ValueAccessorT *accessor, const attribute_id attr_id,
+    std::vector<std::unique_ptr<TupleIdSequence>> *partition_membership,
+    const Optional &...length) const {
+  if (is_power_of_two_) {
+    while (accessor->next()) {
+      const std::size_t hash_code = getHashCode<type_id>(accessor->getUntypedValue(attr_id), length...);
+      const partition_id part_id = getPartitionId<true>(hash_code);
+      (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+    }
+  } else {
+    while (accessor->next()) {
+      const std::size_t hash_code = getHashCode<type_id>(accessor->getUntypedValue(attr_id), length...);
+      const partition_id part_id = getPartitionId<false>(hash_code);
+      (*partition_membership)[part_id]->set(accessor->getCurrentPosition());
+    }
+  }
+}
 
 /**
  * @brief Implementation of PartitionSchemeHeader that partitions the tuples in
