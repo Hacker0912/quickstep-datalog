@@ -36,6 +36,8 @@
 #include "storage/WindowAggregationOperationState.hpp"
 #include "threading/SpinSharedMutex.hpp"
 #include "types/containers/Tuple.hpp"
+#include "utility/ArrayIndex.hpp"
+#include "utility/BitMatrix.hpp"
 #include "utility/Macros.hpp"
 #include "utility/SortConfiguration.hpp"
 #include "utility/lip_filter/LIPFilter.hpp"
@@ -67,6 +69,16 @@ class QueryContext {
    * @brief A unique identifier for an AggregationOperationState per query.
    **/
   typedef std::uint32_t aggregation_state_id;
+
+  /**
+   * @brief A unique identifier for an ArrayIndex per query.
+   **/
+  typedef std::uint32_t array_index_id;
+
+  /**
+   * @brief A unique identifier for a BitMatrix per query.
+   **/
+  typedef std::uint32_t bit_matrix_id;
 
   /**
    * @brief A unique identifier for a GeneratorFunctionHandle per query.
@@ -207,6 +219,74 @@ class QueryContext {
     DCHECK_LT(part_id, aggregation_states_[id].size());
     DCHECK(aggregation_states_[id][part_id]);
     aggregation_states_[id][part_id].reset(nullptr);
+  }
+
+  /**
+   * @brief Get the ArrayIndex.
+   *
+   * @param id The ArrayIndex id in the query.
+   *
+   * @return The ArrayIndex, alreadly created in the constructor.
+   **/
+  inline const ArrayIndex& getArrayIndex(const array_index_id id) const {
+    DCHECK_LT(id, array_indexes_.size());
+    return *array_indexes_[id].get();
+  }
+
+  /**
+   * @brief Get the mutable ArrayIndex.
+   *
+   * @param id The ArrayIndex id in the query.
+   *
+   * @return The ArrayIndex, alreadly created in the constructor.
+   **/
+  inline ArrayIndex* getArrayIndexMutable(const array_index_id id) {
+    DCHECK_LT(id, array_indexes_.size());
+    return array_indexes_[id].get();
+  }
+
+  /**
+   * @brief Destroy the given ArrayIndex.
+   *
+   * @param id The ID of the ArrayIndex to destroy.
+   **/
+  inline void destroyArrayIndex(const array_index_id id) {
+    DCHECK_LT(id, array_indexes_.size());
+    array_indexes_[id].reset();
+  }
+
+  /**
+   * @brief Get the BitMatrix.
+   *
+   * @param id The BitMatrix id in the query.
+   *
+   * @return The BitMatrix, alreadly created in the constructor.
+   **/
+  inline const BitMatrix& getBitMatrix(const bit_matrix_id id) const {
+    DCHECK_LT(id, bit_matrices_.size());
+    return *bit_matrices_[id].get();
+  }
+
+  /**
+   * @brief Get the BitMatrix.
+   *
+   * @param id The BitMatrix id in the query.
+   *
+   * @return The BitMatrix, alreadly created in the constructor.
+   **/
+  inline BitMatrix* getBitMatrixMutable(const bit_matrix_id id) {
+    DCHECK_LT(id, bit_matrices_.size());
+    return bit_matrices_[id].get();
+  }
+
+  /**
+   * @brief Destroy the given BitMatrix.
+   *
+   * @param id The ID of the BitMatrix to destroy.
+   **/
+  inline void destroyBitMatrix(const bit_matrix_id id) {
+    DCHECK_LT(id, bit_matrices_.size());
+    bit_matrices_[id].reset();
   }
 
   /**
@@ -639,6 +719,8 @@ class QueryContext {
   typedef std::vector<std::unique_ptr<JoinHashTable>> PartitionedJoinHashTables;
 
   std::vector<PartitionedAggregationOperationStates> aggregation_states_;
+  std::vector<std::unique_ptr<ArrayIndex>> array_indexes_;
+  std::vector<std::unique_ptr<BitMatrix>> bit_matrices_;
   std::vector<std::unique_ptr<const GeneratorFunctionHandle>> generator_functions_;
   std::vector<std::unique_ptr<InsertDestination>> insert_destinations_;
   std::vector<PartitionedJoinHashTables> join_hash_tables_;

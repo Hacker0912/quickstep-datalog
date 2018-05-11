@@ -49,6 +49,7 @@
 #include "query_optimizer/physical/PatternMatcher.hpp"
 #include "query_optimizer/physical/Physical.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
+#include "query_optimizer/physical/SameGeneration.hpp"
 #include "query_optimizer/physical/Selection.hpp"
 #include "query_optimizer/physical/SharedSubplanReference.hpp"
 #include "query_optimizer/physical/Sort.hpp"
@@ -112,6 +113,12 @@ std::size_t StarSchemaSimpleCostModel::estimateCardinality(
           std::static_pointer_cast<const P::SharedSubplanReference>(physical_plan);
       return estimateCardinality(
           shared_subplans_[shared_subplan_reference->subplan_id()]);
+    }
+    case P::PhysicalType::kSameGeneration: {
+      const auto &same_generation =
+          std::static_pointer_cast<const P::SameGeneration>(physical_plan);
+      return estimateCardinalityForTableReference(
+          std::static_pointer_cast<const P::TableReference>(same_generation->input()));
     }
     case P::PhysicalType::kSort:
       return estimateCardinalityForSort(

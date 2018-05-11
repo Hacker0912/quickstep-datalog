@@ -104,6 +104,7 @@
 #include "query_optimizer/logical/InsertTuple.hpp"
 #include "query_optimizer/logical/MultiwayCartesianJoin.hpp"
 #include "query_optimizer/logical/Project.hpp"
+#include "query_optimizer/logical/SameGeneration.hpp"
 #include "query_optimizer/logical/Sample.hpp"
 #include "query_optimizer/logical/SetOperation.hpp"
 #include "query_optimizer/logical/SharedSubplanReference.hpp"
@@ -2175,6 +2176,19 @@ L::LogicalPtr Resolver::resolveGeneratorTableReference(
     const ParseGeneratorTableReference &table_reference,
     const ParseString *reference_alias) {
   const ParseString *func_name = table_reference.generator_function()->name();
+  const std::string &func_name_value = func_name->value();
+
+  if (func_name_value == "sg") {
+    const PtrList<ParseExpression> *func_args = table_reference.generator_function()->arguments();
+    DCHECK(func_args);
+    DCHECK_EQ(1u, func_args->size());
+    const auto &func_arg = func_args->front();
+    DCHECK(func_arg.getExpressionType() == ParseExpression::kAttribute);
+
+    return L::SameGeneration::Create(
+               resolveSimpleTableReference(*static_cast<const ParseAttribute&>(func_arg).attr_name(),
+                                           reference_alias));
+  }
 
   // Resolve the generator function
   const quickstep::GeneratorFunction *func_template =

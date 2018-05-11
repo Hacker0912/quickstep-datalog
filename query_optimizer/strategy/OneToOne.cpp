@@ -35,6 +35,7 @@
 #include "query_optimizer/logical/InsertSelection.hpp"
 #include "query_optimizer/logical/InsertTuple.hpp"
 #include "query_optimizer/logical/LogicalType.hpp"
+#include "query_optimizer/logical/SameGeneration.hpp"
 #include "query_optimizer/logical/Sample.hpp"
 #include "query_optimizer/logical/SetOperation.hpp"
 #include "query_optimizer/logical/SharedSubplanReference.hpp"
@@ -53,6 +54,7 @@
 #include "query_optimizer/physical/DropTable.hpp"
 #include "query_optimizer/physical/InsertSelection.hpp"
 #include "query_optimizer/physical/InsertTuple.hpp"
+#include "query_optimizer/physical/SameGeneration.hpp"
 #include "query_optimizer/physical/Sample.hpp"
 #include "query_optimizer/physical/SharedSubplanReference.hpp"
 #include "query_optimizer/physical/Sort.hpp"
@@ -167,6 +169,13 @@ bool OneToOne::generatePlan(const L::LogicalPtr &logical_input,
       *physical_output = P::InsertTuple::Create(
           physical_mapper_->createOrGetPhysicalFromLogical(insert_tuple->input()),
           insert_tuple->column_values());
+      return true;
+    }
+    case L::LogicalType::kSameGeneration: {
+      const L::SameGenerationPtr &same_generation =
+          std::static_pointer_cast<const L::SameGeneration>(logical_input);
+      *physical_output = P::SameGeneration::Create(
+          physical_mapper_->createOrGetPhysicalFromLogical(same_generation->input()));
       return true;
     }
     case L::LogicalType::kSample: {
