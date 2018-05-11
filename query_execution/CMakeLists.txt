@@ -140,6 +140,8 @@ target_link_libraries(quickstep_queryexecution_QueryContext
                       quickstep_threading_SpinSharedMutex
                       quickstep_types_TypedValue
                       quickstep_types_containers_Tuple
+                      quickstep_utility_ArrayIndex
+                      quickstep_utility_BitMatrix
                       quickstep_utility_Macros
                       quickstep_utility_SortConfiguration
                       quickstep_utility_lipfilter_LIPFilter

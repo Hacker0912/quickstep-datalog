@@ -45,6 +45,7 @@ enum class PhysicalType {
   kInsertSelection,
   kInsertTuple,
   kNestedLoopsJoin,
+  kSameGeneration,
   kSample,
   kSelection,
   kSharedSubplanReference,

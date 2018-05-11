@@ -26,9 +26,12 @@ import "storage/HashTable.proto";
 import "storage/InsertDestination.proto";
 import "storage/WindowAggregationOperationState.proto";
 import "types/containers/Tuple.proto";
+import "utility/ArrayIndex.proto";
+import "utility/BitMatrix.proto";
 import "utility/SortConfiguration.proto";
 import "utility/lip_filter/LIPFilter.proto";
 
+// Next tag: 18.
 message QueryContext {
   message AggregationOperationStateContext {
     required AggregationOperationState aggregation_state = 1;
@@ -56,6 +59,8 @@ message QueryContext {
   }
 
   repeated AggregationOperationStateContext aggregation_states = 1;
+  repeated ArrayIndex array_indexes = 16;
+  repeated BitMatrix bit_matrices = 17;
   repeated GeneratorFunctionHandle generator_functions = 2;
   repeated HashTableContext join_hash_tables = 3;
   repeated InsertDestination insert_destinations = 4;
