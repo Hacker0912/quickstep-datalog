@@ -21,6 +21,8 @@
 #define QUICKSTEP_RELATIONAL_OPERATORS_BIT_MATRIX_JOIN_OPERATOR_HPP_
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <string>
 
 #include "query_execution/QueryContext.hpp"
@@ -46,9 +48,18 @@ class WorkOrdersContainer;
 /** \addtogroup RelationalOperators
  *  @{
  */
-
 class BitMatrixJoinOperator : public RelationalOperator {
  public:
+  using Pairs = std::vector<std::pair<std::uint32_t, std::uint32_t>>;
+  using UniquePairs = std::unique_ptr<const Pairs>;
+  /**
+   * @brief Feedback message to Foreman when a BitMatrixJoinInitWorkOrder or BitMatrixJoinWorkOrder has
+   *        completed one batch.
+   */
+  enum FeedbackMessageType : WorkOrder::FeedbackMessageType {
+      kNextBatchMessage = 0,
+  };
+
   BitMatrixJoinOperator(const std::size_t query_id,
                         const QueryContext::array_index_id array_index,
                         const QueryContext::bit_matrix_id bit_matrix_index)
@@ -76,35 +87,81 @@ class BitMatrixJoinOperator : public RelationalOperator {
 
   bool getAllWorkOrderProtos(WorkOrderProtosContainer *container) override;
 
+  void receiveFeedbackMessage(const WorkOrder::FeedbackMessage &msg) override;
+
  private:
   const QueryContext::array_index_id array_index_;
   const QueryContext::bit_matrix_id bit_matrix_index_;
   bool started_;
 
+  std::vector<const Pairs*> next_batches_;
+  std::uint64_t count_ = 0;
+
   DISALLOW_COPY_AND_ASSIGN(BitMatrixJoinOperator);
+};
+
+class BitMatrixJoinInitWorkOrder : public WorkOrder {
+ public:
+  BitMatrixJoinInitWorkOrder(const std::size_t query_id,
+                             const Range &range,
+                             const ArrayIndex &array_index,
+                             BitMatrix *matrix,
+                             const std::size_t operator_index,
+                             const tmb::client_id scheduler_client_id,
+                             MessageBus *bus)
+      : WorkOrder(query_id),
+        range_(range),
+        array_index_(array_index),
+        matrix_(matrix),
+        operator_index_(operator_index),
+        scheduler_client_id_(scheduler_client_id),
+        bus_(DCHECK_NOTNULL(bus)) {}
+
+  ~BitMatrixJoinInitWorkOrder() override {}
+
+  void execute() override;
+
+ private:
+  const Range range_;
+  const ArrayIndex &array_index_;
+  BitMatrix *matrix_;
+
+  const std::size_t operator_index_;
+  const tmb::client_id scheduler_client_id_;
+  MessageBus *bus_;
+
+  DISALLOW_COPY_AND_ASSIGN(BitMatrixJoinInitWorkOrder);
 };
 
 class BitMatrixJoinWorkOrder : public WorkOrder {
  public:
   BitMatrixJoinWorkOrder(const std::size_t query_id,
-                         const Range &range,
                          const ArrayIndex &array_index,
-                         BitMatrix *matrix)
+                         const BitMatrixJoinOperator::Pairs *pairs,
+                         BitMatrix *matrix,
+                         const std::size_t operator_index,
+                         const tmb::client_id scheduler_client_id,
+                         MessageBus *bus)
       : WorkOrder(query_id),
-        range_(range),
         array_index_(array_index),
-        matrix_(matrix) {}
+        pairs_(pairs),
+        matrix_(matrix),
+        operator_index_(operator_index),
+        scheduler_client_id_(scheduler_client_id),
+        bus_(DCHECK_NOTNULL(bus)) {}
 
   ~BitMatrixJoinWorkOrder() override {}
 
   void execute() override;
 
  private:
-  void evaluate(std::uint32_t x, std::uint32_t y);
-
-  const Range range_;
   const ArrayIndex &array_index_;
+  const BitMatrixJoinOperator::UniquePairs pairs_;
   BitMatrix *matrix_;
+
+  const std::size_t operator_index_;
+  const tmb::client_id scheduler_client_id_;
+  MessageBus *bus_;
 
   DISALLOW_COPY_AND_ASSIGN(BitMatrixJoinWorkOrder);
 };
