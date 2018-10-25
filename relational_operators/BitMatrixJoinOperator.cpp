@@ -107,10 +107,9 @@ bool BitMatrixJoinOperator::getAllWorkOrders(
   started_ = true;
 
   const RangeSplitter splitter =
-      RangeSplitter::CreateWithNumPartitions(array_index.base(), range, FLAGS_num_workers * 2);
+      RangeSplitter::CreateWithNumPartitions(array_index.base(), range, FLAGS_num_workers);
 
   count_ += splitter.getNumPartitions();
-  std::cout << count_ << std::endl;
   for (std::size_t i = 0; i < splitter.getNumPartitions(); ++i) {
     container->addNormalWorkOrder(
         new BitMatrixJoinInitWorkOrder(query_id_, splitter.getPartition(i), array_index, matrix, op_index_, scheduler_client_id, bus),
@@ -144,6 +143,7 @@ void BitMatrixJoinOperator::receiveFeedbackMessage(const WorkOrder::FeedbackMess
 
 void BitMatrixJoinInitWorkOrder::execute() {
   auto *next_round = new BitMatrixJoinOperator::Pairs();
+  next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
   const auto cid = ClientIDMap::Instance()->getValue();
 
   for (std::size_t i = range_.begin(); i < range_.end(); ++i) {
@@ -158,6 +158,38 @@ void BitMatrixJoinInitWorkOrder::execute() {
             send(operator_index_, BitMatrixJoinBatch(next_round, !kIsLastBatch), cid,
                  scheduler_client_id_, this, bus_);
             next_round = new BitMatrixJoinOperator::Pairs();
+            next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
+          }
+        }
+      }
+    }
+  }
+
+  while (!next_round->empty()) {
+    const auto &last = next_round->back();
+    const int x = last.first;
+    const int y = last.second;
+
+    next_round->pop_back();
+
+    const auto &x_children = array_index_.get(x);
+    const auto &y_children = array_index_.get(y);
+
+    if (x_children.empty() || y_children.empty()) {
+      continue;
+    }
+
+    for (const auto new_x : x_children) {
+      for (const auto new_y : y_children) {
+        if (!matrix_->get(new_x, new_y)) {
+          matrix_->set(new_x, new_y);
+          next_round->emplace_back(new_x, new_y);
+
+          if (next_round->size() == FLAGS_bit_matrix_join_batch_threshold) {
+            send(operator_index_, BitMatrixJoinBatch(next_round, !kIsLastBatch), cid,
+                 scheduler_client_id_, this, bus_);
+            next_round = new BitMatrixJoinOperator::Pairs();
+            next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
           }
         }
       }
@@ -171,6 +203,7 @@ void BitMatrixJoinInitWorkOrder::execute() {
 
 void BitMatrixJoinWorkOrder::execute() {
   auto *next_round = new BitMatrixJoinOperator::Pairs();
+  next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
   const auto cid = ClientIDMap::Instance()->getValue();
 
   for (const auto &pair : *pairs_) {
@@ -194,6 +227,38 @@ void BitMatrixJoinWorkOrder::execute() {
             send(operator_index_, BitMatrixJoinBatch(next_round, !kIsLastBatch), cid,
                  scheduler_client_id_, this, bus_);
             next_round = new BitMatrixJoinOperator::Pairs();
+            next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
+          }
+        }
+      }
+    }
+  }
+
+  while (!next_round->empty()) {
+    const auto &last = next_round->back();
+    const int x = last.first;
+    const int y = last.second;
+
+    next_round->pop_back();
+
+    const auto &x_children = array_index_.get(x);
+    const auto &y_children = array_index_.get(y);
+
+    if (x_children.empty() || y_children.empty()) {
+      continue;
+    }
+
+    for (const auto new_x : x_children) {
+      for (const auto new_y : y_children) {
+        if (!matrix_->get(new_x, new_y)) {
+          matrix_->set(new_x, new_y);
+          next_round->emplace_back(new_x, new_y);
+
+          if (next_round->size() == FLAGS_bit_matrix_join_batch_threshold) {
+            send(operator_index_, BitMatrixJoinBatch(next_round, !kIsLastBatch), cid,
+                 scheduler_client_id_, this, bus_);
+            next_round = new BitMatrixJoinOperator::Pairs();
+            next_round->reserve(FLAGS_bit_matrix_join_batch_threshold);
           }
         }
       }
