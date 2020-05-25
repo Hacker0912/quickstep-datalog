@@ -1,141 +1,65 @@
-# Apache Quickstep (Incubating)
+# Apache Quickstep (RecStep Backend)
 
-[![Travis Widget]][Travis]
+The repos is forked from the original **[Quickstep](https://github.com/apache/incubator-retired-quickstep)** github repo. The code has been specificically modified to serve as the backend of **[RecStep](http://)**, a state-of-the-art Datalog engine built on top of a in-memory relational database system (namely Quickstep).    
 
-[Travis]: https://travis-ci.org/apache/incubator-quickstep
-[Travis Widget]: https://travis-ci.org/apache/incubator-quickstep.svg?branch=master
+### Set-up Instructions 
 
-## What is Quickstep?
-Apache Quickstep is high-performance database engine designed to exploit the full potential of hardware that is packed in modern computing boxes (servers and laptops). The initial version (available now!) targets single-node in-memory environments. If your data spills overs the memory limit Quickstep will still work, so you don't have to obsessively worry about the in-memory part. Also, if your working set fits in memory then Quickstep will transparently and automatically figure that out, and cache that hot set to  deliver in-memory performance.
+**NOTE:** The following set-up steps have been specifically tested on *Ubuntu 18.04.1 LTS*. And thus we recommend using *Ubuntu 18.04.1 LTS* as your testbed OS if you want to play with RecStep. However, if you do want to try RecStep on other OS platforms (e.g., MacOS, Ubuntu 16.04, etc) and have encountered trouble during the set-up phase, feel free to send an email to zhiwei@cs.wisc.edu, we will reply to your inquiry and try to help at our earliest convenience.
 
-Distributed execution is the next big feature for Quickstep.
-
-Quickstep began life in 2011 as a
-[research project at the University of Wisconsin](https://www.cs.wisc.edu/~jignesh)
-and entered incubation at the
-[Apache Software Foundation](https://www.apache.org) in April, 2016.
-
-## Why Quickstep?
-Did you know that the hardware that you have in your laptop was spread across a small cluster just a decade ago? (PS: Hopefully you are not using a very old laptop!) If you look at a high-end server box, then that packs compute and storage power that was a full rack about 5 years ago! And, the way hardware technology is going, that box is going to become even more powerful in the future. In fact, it is likely that the computing power in each box is going to grow faster than other hardware components (e.g. networking) in data centers. So, if you care about performance and/or total operating costs, paying attention to single box performance is likely to be super important in the long run.
-
-In other words there is a small data center in an individual compute boxes today! Quickstep aims to allow you to fully exploit the potential of that data center that is hidden in each individual box today. We call this the **scaling-in approach**, and it complements a scaling-out approach. But without scaling-in, you are overpaying (by a lot!) when you run your data service.
-
-## What are the key ingredients?
-
-Modern computing boxes contain a large number of computing cores and large main memory configuration. Quickstep allows you to fully exploit these hardware resources using novel data processing, data storage, and query processing methods that include:
-
-1. A unique **decoupling of data-flow from control-flow** for query execution that allows for unlimited intra and inter-query parallelism. Thus, using all the processing core effectively.
-
-2. A **template meta-programming** framework that provides fast vectorized query execution. Thus, using each processor cycle very efficiently.
-
-3. A **hybrid data storage** architecture that includes columnar and row-store. Yes, this may surprise some of you, but sometimes a row-store beats a column-store!
-
-And, it is **open source!**
-
-## Giving it a spin
-
-1. Checkout the code: ```git clone https://git-wip-us.apache.org/repos/asf/incubator-quickstep.git quickstep```
-2. Then, go to the code directory: ```cd quickstep```
-3. Initialize the dependencies: ```git submodule init```
-4. Checkout the dependencies: ```git submodule update```
-5. Download additional third-party dependencies and apply patches:<br/>
-```cd third_party && ./download_and_patch_prerequisites.sh && cd ../```
-6. Go into the build directory: ```cd build```
-7. Create the Makefile: ```cmake -D CMAKE_BUILD_TYPE=Release ..```
-8. Build: ```make -j4```. Note you may replace the 4 with the number of cores
-   on your machine.
-9. Start quickstep: ```./quickstep_cli_shell --initialize_db=true```. You can
-   now fire SQL queries. To quit, you can type in ```quit;``` Your data is
-   stored in the directory ```qsstor```. Note the next time you start Quickstep,
-   you can omit the ``` --initialize_db``` flag (as the database has already
-   been initialized), and simply start Quickstep as: ```./quickstep_cli_shell```.
-   There are also a number of optional flags that you can specify, and to see
-   the full list, you can type in: ```./quickstep_cli_shell --help```
-10. Next let us load some data and fire some queries. A few points to note:
-The SQL surface of Quickstep is small (it will grow over time). The
-traditional SQL CREATE TABLE and SELECT statements work. The data types
-that are supported include INTEGER, FLOAT, DOUBLE, VARCHAR, CHAR, DATE,
-and DATETIME. Quickstep also does not have support for NULLS or keys (yet).
-Let us create two tables by typing into the Quickstep shell (which you opened
-in the step above), the following SQL command:
-
+ **1. Checkout the code:**
+``` bash
+git clone https://github.com/Hacker0912/quickstep-datalog
 ```
-CREATE TABLE Weather (cid INTEGER, recordDate DATE, highTemperature FLOAT, lowTemperature FLOAT);
+**2. Checkout the datalog branch:**
+```bash
+git checkout datalog
 ```
-
-and then,
-
+**3. Go to the code directory:**
+``` bash
+cd quickstep-datalog
 ```
-CREATE TABLE City (cid Integer, name VARCHAR(80), state CHAR(2));
+Before conituning the set-up, we need to first check/resolve the *dependency* issues if there are any. You may have already installed the needed dependencies (e.g., tool, package, library, etc), but we are still providing the explicit instructions of installing the important dependencies 
+just for convenience and easiness. We also recommend sticking strictly to the versions of these dependencies as we specified to avoid unnecessary headaches caused by possible incompatibility issues of different versions.  
+
+**4. Check/Resolve potential dependency issues:**
+ *Download* the package lists from the repositories, *updating* to get information on the *newest versions* of packages and dependencies.
+``` bash
+sudo apt-get update -y  
 ```
+**4.2. Install clang-5.0 and clang++-5.0 and set the environment variables for later use:**
+    
+    sudo apt-get install -y clang-5.0
+    sudo apt-get install -y clang++-5.0
+    export CXX=/usr/bin/clang++-5.0
+    export CC=/usr/bin/clang-5.0
 
-10. Next, let us insert some tuples in these two tables.
+**4.3. Install CMake 3.10.2 and check the version after:**
+    
+    sudo apt-get install cmake
+    cmake --verison
+*Note:* Cmake of higher versions is also likely to work.  
+    
+**4.4. Install *GRPC* from the corresponding Github Repo:**
+* Check out the repo: 
+     ```bash 
+     git clone -b $(curl -L https://grpc.io/release) https://github.com/grpc/grpc
+     ```
+* Go to the code directory, and then compile and install grpc
+    ```bash
+    cd grpc 
+    git submodule update --init 
+    sudo make -j<N>  
+    sudo make install 
     ```
-    INSERT INTO City VALUES (1, 'Madison', 'WI');
-    INSERT INTO City VALUES (2, 'Palo Alto', 'CA');
-    INSERT INTO Weather VALUES (1, '2015-11-1', 50, 30);
-    INSERT INTO Weather VALUES (1, '2015-11-2', 51, 32);
-    INSERT INTO Weather VALUES (2, '2015-11-1', 60, 50);
+* Install the *protobuf*
+    ```bash
+    cd third_party/protobuf 
+    sudo make install
     ```
-
-11. We can now issue SQL queries such as:
-  a. Find all weather records for California:
-  ```
-  SELECT * FROM WEATHER W, City C WHERE C.cid = W.cid AND C.state = 'CA';
-  ```
-
-  b. Find the min and max temperature for each city, printing the ```cid```:
-  ```
-  SELECT cid, MIN(lowTemperature), MAX(highTemperature) FROM Weather GROUP BY cid;
-  ```
-
-  c. Find the min and max temperature for each city using a nested query, and
-     printing thie city name:
-  ```
-  SELECT * FROM City C, (SELECT cid, MIN(lowTemperature), MAX(highTemperature) FROM Weather GROUP BY cid) AS T WHERE C.cid = T.cid;
-  ```
-
-12. Quickstep also supports a COPY TABLE command. If you want to try that, then
-    from a separate shell file type in the following:
-
-    ```
-    echo "3|2015-11-3|49|29" > /tmp/tmp.tbl
-    echo "3|2015-11-4|48|28" >> /tmp/tmp.tbl
-    echo "3|2015-11-5|47|27" >> /tmp/tmp.tbl
-    ```
-
-    Then, load this new data by typing the following SQL in the Quickstep shell:
-
-    ```
-    COPY Weather FROM '/tmp/tmp.tbl' WITH (DELIMITER '|');
-    ```
-
-    Now, you have loaded three more tuples into the Weather table, and you can
-    fire the SQL queries above again against this modified database.
-
-    Remember, to quit Quickstep, you can type in ```quit;``` into the Quickstep
-    shell.
-
-
-## Additional pointers
-
-1. For other build options, see the more comprehensive [build guide](BUILDING.md).
-2. To get started as a developer, you should start with the [code organization guide](DEV_README.md).
-
-
-## Licensing
-
-Quickstep is licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/apache/incubator-quickstep/blob/master/LICENSE) for the full license text.
-
-## Disclaimer
-Apache Quickstep is an effort undergoing incubation at the Apache Software
-Foundation (ASF), sponsored by the Apache Incubator PMC.
-
-Incubation is required of all newly accepted projects until a further
-review indicates that the infrastructure, communications, and decision
-making process have stabilized in a manner consistent with other
-successful ASF projects.
-
-While incubation status is not necessarily a reflection of the
-completeness or stability of the code, it does indicate that the
-project has yet to be fully endorsed by the ASF.
+  
+     
+After confirming that we are good with all dependencies, we can then continue to compile and build *Quickstep* from the source code. 
+**5. Create the Makefile:**
+``` bash
+cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
+```
