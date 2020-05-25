@@ -32,11 +32,14 @@ sudo apt-get update -y
     sudo apt-get install -y clang++-5.0
     export CXX=/usr/bin/clang++-5.0
     export CC=/usr/bin/clang-5.0
+    
+*Note:* clang and clang++ of higher versions are also likely to work. 
 
 **4.3. Install CMake 3.10.2 and check the version after:**
     
     sudo apt-get install cmake
     cmake --verison
+
 *Note:* Cmake of higher versions is also likely to work.  
     
 **4.4. Install *GRPC* from the corresponding Github Repo:**
@@ -44,6 +47,8 @@ sudo apt-get update -y
      ```bash 
      git clone -b $(curl -L https://grpc.io/release) https://github.com/grpc/grpc
      ```
+*Note:* (curl -L https://grpc.io/release) at the time of testing returns value *v1.28.1*
+
 * Go to the code directory, and then compile and install grpc
     ```bash
     cd grpc 
@@ -62,4 +67,8 @@ After confirming that we are good with all dependencies, we can then continue to
 **5. Create the Makefile:**
 ``` bash
 cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
+```
+**6. Compile and build**
+```bash
+make -j<N> quickstep_cli_shell quickstep_client
 ```
