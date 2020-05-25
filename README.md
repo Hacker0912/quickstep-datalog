@@ -64,10 +64,12 @@ sudo apt-get update -y
   
      
 After confirming that we are good with all dependencies, we can then continue to compile and build *Quickstep* from the source code. 
+
 **5. Create the Makefile:**
 ``` bash
 cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
 ```
+
 **6. Compile and build**
 ```bash
 make -j<N> quickstep_cli_shell quickstep_client
