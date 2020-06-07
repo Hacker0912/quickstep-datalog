@@ -86,7 +86,6 @@ target_link_libraries(quickstep_queryoptimizer_strategy_OneToOne
                       quickstep_queryoptimizer_logical_InsertTuple
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_logical_LogicalType
-                      quickstep_queryoptimizer_logical_SameGeneration
                       quickstep_queryoptimizer_logical_Sample
                       quickstep_queryoptimizer_logical_SetOperation
                       quickstep_queryoptimizer_logical_SharedSubplanReference
@@ -108,7 +107,6 @@ target_link_libraries(quickstep_queryoptimizer_strategy_OneToOne
                       quickstep_queryoptimizer_physical_InsertTuple
                       quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_Physical
-                      quickstep_queryoptimizer_physical_SameGeneration
                       quickstep_queryoptimizer_physical_Sample
                       quickstep_queryoptimizer_physical_Selection
                       quickstep_queryoptimizer_physical_SharedSubplanReference

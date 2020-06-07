@@ -320,7 +320,7 @@ else()
   # builds to fail. As a short-term workaround for now, we turn off deprecated
   # warnings so that they do not cause build failures anymore.
   # TODO: Remove this workaround by fixing the protobuf_cmake and glog_cmake.
-  if (${CMAKE_SYSTEM} MATCHES "Darwin-1[678].[0-9]*.[0-9]*")
+  if (${CMAKE_SYSTEM} MATCHES "Darwin-1[67].[0-9]*.[0-9]*")
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
       CHECK_CXX_COMPILER_FLAG("-Wno-error=deprecated-declarations" COMPILER_HAS_WNO_DEPRECATED)
       if (COMPILER_HAS_WNO_DEPRECATED)
@@ -702,9 +702,7 @@ set(ENABLE_MEMORYMIRROR OFF CACHE BOOL "Enable MemoryMirror TMB")
 set(ENABLE_NATIVELOG OFF CACHE BOOL "Enable NativeLog TMB")
 
 # The distributed version requires to use the NativeNet implementation.
-if (ENABLE_DISTRIBUTED OR ENABLE_NETWORK_CLI)
-  set(ENABLE_NATIVENET ON CACHE BOOL "Enable NativeNet TMB")
-else()
+if (NOT ENABLE_DISTRIBUTED)
   set(ENABLE_NATIVENET OFF CACHE BOOL "Enable NativeNet TMB")
 endif()
 
@@ -715,7 +713,7 @@ set(ENABLE_ZOOKEEPER OFF CACHE BOOL "Enable Zookeeper TMB")
 add_subdirectory("${THIRD_PARTY_SOURCE_DIR}/tmb" "${CMAKE_CURRENT_BINARY_DIR}/third_party/tmb")
 include_directories(${TMB_INCLUDE_DIRS})
 
-if (ENABLE_DISTRIBUTED OR ENABLE_NETWORK_CLI)
+if (ENABLE_DISTRIBUTED)
   include_directories(${CMAKE_CURRENT_BINARY_DIR}/third_party/tmb/include)
 endif()
 

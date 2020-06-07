@@ -52,7 +52,6 @@
 #include "query_optimizer/physical/InsertTuple.hpp"
 #include "query_optimizer/physical/NestedLoopsJoin.hpp"
 #include "query_optimizer/physical/Physical.hpp"
-#include "query_optimizer/physical/SameGeneration.hpp"
 #include "query_optimizer/physical/Sample.hpp"
 #include "query_optimizer/physical/Selection.hpp"
 #include "query_optimizer/physical/SharedSubplanReference.hpp"
@@ -213,8 +212,6 @@ class ExecutionGenerator {
    * @param physical_plan The TableReference node.
    */
   void convertTableReference(const physical::TableReferencePtr &physical_plan);
-
-  void convertSameGeneration(const physical::SameGenerationPtr &physical_same_generation);
 
   /**
    * @brief Converts a Sample(block/tuple) and sample percentage to a Sample operator.

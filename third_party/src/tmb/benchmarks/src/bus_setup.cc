@@ -96,6 +96,7 @@ DEFINE_string(servers, "",
               "specifies a comma-separated list of servers to connect to, "
               "each of which is given in HOSTNAME:PORT or IP:PORT format. "
               "Has no effect for other TMB implementations.");
+#endif
 
 namespace {
 
@@ -152,7 +153,6 @@ bool ParseServersString(const std::string &servers_string,
 }
 
 }  // namespace
-#endif
 
 tmb::MessageBus* CreateBus(const bool delete_messages_immediately) {
 #ifdef TMB_MEMORYMIRROR_ENABLED

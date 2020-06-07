@@ -150,14 +150,6 @@ configure_file (
   "${CMAKE_CURRENT_BINARY_DIR}/UtilityConfig.h"
 )
 
-QS_PROTOBUF_GENERATE_CPP(quickstep_utility_ArrayIndex_proto_srcs
-                         quickstep_utility_ArrayIndex_proto_hdrs
-                         ArrayIndex.proto)
-
-QS_PROTOBUF_GENERATE_CPP(quickstep_utility_BitMatrix_proto_srcs
-                         quickstep_utility_BitMatrix_proto_hdrs
-                         BitMatrix.proto)
-
 QS_PROTOBUF_GENERATE_CPP(quickstep_utility_BloomFilter_proto_srcs
                          quickstep_utility_BloomFilter_proto_hdrs
                          BloomFilter.proto)
@@ -170,18 +162,10 @@ add_subdirectory(lip_filter)
 
 # Declare micro-libs:
 add_library(quickstep_utility_Alignment ../empty_src.cpp Alignment.hpp)
-add_library(quickstep_utility_ArrayIndex ../empty_src.cpp ArrayIndex.hpp)
-add_library(quickstep_utility_ArrayIndex_proto
-            ${quickstep_utility_ArrayIndex_proto_srcs}
-            ${quickstep_utility_ArrayIndex_proto_hdrs})
 add_library(quickstep_utility_BarrieredReadWriteConcurrentBitVector
             ../empty_src.cpp
             BarrieredReadWriteConcurrentBitVector.hpp)
 add_library(quickstep_utility_BitManipulation ../empty_src.cpp BitManipulation.hpp)
-add_library(quickstep_utility_BitMatrix ../empty_src.cpp BitMatrix.hpp)
-add_library(quickstep_utility_BitMatrix_proto
-            ${quickstep_utility_BitMatrix_proto_srcs}
-            ${quickstep_utility_BitMatrix_proto_hdrs})
 add_library(quickstep_utility_BitVector ../empty_src.cpp BitVector.hpp)
 add_library(quickstep_utility_BlockIDStream ../empty_src.cpp BlockIDStream.hpp)
 add_library(quickstep_utility_BloomFilter ../empty_src.cpp BloomFilter.hpp)
@@ -241,27 +225,10 @@ add_library(quickstep_utility_TextBasedTestDriver
 target_link_libraries(quickstep_utility_Alignment
                       glog
                       quickstep_utility_Macros)
-target_link_libraries(quickstep_utility_ArrayIndex
-                      glog
-                      quickstep_catalog_CatalogTypedefs
-                      quickstep_storage_ValueAccessor
-                      quickstep_storage_ValueAccessorUtil
-                      quickstep_types_TypedValue
-                      quickstep_utility_ArrayIndex_proto
-                      quickstep_utility_Macros)
-target_link_libraries(quickstep_utility_ArrayIndex_proto
-                      ${PROTOBUF_LIBRARY})
 target_link_libraries(quickstep_utility_BarrieredReadWriteConcurrentBitVector
                       glog
                       quickstep_utility_BitManipulation
                       quickstep_utility_Macros)
-target_link_libraries(quickstep_utility_BitMatrix
-                      glog
-                      quickstep_utility_BarrieredReadWriteConcurrentBitVector
-                      quickstep_utility_BitMatrix_proto
-                      quickstep_utility_Macros)
-target_link_libraries(quickstep_utility_BitMatrix_proto
-                      ${PROTOBUF_LIBRARY})
 target_link_libraries(quickstep_utility_BitVector
                       glog
                       quickstep_utility_BitManipulation
@@ -359,12 +326,9 @@ target_link_libraries(quickstep_utility_PtrVector
 target_link_libraries(quickstep_utility_Range
                       glog
                       quickstep_utility_Macros)
-<<<<<<< HEAD
 target_link_libraries(quickstep_utility_ScopedArray
                       quickstep_utility_Macros
                       quickstep_utility_ScopedBuffer)
-=======
->>>>>>> origin/sg-alt
 target_link_libraries(quickstep_utility_ScopedBuffer
                       glog
                       quickstep_utility_Alignment
@@ -413,12 +377,8 @@ endif()
 add_library(quickstep_utility ../empty_src.cpp UtilityModule.hpp)
 target_link_libraries(quickstep_utility
                       quickstep_utility_Alignment
-                      quickstep_utility_ArrayIndex
-                      quickstep_utility_ArrayIndex_proto
                       quickstep_utility_BarrieredReadWriteConcurrentBitVector
                       quickstep_utility_BitManipulation
-                      quickstep_utility_BitMatrix
-                      quickstep_utility_BitMatrix_proto
                       quickstep_utility_BitVector
                       quickstep_utility_BlockIDStream
                       quickstep_utility_BloomFilter
@@ -445,10 +405,7 @@ target_link_libraries(quickstep_utility
                       quickstep_utility_PtrMap
                       quickstep_utility_PtrVector
                       quickstep_utility_Range
-<<<<<<< HEAD
                       quickstep_utility_ScopedArray
-=======
->>>>>>> origin/sg-alt
                       quickstep_utility_ScopedBuffer
                       quickstep_utility_ScopedDeleter
                       quickstep_utility_ScopedReassignment
@@ -590,13 +547,6 @@ add_test(TemplateUtil_unittest TemplateUtil_unittest)
 
 # Benchmarks:
 if (UNIX)
-  add_executable(BitMatrix_benchmark
-                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/BitMatrix_benchmark.cpp")
-  target_link_libraries(BitMatrix_benchmark
-                        benchmark
-                        quickstep_utility_BitMatrix
-                        quickstep_utility_BitMatrix_proto)
-
   add_executable(EqualsAnyConstant_benchmark
                  "${CMAKE_CURRENT_SOURCE_DIR}/tests/EqualsAnyConstant_benchmark.cpp")
   target_link_libraries(EqualsAnyConstant_benchmark

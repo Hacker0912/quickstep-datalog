@@ -33,7 +33,8 @@
 #include "query_execution/Shiftboss.hpp"
 #include "query_execution/Worker.hpp"
 #include "query_execution/WorkerDirectory.hpp"
-#include "query_optimizer/QueryProcessor.hpp"
+#include "query_optimizer/Optimizer.hpp"
+#include "query_optimizer/tests/TestDatabaseLoader.hpp"
 #include "storage/DataExchangerAsync.hpp"
 #include "storage/StorageManager.hpp"
 #include "utility/Macros.hpp"
@@ -52,6 +53,12 @@ namespace quickstep {
 class DistributedCommandExecutorTestRunner : public TextBasedTestRunner {
  public:
   /**
+   * @brief If this option is enabled, recreate the entire database and
+   *        repopulate the data before every test.
+   */
+  static const char *kResetOption;
+
+  /**
    * @brief Constructor.
    */
   explicit DistributedCommandExecutorTestRunner(const std::string &storage_path);
@@ -63,18 +70,18 @@ class DistributedCommandExecutorTestRunner : public TextBasedTestRunner {
                    std::string *output) override;
 
  private:
-  const std::string catalog_path_;
-
   std::size_t query_id_;
 
   SqlParserWrapper sql_parser_;
+  std::unique_ptr<optimizer::TestDatabaseLoader> test_database_loader_;
+  DataExchangerAsync test_database_loader_data_exchanger_;
+  optimizer::Optimizer optimizer_;
 
   MessageBusImpl bus_;
   tmb::client_id cli_id_, locator_client_id_;
 
   std::unique_ptr<BlockLocator> block_locator_;
 
-  std::unique_ptr<QueryProcessor> query_processor_;
   std::unique_ptr<ForemanDistributed> foreman_;
 
   MessageBusImpl bus_local_;

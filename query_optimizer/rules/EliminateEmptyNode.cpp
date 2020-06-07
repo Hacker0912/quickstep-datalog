@@ -271,7 +271,6 @@ P::PhysicalPtr EliminateEmptyNode::apply(const P::PhysicalPtr &input) {
     case P::PhysicalType::kFilterJoin:
     case P::PhysicalType::kHashJoin:
     case P::PhysicalType::kNestedLoopsJoin:
-    case P::PhysicalType::kSameGeneration:
     case P::PhysicalType::kSample:
     case P::PhysicalType::kSort:
     case P::PhysicalType::kUnionAll:
@@ -380,7 +379,6 @@ P::PhysicalPtr EliminateEmptyNode::apply(const P::PhysicalPtr &input) {
     case P::PhysicalType::kFilterJoin:
     case P::PhysicalType::kHashJoin:
     case P::PhysicalType::kNestedLoopsJoin:
-    case P::PhysicalType::kSameGeneration:
     case P::PhysicalType::kSample:
     case P::PhysicalType::kSort:
     case P::PhysicalType::kUnionAll:

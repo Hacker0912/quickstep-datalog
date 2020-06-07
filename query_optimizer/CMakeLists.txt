@@ -59,7 +59,6 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_catalog_CatalogDatabase
                       quickstep_catalog_CatalogRelation
                       quickstep_catalog_CatalogRelationSchema
-                      quickstep_catalog_CatalogRelationStatistics
                       quickstep_catalog_CatalogTypedefs
                       quickstep_catalog_PartitionScheme
                       quickstep_catalog_PartitionSchemeHeader
@@ -112,7 +111,6 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_queryoptimizer_physical_PatternMatcher
                       quickstep_queryoptimizer_physical_Physical
                       quickstep_queryoptimizer_physical_PhysicalType
-                      quickstep_queryoptimizer_physical_SameGeneration
                       quickstep_queryoptimizer_physical_Sample
                       quickstep_queryoptimizer_physical_Selection
                       quickstep_queryoptimizer_physical_SharedSubplanReference
@@ -125,10 +123,7 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_queryoptimizer_physical_UpdateTable
                       quickstep_queryoptimizer_physical_WindowAggregate
                       quickstep_relationaloperators_AggregationOperator
-                      quickstep_relationaloperators_BitMatrixExportOperator
-                      quickstep_relationaloperators_BitMatrixJoinOperator
                       quickstep_relationaloperators_BuildAggregationExistenceMapOperator
-                      quickstep_relationaloperators_BuildArrayIndexOperator
                       quickstep_relationaloperators_BuildHashOperator
                       quickstep_relationaloperators_BuildLIPFilterOperator
                       quickstep_relationaloperators_BuildTransitiveClosureOperator
@@ -136,15 +131,12 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_relationaloperators_CreateTableOperator
                       quickstep_relationaloperators_DeleteOperator
                       quickstep_relationaloperators_DestroyAggregationStateOperator
-                      quickstep_relationaloperators_DestroyArrayIndexOperator
-                      quickstep_relationaloperators_DestroyBitMatrixOperator
                       quickstep_relationaloperators_DestroyHashOperator
                       quickstep_relationaloperators_DropTableOperator
                       quickstep_relationaloperators_FinalizeAggregationOperator
                       quickstep_relationaloperators_HashJoinOperator
                       quickstep_relationaloperators_InitializeAggregationOperator
                       quickstep_relationaloperators_InitializeTransitiveClosureOperator
-                      quickstep_relationaloperators_InitializeBitMatrixOperator
                       quickstep_relationaloperators_InsertOperator
                       quickstep_relationaloperators_NestedLoopsJoinOperator
                       quickstep_relationaloperators_RelationalOperator
@@ -174,9 +166,7 @@ target_link_libraries(quickstep_queryoptimizer_ExecutionGenerator
                       quickstep_types_TypedValue
                       quickstep_types_TypedValue_proto
                       quickstep_types_containers_Tuple_proto
-                      quickstep_utility_ArrayIndex_proto
                       quickstep_utility_BarrieredReadWriteConcurrentBitVector
-                      quickstep_utility_BitMatrix_proto
                       quickstep_utility_Macros
                       quickstep_utility_SqlError)
 target_link_libraries(quickstep_queryoptimizer_LIPFilterGenerator
