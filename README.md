@@ -9,6 +9,7 @@ The repos is forked from the original **[Quickstep](https://github.com/apache/in
  **1. Checkout the code:**
 ``` bash
 git clone https://github.com/Hacker0912/quickstep-datalog
+cd quickstep-datalog
 ```
 **2. Checkout the datalog branch:**
 ```bash
@@ -37,8 +38,8 @@ sudo apt-get update -y
 
 **4.3. Install CMake 3.10.2 and check the version after:**
     
-    sudo apt-get install cmake
-    cmake --verison
+    sudo apt-get install -y cmake
+    cmake --version
 
 *Note:* Cmake of higher versions is also likely to work.  
     
@@ -56,21 +57,37 @@ sudo apt-get update -y
     sudo make -j<N>  
     sudo make install 
     ```
+*Note:* you may replace <N> with the number of cores on the machine 
+    
 * Install the *protobuf*
     ```bash
     cd third_party/protobuf 
     sudo make install
     ```
-  
      
-After confirming that we are good with all dependencies, we can then continue to compile and build *Quickstep* from the source code. 
+After confirming that we are good with all the dependencies, we can then continue to compile and build *Quickstep* from the source code. 
 
-**5. Create the Makefile:**
-``` bash
-cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
+**5. Go back to the quickstep-datalog directory:**
+```bash
+cd ../../../
 ```
 
-**6. Compile and build**
+
+**6. Initialize & Checkout the dependencies:**
 ```bash
+git submodule init
+git submodule update
+```
+
+**7. Download additional third-party dependencies and apply patches:**
+```bash
+cd third_party && ./download_and_patch_prerequisites.sh && cd ../
+```
+
+**8. Compile and build**
+``` bash
+cd build
+cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
 make -j<N> quickstep_cli_shell quickstep_client
 ```
+*Note:* you may replace <N> with the number of cores on the machine 
