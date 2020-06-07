@@ -40,6 +40,8 @@
 #include "storage/TransitiveClosureState.hpp"
 #include "types/TypedValue.hpp"
 #include "types/containers/Tuple.hpp"
+#include "utility/ArrayIndex.hpp"
+#include "utility/BitMatrix.hpp"
 #include "utility/SortConfiguration.hpp"
 #include "utility/lip_filter/LIPFilter.hpp"
 #include "utility/lip_filter/LIPFilterDeployment.hpp"
@@ -75,6 +77,16 @@ QueryContext::QueryContext(const serialization::QueryContext &proto,
                                                           storage_manager));
     }
     aggregation_states_.push_back(move(partitioned_aggregation_states));
+  }
+
+  for (int i = 0; i < proto.array_indexes_size(); ++i) {
+    array_indexes_.emplace_back(
+        std::unique_ptr<ArrayIndex>(ArrayIndex::ReconstructFromProto(proto.array_indexes(i))));
+  }
+
+  for (int i = 0; i < proto.bit_matrices_size(); ++i) {
+    bit_matrices_.emplace_back(
+        std::unique_ptr<BitMatrix>(BitMatrix::ReconstructFromProto(proto.bit_matrices(i))));
   }
 
   for (int i = 0; i < proto.generator_functions_size(); ++i) {

@@ -110,6 +110,7 @@ target_link_libraries(quickstep_queryoptimizer_resolver_Resolver
                       quickstep_queryoptimizer_logical_Logical
                       quickstep_queryoptimizer_logical_MultiwayCartesianJoin
                       quickstep_queryoptimizer_logical_Project
+                      quickstep_queryoptimizer_logical_SameGeneration
                       quickstep_queryoptimizer_logical_Sample
                       quickstep_queryoptimizer_logical_SetOperation
                       quickstep_queryoptimizer_logical_SharedSubplanReference

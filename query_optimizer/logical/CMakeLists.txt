@@ -35,6 +35,7 @@ add_library(quickstep_queryoptimizer_logical_MultiwayCartesianJoin MultiwayCarte
 add_library(quickstep_queryoptimizer_logical_NestedLoopsJoin ../../empty_src.cpp NestedLoopsJoin.hpp)
 add_library(quickstep_queryoptimizer_logical_PatternMatcher ../../empty_src.cpp PatternMatcher.hpp)
 add_library(quickstep_queryoptimizer_logical_Project Project.cpp Project.hpp)
+add_library(quickstep_queryoptimizer_logical_SameGeneration ../../empty_src.cpp SameGeneration.hpp)
 add_library(quickstep_queryoptimizer_logical_Sample Sample.cpp Sample.hpp)
 add_library(quickstep_queryoptimizer_logical_SetOperation ../../empty_src.cpp SetOperation.hpp)
 add_library(quickstep_queryoptimizer_logical_SharedSubplanReference
@@ -208,6 +209,13 @@ target_link_libraries(quickstep_queryoptimizer_logical_Project
                       quickstep_queryoptimizer_logical_LogicalType
                       quickstep_utility_Cast
                       quickstep_utility_Macros)
+target_link_libraries(quickstep_queryoptimizer_logical_SameGeneration
+                      glog
+                      quickstep_queryoptimizer_OptimizerTree
+                      quickstep_queryoptimizer_expressions_AttributeReference
+                      quickstep_queryoptimizer_logical_Logical
+                      quickstep_queryoptimizer_logical_LogicalType
+                      quickstep_utility_Macros)
 target_link_libraries(quickstep_queryoptimizer_logical_Sample
                       glog
                       quickstep_queryoptimizer_OptimizerTree
@@ -325,6 +333,7 @@ target_link_libraries(quickstep_queryoptimizer_logical
                       quickstep_queryoptimizer_logical_NestedLoopsJoin
                       quickstep_queryoptimizer_logical_PatternMatcher
                       quickstep_queryoptimizer_logical_Project
+                      quickstep_queryoptimizer_logical_SameGeneration
                       quickstep_queryoptimizer_logical_Sample
                       quickstep_queryoptimizer_logical_SetOperation
                       quickstep_queryoptimizer_logical_SharedSubplanReference

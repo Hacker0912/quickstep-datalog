@@ -43,6 +43,7 @@
 #include "catalog/CatalogDatabase.hpp"
 #include "catalog/CatalogRelation.hpp"
 #include "catalog/CatalogRelationSchema.hpp"
+#include "catalog/CatalogRelationStatistics.hpp"
 #include "catalog/CatalogTypedefs.hpp"
 #include "catalog/PartitionScheme.hpp"
 #include "catalog/PartitionSchemeHeader.hpp"
@@ -92,6 +93,7 @@
 #include "query_optimizer/physical/PatternMatcher.hpp"
 #include "query_optimizer/physical/Physical.hpp"
 #include "query_optimizer/physical/PhysicalType.hpp"
+#include "query_optimizer/physical/SameGeneration.hpp"
 #include "query_optimizer/physical/Sample.hpp"
 #include "query_optimizer/physical/Selection.hpp"
 #include "query_optimizer/physical/SharedSubplanReference.hpp"
@@ -104,7 +106,10 @@
 #include "query_optimizer/physical/UpdateTable.hpp"
 #include "query_optimizer/physical/WindowAggregate.hpp"
 #include "relational_operators/AggregationOperator.hpp"
+#include "relational_operators/BitMatrixExportOperator.hpp"
+#include "relational_operators/BitMatrixJoinOperator.hpp"
 #include "relational_operators/BuildAggregationExistenceMapOperator.hpp"
+#include "relational_operators/BuildArrayIndexOperator.hpp"
 #include "relational_operators/BuildHashOperator.hpp"
 #include "relational_operators/BuildLIPFilterOperator.hpp"
 #include "relational_operators/BuildTransitiveClosureOperator.hpp"
@@ -112,12 +117,15 @@
 #include "relational_operators/CreateTableOperator.hpp"
 #include "relational_operators/DeleteOperator.hpp"
 #include "relational_operators/DestroyAggregationStateOperator.hpp"
+#include "relational_operators/DestroyArrayIndexOperator.hpp"
+#include "relational_operators/DestroyBitMatrixOperator.hpp"
 #include "relational_operators/DestroyHashOperator.hpp"
 #include "relational_operators/DropTableOperator.hpp"
 #include "relational_operators/FinalizeAggregationOperator.hpp"
 #include "relational_operators/HashJoinOperator.hpp"
 #include "relational_operators/InitializeAggregationOperator.hpp"
 #include "relational_operators/InitializeTransitiveClosureOperator.hpp"
+#include "relational_operators/InitializeBitMatrixOperator.hpp"
 #include "relational_operators/InsertOperator.hpp"
 #include "relational_operators/NestedLoopsJoinOperator.hpp"
 #include "relational_operators/RelationalOperator.hpp"
@@ -147,7 +155,9 @@
 #include "types/TypedValue.hpp"
 #include "types/TypedValue.pb.h"
 #include "types/containers/Tuple.pb.h"
+#include "utility/ArrayIndex.pb.h"
 #include "utility/BarrieredReadWriteConcurrentBitVector.hpp"
+#include "utility/BitMatrix.pb.h"
 #include "utility/SqlError.hpp"
 
 #include "gflags/gflags.h"
@@ -474,6 +484,9 @@ void ExecutionGenerator::generatePlanInternal(
     case P::PhysicalType::kWindowAggregate:
       return convertWindowAggregate(
           std::static_pointer_cast<const P::WindowAggregate>(physical_plan));
+    case P::PhysicalType::kSameGeneration:
+      return convertSameGeneration(
+          std::static_pointer_cast<const P::SameGeneration>(physical_plan));
     default:
       LOG(FATAL) << "Unknown physical plan node "
                  << physical_plan->getShortString();
@@ -625,6 +638,116 @@ void ExecutionGenerator::convertTableReference(
       std::forward_as_tuple(physical_table_reference),
       std::forward_as_tuple(CatalogRelationInfo::kInvalidOperatorIndex,
                             catalog_relation));
+}
+
+void ExecutionGenerator::convertSameGeneration(const P::SameGenerationPtr &physical_same_generation) {
+  // SameGeneration is converted to six operators:
+  //     BuildArrayIndexOperator, InitializeBitMatrixOperator, BitMatrixJoinOperator,
+  //     BitMatrixExportOperator, DestroyArrayIndexOperator, DestroyBitMatrixOperator.
+  //     The third is the primary operator.
+
+  const std::size_t query_id = query_handle_->query_id();
+
+  // Create and add a BuildArrayIndexOperator.
+  const CatalogRelationInfo *input_relation_info =
+      findRelationInfoOutputByPhysical(physical_same_generation->input());
+  DCHECK(input_relation_info != nullptr);
+  DCHECK(input_relation_info->isStoredRelation());
+
+  const CatalogRelation &input_relation = *input_relation_info->relation;
+  DCHECK_EQ(2u, input_relation.size());
+
+  const CatalogRelationStatistics &stat = input_relation.getStatistics();
+  if (!stat.isExact() || !stat.hasNumTuples() ||
+      !stat.hasMinValue(0) || !stat.hasMaxValue(0) ||
+      !stat.hasMinValue(1) || !stat.hasMaxValue(1)) {
+    THROW_SQL_ERROR() << "This query needs exact stats by running '\\analyze "
+                      << input_relation.getName() << "'";
+  }
+
+  const std::size_t num_tuples = stat.getNumTuples();
+  const std::uint32_t base = std::min(stat.getMinValue(0).getHashScalarLiteral(),
+                                      stat.getMinValue(1).getHashScalarLiteral());
+  const std::uint32_t max_value = std::max(stat.getMaxValue(0).getHashScalarLiteral(),
+                                           stat.getMaxValue(1).getHashScalarLiteral());
+  const std::uint32_t length = max_value - base + 1u;
+
+  // Create ArrayIndex proto.
+  const QueryContext::array_index_id array_index =
+      query_context_proto_->array_indexes_size();
+  S::ArrayIndex *array_index_proto = query_context_proto_->add_array_indexes();
+  array_index_proto->set_base(base);
+  array_index_proto->set_length(length);
+  array_index_proto->set_reserve_size(num_tuples / length * 2);
+
+  auto *build_array_index_op =
+      new BuildArrayIndexOperator(query_id, input_relation, array_index);
+  const QueryPlan::DAGNodeIndex build_array_index_op_index =
+      execution_plan_->addRelationalOperator(build_array_index_op);
+
+  // Create BitMatrix proto.
+  const QueryContext::bit_matrix_id bit_matrix_index =
+      query_context_proto_->bit_matrices_size();
+  query_context_proto_->add_bit_matrices()->set_size(max_value + 1);  // FIXME(zuyu).
+
+  auto *init_bit_matrix_op =
+      new InitializeBitMatrixOperator(query_id, bit_matrix_index);
+  const QueryPlan::DAGNodeIndex init_bit_matrix_op_index =
+      execution_plan_->addRelationalOperator(init_bit_matrix_op);
+
+  auto *bit_matrix_join_op =
+      new BitMatrixJoinOperator(query_id, array_index, bit_matrix_index);
+  const QueryPlan::DAGNodeIndex bit_matrix_join_op_index =
+      execution_plan_->addRelationalOperator(bit_matrix_join_op);
+  execution_plan_->addDirectDependency(bit_matrix_join_op_index,
+                                       build_array_index_op_index,
+                                       true /* is_pipeline_breaker */);
+  execution_plan_->addDirectDependency(bit_matrix_join_op_index,
+                                       init_bit_matrix_op_index,
+                                       true /* is_pipeline_breaker */);
+
+  auto *destroy_array_index_op =
+      new DestroyArrayIndexOperator(query_id, array_index);
+  const QueryPlan::DAGNodeIndex destroy_array_index_op_index =
+      execution_plan_->addRelationalOperator(destroy_array_index_op);
+  execution_plan_->addDirectDependency(destroy_array_index_op_index,
+                                       bit_matrix_join_op_index,
+                                       true /* is_pipeline_breaker */);
+
+  // Create InsertDestination proto.
+  const CatalogRelation *output_relation = nullptr;
+  const QueryContext::insert_destination_id insert_destination_index =
+      query_context_proto_->insert_destinations_size();
+  S::InsertDestination *insert_destination_proto =
+      query_context_proto_->add_insert_destinations();
+  createTemporaryCatalogRelation(physical_same_generation,
+                                 &output_relation,
+                                 insert_destination_proto);
+
+  auto *bit_matrix_export_op =
+      new BitMatrixExportOperator(query_id, bit_matrix_index, output_relation->getID(),
+                                  insert_destination_index);
+  const QueryPlan::DAGNodeIndex bit_matrix_export_op_index =
+      execution_plan_->addRelationalOperator(bit_matrix_export_op);
+  insert_destination_proto->set_relational_op_index(bit_matrix_export_op_index);
+  execution_plan_->addDirectDependency(bit_matrix_export_op_index,
+                                       bit_matrix_join_op_index,
+                                       true /* is_pipeline_breaker */);
+
+  auto *destroy_bit_matrix_op =
+      new DestroyBitMatrixOperator(query_id, bit_matrix_index);
+  const QueryPlan::DAGNodeIndex destroy_bit_matrix_op_index =
+      execution_plan_->addRelationalOperator(destroy_bit_matrix_op);
+  execution_plan_->addDirectDependency(destroy_bit_matrix_op_index,
+                                       bit_matrix_export_op_index,
+                                       true /* is_pipeline_breaker */);
+
+  physical_to_output_relation_map_.emplace(
+      std::piecewise_construct,
+      std::forward_as_tuple(physical_same_generation),
+      std::forward_as_tuple(bit_matrix_export_op_index,
+                            output_relation));
+  temporary_relation_info_vec_.emplace_back(bit_matrix_export_op_index, output_relation);
 }
 
 void ExecutionGenerator::convertSample(const P::SamplePtr &physical_sample) {
