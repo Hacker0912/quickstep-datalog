@@ -4,7 +4,7 @@ The repos is forked from the original **[Quickstep](https://github.com/apache/in
 
 ### Set-up Instructions 
 
-**NOTE:** The following set-up steps have been specifically tested on *Ubuntu 18.04.1 LTS*. And thus we recommend using *Ubuntu 18.04.1 LTS* as your testbed OS if you want to play with RecStep. However, if you do want to try RecStep on other OS platforms (e.g., MacOS, Ubuntu 16.04, etc) and have encountered trouble during the set-up phase, feel free to send an email to zhiwei@cs.wisc.edu, we will reply to your inquiry and try to help at our earliest convenience.
+**NOTE:** The following set-up steps have been specifically tested on *Ubuntu 18.04.1 LTS*. And thus we recommend using *Ubuntu 18.04.1 LTS* as your testbed OS if you want to play with RecStep. It should also be feasible to set-up the RecStep backend on Ubuntu of other versions (e.g., 14.04, 16.04), but it may take a little bit more extra efforts as configuring the corresponding dependencies as required in Ubuntu of different versions might be slighly different. 
 
  **1. Checkout the code:**
 ``` bash
@@ -13,13 +13,13 @@ cd quickstep-datalog
 ```
 **2. Checkout the datalog branch:**
 ```bash
-git checkout datalog
+git checkout recstep
 ```
 **3. Go to the code directory:**
 ``` bash
 cd quickstep-datalog
 ```
-Before conituning the set-up, we need to first check/resolve the *dependency* issues if there are any. You may have already installed the needed dependencies (e.g., tool, package, library, etc), but we are still providing the explicit instructions of installing the important dependencies 
+Before conituning the set-up, we need to first check/resolve the *dependency* issues if there are any. You may have already installed the needed dependencies (e.g., tools, packages, libraries, etc), but we still provide the explicit instructions of installing the important dependencies 
 just for convenience and easiness. We also recommend sticking strictly to the versions of these dependencies as we specified to avoid unnecessary headaches caused by possible incompatibility issues of different versions.  
 
 **4. Check/Resolve potential dependency issues:**
@@ -57,7 +57,7 @@ sudo apt-get update -y
     sudo make -j<N>  
     sudo make install 
     ```
-*Note:* you may replace <N> with the number of cores on the machine 
+*Note:* you may replace \<N\> with the number of cores on the machine 
     
 * Install the *protobuf*
     ```bash
@@ -71,7 +71,6 @@ After confirming that we are good with all the dependencies, we can then continu
 ```bash
 cd ../../../
 ```
-
 
 **6. Initialize & Checkout the dependencies:**
 ```bash
@@ -90,4 +89,4 @@ cd build
 cmake -D CMAKE_C_COMPILER=$CC CMAKE_CXX_COMPILER=$CXX CMAKE_BUILD_TYPE=Release -D ENABLE_NETWORK_CLI=True ..
 make -j<N> quickstep_cli_shell quickstep_client
 ```
-*Note:* you may replace <N> with the number of cores on the machine 
+*Note:* you may replace \<N\> with the number of cores on the machine 
