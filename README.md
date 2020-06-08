@@ -1,6 +1,6 @@
 # Apache Quickstep (RecStep Backend)
 
-The repos is forked from the original **[Quickstep](https://github.com/apache/incubator-retired-quickstep)** github repo. The code has been specificically modified to serve as the backend of **[RecStep](http://www.vldb.org/pvldb/vol12/p695-fan.pdf)**, a state-of-the-art Datalog engine built on top of a in-memory relational database system (namely Quickstep).    
+The repo is forked from the original **[Quickstep](https://github.com/apache/incubator-retired-quickstep)** github repo. The code has been specificically modified to serve as the backend of **[RecStep](http://www.vldb.org/pvldb/vol12/p695-fan.pdf)**, a state-of-the-art Datalog engine built on top of a in-memory relational database system (namely Quickstep).    
 
 ### Set-up Instructions 
 
