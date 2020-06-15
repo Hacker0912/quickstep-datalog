@@ -4,7 +4,7 @@ The repo is forked from the original **[Quickstep](https://github.com/apache/inc
 
 ### Set-up Instructions 
 
-**NOTE:** The following set-up steps have been specifically tested on *Ubuntu 18.04.1 LTS*. And thus we recommend using *Ubuntu 18.04.1 LTS* as your testbed OS if you want to play with RecStep. It should also be feasible to set-up the RecStep backend on Ubuntu of other versions (e.g., 14.04, 16.04), but it may take a little bit more extra efforts as configuring the corresponding dependencies as required in Ubuntu of different versions might be slighly different. 
+**NOTE:** The following set-up steps have been specifically tested on *Ubuntu 18.04.1 LTS*. And thus we recommend using *Ubuntu 18.04.1 LTS* as your testbed OS if you want to play with RecStep. It should also be feasible to set-up the RecStep backend on Ubuntu of other versions (e.g., 14.04, 16.04), but it may take a little bit more extra efforts as configuring the corresponding dependencies as required on Ubuntu of different versions might be slighly different. 
 
  **1. Checkout the code:**
 ``` bash
