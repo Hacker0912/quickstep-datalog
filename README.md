@@ -15,19 +15,16 @@ cd quickstep-datalog
 ```bash
 git checkout recstep
 ```
-**3. Go to the code directory:**
-``` bash
-cd quickstep-datalog
-```
+
 Before conituning the set-up, we need to first check/resolve the *dependency* issues if there are any. You may have already installed the needed dependencies (e.g., tools, packages, libraries, etc), but we still provide the explicit instructions of installing the important dependencies 
 just for convenience and easiness. We also recommend sticking strictly to the versions of these dependencies as we specified to avoid unnecessary headaches caused by possible incompatibility issues of different versions.  
 
-**4. Check/Resolve potential dependency issues:**
+**3. Check/Resolve potential dependency issues:**
  *Download* the package lists from the repositories, *updating* to get information on the *newest versions* of packages and dependencies.
 ``` bash
 sudo apt-get update -y  
 ```
-**4.2. Install clang-5.0 and clang++-5.0 and set the environment variables for later use:**
+**3.1. Install clang-5.0 and clang++-5.0 and set the environment variables for later use:**
     
     sudo apt-get install -y clang-5.0
     sudo apt-get install -y clang++-5.0
@@ -36,14 +33,14 @@ sudo apt-get update -y
     
 *Note:* clang and clang++ of higher versions are also likely to work. 
 
-**4.3. Install CMake 3.10.2 and check the version after:**
+**3.2. Install CMake 3.10.2 and check the version after:**
     
     sudo apt-get install -y cmake
     cmake --version
 
 *Note:* Cmake of higher versions is also likely to work.  
     
-**4.4. Install *GRPC* from the corresponding Github Repo:**
+**3.3. Install *GRPC* from the corresponding Github Repo:**
 * Check out the repo: 
      ```bash 
      git clone -b $(curl -L https://grpc.io/release) https://github.com/grpc/grpc
